@@ -1,0 +1,34 @@
+hash: 46fcfc21ade906a0b2b10b0043a77a1e3ab76b062b3000d2c844fe504d26895d
+updated: 2017-01-26T18:38:00.495927545+01:00
+imports:
+- name: github.com/bitfinexcom/bitfinex-api-go
+  version: 409c11d782c2194bcec415a43dcbd9aff50b9cf9
+- name: github.com/gorilla/websocket
+  version: 4e4c8d08b4b90add48392b80324adb3630ff3431
+- name: github.com/quickfixgo/quickfix
+  version: 4ec17e93103253252961cf408524b072a9b435b3
+#version: 232221cba13e48d6c032ac15873de9d6a222f707
+  subpackages:
+  - config
+  - datadictionary
+  - enum
+  - field
+  - fix42
+  - fix42/marketdatarequest
+  - fix42/newordersingle
+  - fix42/ordercancelrequest
+  - fix42/orderstatusrequest
+  - fix44
+  - fix44/marketdatarequest
+  - fix44/newordersingle
+  - fix44/ordercancelrequest
+  - fix44/orderstatusrequest
+  - internal
+  - tag
+- name: github.com/shopspring/decimal
+  version: d6f52241f332c63811249bd79a522406bea1a7c9
+- name: github.com/uber-go/atomic
+  version: 3b8db5e93c4c02efbc313e17b2e796b0914a01fb
+- name: github.com/uber-go/zap
+  version: a5783ee4b216a927da8f839c45cfbf9d694e1467
+testImports: []

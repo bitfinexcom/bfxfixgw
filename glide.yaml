@@ -1,0 +1,6 @@
+package: github.com/bitfinexcom/bfxfixgw
+import:
+#- package: github.com/bitfinexcom/bfxgixgw
+  #subpackages:
+  #- log
+- package: github.com/uber-go/zap

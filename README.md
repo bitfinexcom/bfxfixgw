@@ -17,6 +17,12 @@ connect to.
 At some point in the future extending the quickfixgo library to allow a graceful
 reload of the config could be considered.
 
+## Environment
+
+- `DEBUG=1` to enable debug logging
+- `FIX_SETTINGS_DIRECTORY=./config` to read the configs from the given directory, `./config`
+  is the default directory.
+
 ## Sessions
 
 The current plan is to have one FIX instance per config file/port to enable restarting

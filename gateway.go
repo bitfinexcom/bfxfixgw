@@ -36,7 +36,7 @@ type Gateway struct {
 }
 
 func main() {
-	ps, err := filepath.Glob(path.Join(FIXConfigDirectory, "server", "*.cfg"))
+	ps, err := filepath.Glob(path.Join(FIXConfigDirectory, "*.cfg"))
 	if err != nil {
 		log.Logger.Fatal("glob FIX configs", zap.Error(err))
 	}

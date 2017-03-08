@@ -116,7 +116,7 @@ func (f *FIX) OnCreate(sID quickfix.SessionID) {
 	}()
 
 	f.termDataChans[sID] = make(chan bitfinex.TermData)
-	err = f.bfx.WebSocket.ConnectPrivateToken(sID.SenderCompID, f.termDataChans[sID])
+	err = f.bfx.WebSocket.ConnectPrivate(f.termDataChans[sID])
 	if err != nil {
 		f.logger.Error("websocket connect private", zap.Error(err))
 	}

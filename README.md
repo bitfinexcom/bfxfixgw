@@ -28,23 +28,42 @@ reload of the config could be considered.
 The current plan is to have one FIX instance per config file/port to enable restarting
 single sessions in the future.
 
+The creation of the sessions happen at the startup of the application "onCreate"
+event. So for each session, as soon as the app starts, we connect the authenticated 
+websocket and map it to the sessionId.
+
 # Authentication
 
-Authentication is problematic given the 
-- FIX 4.4 allows username/password, FIX 4.2 does not
-- possibly use RawData field in
+Authentication is problematic given that FIX 4.4 allows username/password, FIX 
+4.2 does not, which means that there's no consisten way of handling the authentication.
+One possibility would be to use the RawData field, but many clients don't seem to
+support that.
+The current approach is to use the `SenderCompID` and `TargetCompID`. The 
+`SenderCompID` is the key for the API and the `TargetCompID` is the secret, e.g.
+one session in the cfg file for the proxy/server might look like this:
 
-Current approach is to use the SenderCompID and TargetCompID.
+```
+[SESSION]
+SenderCompID=wGqfsyrEi2c1eD4c1E9BHAXCL50rE4j2wqjNQjq4DAh
+TargetCompID=8NGQqizVUE5e3benJklHpB33FSFHGb64U49h1rGBhHZ
+BeginString=FIX.4.4
+```
 
-- configuration file will contain a batch of X sessions (senderCompId + targetCompId). 
-  Each senderCompId is an authentication token that will manually associated to a user on 
-  bitfinex's backend side. 
-  (websocket authentication message will just be `{ "event": "auth", "token": SEND_COMP_ID}` ). 
-  The creation of the sessions happen at the startup of the application "onCreate"
-  event. So for each session, as soon as the app starts, we connect the authenticated 
-  websocket and map it to the sessionId.
+The issues with using `SenderCompID` and `TargetCompID` are the misuse of the
+protocol and both fields only being protected by TLS, i.e. without TLS they are
+transmitted in plaintext over the wire, because they're part of the Header, which
+is always unencrypted.
+
+It was also proposed to have a configuration file containing a batch of X sessions
+(senderCompId + targetCompId), where each senderCompId is an authentication token
+that will manually associated to a user on bitfinex's backend side, so websocket
+authentication message will just be `{ "event": "auth", "token": SEND_COMP_ID}`. 
 
 ## Issues
 
-OrderCancelReject currently does not get passed the ClOrdID of the OrderCancelRequest because bitfinex doesn’t care about it and in the current state there’s no way to pass that ClOrdID along.
-One solution could be to register handlers for different responses inside the e.g. OrderCancelRequest that gets called once the reply from bitfinex arrives and then removed after.
+`OrderCancelReject` currently does not get passed the `ClOrdID` of the `OrderCancelRequest`
+because bitfinex doesn’t care about it and in the current state there’s no way
+to pass that `ClOrdID` along.
+One solution could be to register handlers for different responses inside the 
+e.g. `OrderCancelRequest` that gets called once the reply from bitfinex arrives
+and then removed after.

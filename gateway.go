@@ -31,7 +31,7 @@ func configDirectory() string {
 // Gateway is a tunnel that enables a FIX client to talk to the bitfinex websocket API
 // and vice versa.
 type Gateway struct {
-	logger zap.Logger
+	logger *zap.Logger
 	links  []*link.Link
 }
 

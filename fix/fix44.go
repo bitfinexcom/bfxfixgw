@@ -1,7 +1,9 @@
 package fix
 
 import (
+	"context"
 	"strconv"
+	"time"
 
 	"github.com/bitfinexcom/bfxfixgw/convert"
 
@@ -40,8 +42,8 @@ func (f *FIX) FIX44Handler(o interface{}, sID quickfix.SessionID) {
 }
 
 func (f *FIX) FIX44NotificationHandler(d bitfinex.Notification, sID quickfix.SessionID) {
-	switch d.Type {
-	case "oc-req":
+	switch o := d.NotifyInfo.(type) {
+	case bitfinex.OrderCancel:
 		// Only handling error currently.
 		if d.Status == "ERROR" && d.Text == "Order not found." {
 			// Send out an OrderCancelReject
@@ -58,46 +60,33 @@ func (f *FIX) FIX44NotificationHandler(d bitfinex.Notification, sID quickfix.Ses
 			return
 		}
 		return
-	case "on-req":
-		//nInfo := d.Data[4] // This should be an order object
+	case bitfinex.OrderNew:
+		// XXX: Handle this at some point.
 		return
 	default:
 		return
 	}
 }
 
-func (f *FIX) FIX44OrderStatusHandler(d bitfinex.TermData, sID quickfix.SessionID) {
-	o, err := convert.OrderFromTermData(d.Data)
-	if err != nil {
-		return // Skip order. XXX: Is there a better way?
+func (f *FIX) FIX44OrderSnapshotHandler(os bitfinex.OrderSnapshot, sID quickfix.SessionID) {
+	for _, o := range os {
+		er := convert.FIX44ExecutionReportFromOrder(bitfinex.Order(o))
+		er.SetAccount(f.bfxUserID)
+		er.SetExecType(enum.ExecType_ORDER_STATUS)
+		quickfix.SendToTarget(er, sID)
 	}
-
-	er := convert.FIX44ExecutionReportFromWebsocketV2Order(o)
-	er.SetAccount(f.bfxUserID)
-	er.SetExecType(enum.ExecType_ORDER_STATUS)
-	quickfix.SendToTarget(er, sID)
 	return
 }
 
-func (f *FIX) FIX44OrderNewHandler(d bitfinex.TermData, sID quickfix.SessionID) {
-	o, err := convert.OrderFromTermData(d.Data)
-	if err != nil {
-		return
-	}
-
-	er := convert.FIX44ExecutionReportFromWebsocketV2Order(o)
+func (f *FIX) FIX44OrderNewHandler(o bitfinex.OrderNew, sID quickfix.SessionID) {
+	er := convert.FIX44ExecutionReportFromOrder(bitfinex.Order(o))
 	er.SetAccount(f.bfxUserID)
 	quickfix.SendToTarget(er, sID)
 	return
 }
 
-func (f *FIX) FIX44OrderCancelHandler(d bitfinex.TermData, sID quickfix.SessionID) {
-	o, err := convert.OrderFromTermData(d.Data)
-	if err != nil {
-		return
-	}
-
-	er := convert.FIX44ExecutionReportFromWebsocketV2Order(o)
+func (f *FIX) FIX44OrderCancelHandler(o bitfinex.OrderCancel, sID quickfix.SessionID) {
+	er := convert.FIX44ExecutionReportFromOrder(bitfinex.Order(o))
 	er.SetExecType(enum.ExecType_CANCELED)
 	er.SetAccount(f.bfxUserID)
 	quickfix.SendToTarget(er, sID)
@@ -105,14 +94,14 @@ func (f *FIX) FIX44OrderCancelHandler(d bitfinex.TermData, sID quickfix.SessionI
 }
 
 func (f *FIX) OnFIX44NewOrderSingle(msg nos.NewOrderSingle, sID quickfix.SessionID) quickfix.MessageRejectError {
-	bo, err := convert.WebSocketV2OrderNewFromFIX44NewOrderSingle(msg)
+	bo, err := convert.OrderNewFromFIX44NewOrderSingle(msg)
 	if err != nil {
 		return err
 	}
 
 	go func() {
 		// XXX: handle error?
-		f.bfx.WebSocket.SendPrivate(bo)
+		f.bfx.Websocket.Send(context.Background(), bo)
 	}()
 
 	return nil
@@ -140,89 +129,111 @@ func (f *FIX) OnFIX44MarketDataRequest(msg mdr.MarketDataRequest, sID quickfix.S
 		return err
 	}
 
-	// XXX: The following could most likely be abtracted to work both for 4.2 and 4.4.
 	go func() {
 		switch subType {
 		default:
 			rej := mdrr.New(field.NewMDReqID(mdReqID))
 			quickfix.SendToTarget(rej, sID)
 		case enum.SubscriptionRequestType_SNAPSHOT:
-			dc := NewMarketDataChan()
+			ctx, _ := context.WithTimeout(context.Background(), time.Second*2)
+			msg := &bitfinex.PublicSubscriptionRequest{
+				Event:   "subscribe",
+				Channel: bitfinex.ChanTicker,
+				Symbol:  symbol,
+			}
 
-			err := f.bfx.WebSocket.Subscribe(bitfinex.CHAN_TICKER, symbol, dc.C)
+			h := func(ev interface{}) {
+				// For a simple snapshot request we just need to read one message from the channel.
+				go f.bfx.Websocket.Unsubscribe(context.Background(), msg)
+
+				var data [][]float64
+				switch e := ev.(type) {
+				case []float64:
+					return // We only care about the snapshot.
+				case [][]float64:
+					data = e
+				}
+
+				for _, d := range data {
+					r := mdsfr.New()
+
+					mdEntriesGroup := convert.FIX44NoMDEntriesRepeatingGroupFromTradeTicker(d)
+					r.SetNoMDEntries(mdEntriesGroup)
+
+					r.SetSymbol(symbol)
+					quickfix.SendToTarget(r, sID)
+				}
+			}
+
+			err := f.bfx.Websocket.Subscribe(ctx, msg, h)
 			if err != nil {
 				rej := mdrr.New(field.NewMDReqID(mdReqID))
 				quickfix.SendToTarget(rej, sID)
 				return
 			}
-
-			// For a simple snapshot request we just need to read one message from the channel.
-			go func() {
-				data := <-dc.Receive()
-				err = f.bfx.WebSocket.UnsubscribeByChannel(dc.C)
-				if err != nil {
-					f.logger.Error("unsub", zap.Error(err))
-				}
-				defer dc.Close(err)
-
-				r := mdsfr.New()
-
-				mdEntriesGroup := convert.FIX44NoMDEntriesRepeatingGroupFromTradeTicker(data)
-				r.SetNoMDEntries(mdEntriesGroup)
-
-				r.SetSymbol(symbol)
-				quickfix.SendToTarget(r, sID)
-			}()
 		case enum.SubscriptionRequestType_SNAPSHOT_PLUS_UPDATES:
-			if _, has := f.marketDataChans[mdReqID]; has {
+			if _, has := f.marketDataSubscriptions[mdReqID]; has {
 				rej := mdrr.New(field.NewMDReqID(mdReqID))
 				rej.SetMDReqRejReason(enum.MDReqRejReason_DUPLICATE_MDREQID)
 				quickfix.SendToTarget(rej, sID)
 				return
 			}
-			// Every new market data subscription gets a new channel that constantly
-			// sends out reports.
-			// XXX: How does this handle multiple market data request for the same ticker?
-			f.mu.Lock()
-			f.marketDataChans[mdReqID] = NewMarketDataChan()
-			f.mu.Unlock()
 
-			err := f.bfx.WebSocket.Subscribe(bitfinex.CHAN_TICKER, symbol, f.marketDataChans[mdReqID].C)
+			h := func(ev interface{}) {
+				var data [][]float64
+				switch e := ev.(type) {
+				case []float64:
+					return // We only care about the snapshot.
+				case [][]float64:
+					data = e
+				}
+
+				for _, d := range data {
+					r := mdsfr.New()
+
+					mdEntriesGroup := convert.FIX44NoMDEntriesRepeatingGroupFromTradeTicker(d)
+					r.SetNoMDEntries(mdEntriesGroup)
+
+					r.SetSymbol(symbol)
+					quickfix.SendToTarget(r, sID)
+				}
+			}
+
+			ctx, _ := context.WithTimeout(context.Background(), time.Second*2)
+			msg := &bitfinex.PublicSubscriptionRequest{
+				Event:   "subscribe",
+				Channel: bitfinex.ChanTicker,
+				Symbol:  symbol,
+			}
+
+			err := f.bfx.Websocket.Subscribe(ctx, msg, h)
 			if err != nil {
 				rej := mdrr.New(field.NewMDReqID(mdReqID))
 				quickfix.SendToTarget(rej, sID)
 				return
 			}
 
-			go func() {
-				for {
-					select {
-					case data := <-f.marketDataChans[mdReqID].Receive():
-						r := mdsfr.New()
-
-						mdEntriesGroup := convert.FIX44NoMDEntriesRepeatingGroupFromTradeTicker(data)
-						r.SetNoMDEntries(mdEntriesGroup)
-
-						r.SetSymbol(symbol)
-						quickfix.SendToTarget(r, sID)
-					case <-f.marketDataChans[mdReqID].Done():
-						return
-					}
-				}
-			}()
+			// Every new market data subscription gets a new channel that constantly
+			// sends out reports.
+			// XXX: How does this handle multiple market data request for the same ticker?
+			f.mu.Lock()
+			f.marketDataSubscriptions[mdReqID] = msg
+			f.mu.Unlock()
 		case enum.SubscriptionRequestType_DISABLE_PREVIOUS_SNAPSHOT_PLUS_UPDATE_REQUEST:
-			if _, has := f.marketDataChans[mdReqID]; !has {
+			if _, has := f.marketDataSubscriptions[mdReqID]; !has {
 				// If we don't have a channel for the req we just ignore the disable.
 				// XXX: Should we tell the other side about that?
 				return
 			}
 
-			err := f.bfx.WebSocket.UnsubscribeByChannel(f.marketDataChans[mdReqID].C)
+			ctx, _ := context.WithTimeout(context.Background(), time.Second*2)
+			err := f.bfx.Websocket.Unsubscribe(ctx, f.marketDataSubscriptions[mdReqID])
 			if err != nil {
 				f.logger.Error("unsub", zap.Error(err))
 			}
-			defer f.marketDataChans[mdReqID].Close(nil)
-			defer delete(f.marketDataChans, mdReqID)
+			f.mu.Lock()
+			delete(f.marketDataSubscriptions, mdReqID)
+			f.mu.Unlock()
 		}
 	}()
 
@@ -243,7 +254,7 @@ func (f *FIX) OnFIX44OrderCancelRequest(msg ocr.OrderCancelRequest, sID quickfix
 	// care about either of those for cancelling.
 	txnT, _ := msg.GetTransactTime()
 
-	oc := &bitfinex.WebSocketV2OrderCancel{}
+	oc := &bitfinex.OrderCancelRequest{}
 
 	if id != "" {
 		idi, err := strconv.ParseInt(id, 10, 64)
@@ -282,7 +293,7 @@ func (f *FIX) OnFIX44OrderCancelRequest(msg ocr.OrderCancelRequest, sID quickfix
 	}
 
 	go func() {
-		f.bfx.WebSocket.SendPrivate(oc)
+		f.bfx.Websocket.Send(context.Background(), oc)
 	}()
 
 	return nil
@@ -298,15 +309,20 @@ func (f *FIX) OnFIX44OrderStatusRequest(msg osr.OrderStatusRequest, sID quickfix
 	//if err != nil {
 	//return err
 	//}
-
 	oidi, nerr := strconv.ParseInt(oid, 10, 64)
-	o, nerr := f.bfxV1.Orders.Status(oidi)
+	restOrder, nerr := f.bfxV1.Orders.Status(oidi)
 	if nerr != nil {
 		r := quickfix.NewBusinessMessageRejectError(nerr.Error(), 0 /*OTHER*/, nil)
 		return r
 	}
 
-	er := convert.FIX44ExecutionReportFromOrder(&o)
+	wsOrder, nerr := convert.OrderFromV1Order(restOrder)
+	if nerr != nil {
+		r := quickfix.NewBusinessMessageRejectError(nerr.Error(), 0 /*OTHER*/, nil)
+		return r
+	}
+
+	er := convert.FIX44ExecutionReportFromOrder(*wsOrder)
 	er.SetAccount(f.bfxUserID)
 	quickfix.SendToTarget(er, sID)
 

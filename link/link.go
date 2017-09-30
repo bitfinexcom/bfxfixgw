@@ -12,7 +12,7 @@ import (
 type Link struct {
 	fix *fix.FIX
 
-	logger zap.Logger
+	logger *zap.Logger
 }
 
 func NewLink(s *quickfix.Settings) (*Link, error) {

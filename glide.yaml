@@ -1,6 +1,30 @@
 package: github.com/bitfinexcom/bfxfixgw
 import:
-#- package: github.com/bitfinexcom/bfxgixgw
-  #subpackages:
-  #- log
-- package: github.com/uber-go/zap
+- package: github.com/bitfinexcom/bitfinex-api-go
+  subpackages:
+  - v1
+  - v2
+- package: github.com/quickfixgo/quickfix
+  subpackages:
+  - enum
+  - field
+  - fix42/executionreport
+  - fix42/marketdatarequest
+  - fix42/marketdatarequestreject
+  - fix42/marketdatasnapshotfullrefresh
+  - fix42/newordersingle
+  - fix42/ordercancelreject
+  - fix42/ordercancelrequest
+  - fix42/orderstatusrequest
+  - fix44/executionreport
+  - fix44/marketdatarequest
+  - fix44/marketdatarequestreject
+  - fix44/marketdatasnapshotfullrefresh
+  - fix44/newordersingle
+  - fix44/ordercancelreject
+  - fix44/ordercancelrequest
+  - fix44/orderstatusrequest
+  - tag
+- package: github.com/satori/go.uuid
+- package: github.com/shopspring/decimal
+- package: go.uber.org/zap

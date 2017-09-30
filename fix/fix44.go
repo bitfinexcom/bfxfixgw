@@ -5,9 +5,9 @@ import (
 
 	"github.com/bitfinexcom/bfxfixgw/convert"
 
-	"github.com/knarz/bitfinex-api-go"
+	"github.com/bitfinexcom/bitfinex-api-go/v2"
 	"github.com/quickfixgo/quickfix"
-	"github.com/uber-go/zap"
+	"go.uber.org/zap"
 
 	//er "github.com/quickfixgo/quickfix/fix44/executionreport"
 	mdr "github.com/quickfixgo/quickfix/fix44/marketdatarequest"
@@ -22,48 +22,28 @@ import (
 	"github.com/quickfixgo/quickfix/field"
 )
 
-func (f *FIX) FIX44TermDataHandler(d bitfinex.TermData, sID quickfix.SessionID) {
-	f.logger.Debug("in FIX44TermDataHandler", zap.Object("termData", d))
+func (f *FIX) FIX44Handler(o interface{}, sID quickfix.SessionID) {
+	f.logger.Debug("in FIX44TermDataHandler", zap.Any("object", o))
 
-	if d.HasError() {
-		return
-	}
-
-	switch d.Term {
-	case "os": // Order status
-		f.FIX44TermDataOrderStatusHandler(d, sID)
-	case "on": // Order new
-		f.FIX44TermDataOrderNewHandler(d, sID)
-	case "oc": // Order cancel
-		f.FIX44TermDataOrderCancelHandler(d, sID)
-	case "n": // Order cancel
-		f.FIX44TermDataNotificationHandler(d, sID)
+	switch d := o.(type) {
+	case bitfinex.OrderSnapshot: // Order snapshot
+		f.FIX44OrderSnapshotHandler(d, sID)
+	case bitfinex.OrderNew: // Order new
+		f.FIX44OrderNewHandler(d, sID)
+	case bitfinex.OrderCancel: // Order cancel
+		f.FIX44OrderCancelHandler(d, sID)
+	case bitfinex.Notification: // Notification
+		f.FIX44NotificationHandler(d, sID)
 	default: // unknown
 		return
 	}
 }
 
-func (f *FIX) FIX44TermDataNotificationHandler(d bitfinex.TermData, sID quickfix.SessionID) {
-	if len(d.Data) < 8 {
-		return
-	}
-
-	//ts := d.Data[0]
-	reason := d.Data[1]
-	//msgID := d.Data[2]
-	//? := d.Data[3]
-	// code := d.Data[5]
-	status := d.Data[6]
-	msg := d.Data[7]
-	switch reason {
+func (f *FIX) FIX44NotificationHandler(d bitfinex.Notification, sID quickfix.SessionID) {
+	switch d.Type {
 	case "oc-req":
-		o, err := convert.OrderFromTermData(d.Data[4].([]interface{})) // This should be an order object
-		if err != nil {
-			return
-		}
-
 		// Only handling error currently.
-		if status == "ERROR" && msg == "Order not found." {
+		if d.Status == "ERROR" && d.Text == "Order not found." {
 			// Send out an OrderCancelReject
 			r := ocj.New(
 				field.NewOrderID("NONE"),
@@ -73,7 +53,7 @@ func (f *FIX) FIX44TermDataNotificationHandler(d bitfinex.TermData, sID quickfix
 				field.NewCxlRejResponseTo(enum.CxlRejResponseTo_ORDER_CANCEL_REQUEST),
 			)
 			r.SetCxlRejReason(enum.CxlRejReason_UNKNOWN_ORDER)
-			r.SetAccount(strconv.FormatInt(f.bfxUserIDs[sID], 10))
+			r.SetAccount(f.bfxUserID)
 			quickfix.SendToTarget(r, sID)
 			return
 		}
@@ -86,31 +66,32 @@ func (f *FIX) FIX44TermDataNotificationHandler(d bitfinex.TermData, sID quickfix
 	}
 }
 
-func (f *FIX) FIX44TermDataOrderStatusHandler(d bitfinex.TermData, sID quickfix.SessionID) {
+func (f *FIX) FIX44OrderStatusHandler(d bitfinex.TermData, sID quickfix.SessionID) {
 	o, err := convert.OrderFromTermData(d.Data)
 	if err != nil {
 		return // Skip order. XXX: Is there a better way?
 	}
 
 	er := convert.FIX44ExecutionReportFromWebsocketV2Order(o)
-	er.SetAccount(strconv.FormatInt(f.bfxUserIDs[sID], 10))
+	er.SetAccount(f.bfxUserID)
 	er.SetExecType(enum.ExecType_ORDER_STATUS)
+	quickfix.SendToTarget(er, sID)
 	return
 }
 
-func (f *FIX) FIX44TermDataOrderNewHandler(d bitfinex.TermData, sID quickfix.SessionID) {
+func (f *FIX) FIX44OrderNewHandler(d bitfinex.TermData, sID quickfix.SessionID) {
 	o, err := convert.OrderFromTermData(d.Data)
 	if err != nil {
 		return
 	}
 
 	er := convert.FIX44ExecutionReportFromWebsocketV2Order(o)
-	er.SetAccount(strconv.FormatInt(f.bfxUserIDs[sID], 10))
+	er.SetAccount(f.bfxUserID)
 	quickfix.SendToTarget(er, sID)
 	return
 }
 
-func (f *FIX) FIX44TermDataOrderCancelHandler(d bitfinex.TermData, sID quickfix.SessionID) {
+func (f *FIX) FIX44OrderCancelHandler(d bitfinex.TermData, sID quickfix.SessionID) {
 	o, err := convert.OrderFromTermData(d.Data)
 	if err != nil {
 		return
@@ -118,7 +99,7 @@ func (f *FIX) FIX44TermDataOrderCancelHandler(d bitfinex.TermData, sID quickfix.
 
 	er := convert.FIX44ExecutionReportFromWebsocketV2Order(o)
 	er.SetExecType(enum.ExecType_CANCELED)
-	er.SetAccount(strconv.FormatInt(f.bfxUserIDs[sID], 10))
+	er.SetAccount(f.bfxUserID)
 	quickfix.SendToTarget(er, sID)
 	return
 }
@@ -275,7 +256,7 @@ func (f *FIX) OnFIX44OrderCancelRequest(msg ocr.OrderCancelRequest, sID quickfix
 				field.NewCxlRejResponseTo(enum.CxlRejResponseTo_ORDER_CANCEL_REQUEST),
 			)
 			r.SetCxlRejReason(enum.CxlRejReason_UNKNOWN_ORDER)
-			r.SetAccount(strconv.FormatInt(f.bfxUserIDs[sID], 10))
+			r.SetAccount(f.bfxUserID)
 			quickfix.SendToTarget(r, sID)
 			return nil
 		}
@@ -291,7 +272,7 @@ func (f *FIX) OnFIX44OrderCancelRequest(msg ocr.OrderCancelRequest, sID quickfix
 				field.NewCxlRejResponseTo(enum.CxlRejResponseTo_ORDER_CANCEL_REQUEST),
 			)
 			r.SetCxlRejReason(enum.CxlRejReason_UNKNOWN_ORDER)
-			r.SetAccount(strconv.FormatInt(f.bfxUserIDs[sID], 10))
+			r.SetAccount(f.bfxUserID)
 			quickfix.SendToTarget(r, sID)
 			return nil
 		}
@@ -326,7 +307,7 @@ func (f *FIX) OnFIX44OrderStatusRequest(msg osr.OrderStatusRequest, sID quickfix
 	}
 
 	er := convert.FIX44ExecutionReportFromOrder(&o)
-	er.SetAccount(strconv.FormatInt(f.bfxUserIDs[sID], 10))
+	er.SetAccount(f.bfxUserID)
 	quickfix.SendToTarget(er, sID)
 
 	return nil

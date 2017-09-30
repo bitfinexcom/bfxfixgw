@@ -1,13 +1,16 @@
 package fix
 
 import (
-	"fmt"
+	//"fmt"
+	"strconv"
 	"sync"
+	"time"
 
 	"github.com/bitfinexcom/bfxfixgw/log"
 
-	"github.com/knarz/bitfinex-api-go"
-	"github.com/uber-go/zap"
+	bfxV1 "github.com/bitfinexcom/bitfinex-api-go/v1"
+	bfx "github.com/bitfinexcom/bitfinex-api-go/v2"
+	"go.uber.org/zap"
 
 	fix42mdr "github.com/quickfixgo/quickfix/fix42/marketdatarequest"
 	fix42nos "github.com/quickfixgo/quickfix/fix42/newordersingle"
@@ -26,140 +29,73 @@ import (
 	_ "github.com/shopspring/decimal"
 )
 
-// MarketDataChan provides a way to send market data between go routines.
-type MarketDataChan struct {
-	mu sync.Mutex
-	c  chan []float64
-	// C is used to send market data to. Use the Close method instead of calling
-	// close() on it.
-	C    chan<- []float64
-	err  error
-	done chan struct{}
-}
-
-// Done returns a channel that is closed once the channel is closed.
-func (m *MarketDataChan) Done() <-chan struct{} {
-	return m.done
-}
-
-func (m *MarketDataChan) Close(err error) {
-	m.mu.Lock()
-	m.err = err
-	m.mu.Unlock()
-	close(m.c)
-	close(m.done)
-}
-
-// Receive returns the channel from which to read MarketData.
-func (m *MarketDataChan) Receive() <-chan []float64 { return m.c }
-
-func (m *MarketDataChan) Send(md []float64) { m.c <- md }
-
-func (m *MarketDataChan) Err() error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	return m.err
-}
-
-func NewMarketDataChan() *MarketDataChan {
-	mdc := &MarketDataChan{
-		c:    make(chan []float64),
-		done: make(chan struct{}),
-	}
-	mdc.C = mdc.c
-
-	return mdc
-}
-
 type FIX struct {
-	mu sync.Mutex // Mutex to protect the marketDataChans.
+	mu sync.Mutex // Mutex to protect the marketDataSubscriptions.
 	*quickfix.MessageRouter
 
-	// XXX: these could also go into a map[quickfix.SessionID]
-	bfx   *bitfinex.ClientV2
-	bfxV1 *bitfinex.Client
+	bfx   *bfx.Client
+	bfxV1 *bfxV1.Client
 
-	// XXX: make TermDataChan similar to the MarketDataChan.
-	termDataChans     map[quickfix.SessionID]chan bitfinex.TermData
-	bfxWSSDone        map[quickfix.SessionID]chan struct{}
-	bfxPrivateWSSDone map[quickfix.SessionID]chan struct{}
-	bfxUserIDs        map[quickfix.SessionID]int64
+	bfxWSSDone <-chan struct{}
+	bfxUserID  string
 
-	// map[MDReqID]chan
-	marketDataChans map[string]*MarketDataChan
+	marketDataSubscriptions map[string]*bfx.PublicSubscriptionRequest
 
 	acc *quickfix.Acceptor
 
-	logger zap.Logger
+	logger *zap.Logger
 }
 
 func (f *FIX) OnCreate(sID quickfix.SessionID) {
-	b := bitfinex.NewClientV2().Auth(sID.SenderCompID, sID.TargetCompID)
+	b := bfx.NewClient().Credentials(sID.SenderCompID, sID.TargetCompID)
 	f.bfx = b
 
-	b1 := bitfinex.NewClient().Auth(sID.SenderCompID, sID.TargetCompID)
+	b1 := bfxV1.NewClient().Auth(sID.SenderCompID, sID.TargetCompID)
 	f.bfxV1 = b1
 
-	err := f.bfx.WebSocket.Connect()
+	err := f.bfx.Websocket.Connect()
 	if err != nil {
 		f.logger.Error("websocket connect", zap.Error(err))
 	}
+	f.bfx.Websocket.SetReadTimeout(3 * time.Second)
 
-	f.bfxWSSDone[sID] = make(chan struct{})
-	go func() {
-		f.logger.Debug("websocket watch")
-		err := f.bfx.WebSocket.Watch(f.bfxWSSDone[sID])
-		if err != nil {
-			// XXX: Handle this error
-			f.logger.Error("websocket watch", zap.Error(err))
-		}
-	}()
-
-	f.termDataChans[sID] = make(chan bitfinex.TermData)
-	err = f.bfx.WebSocket.ConnectPrivate(f.termDataChans[sID])
-	if err != nil {
-		f.logger.Error("websocket connect private", zap.Error(err))
-	}
-
-	f.bfxUserIDs[sID] = int64(f.bfx.WebSocket.UserId)
-
-	f.bfxPrivateWSSDone[sID] = make(chan struct{})
-	go func() {
-		f.logger.Debug("websocket watch private")
-		err := f.bfx.WebSocket.WatchPrivate(f.bfxPrivateWSSDone[sID])
-		if err != nil {
-			f.logger.Error("websocket watch private", zap.Error(err))
-		}
-	}()
+	f.bfxWSSDone = f.bfx.Websocket.Done()
 
 	go func() {
-		var handler func(d bitfinex.TermData, sID quickfix.SessionID)
+		var handler func(o interface{}, sID quickfix.SessionID)
 
 		switch sID.BeginString {
 		case enum.BeginStringFIX44:
-			handler = f.FIX44TermDataHandler
+			handler = f.FIX44Handler
 		case enum.BeginStringFIX42:
-			handler = f.FIX42TermDataHandler
+			handler = f.FIX42Handler
 		default:
 			return // Unsupported
 		}
 
-		for {
-			select {
-			case data := <-f.termDataChans[sID]:
-				if data.HasError() {
-					// Data has error - websocket channel will be closed.
-					// XXX: Handle this properly.
-					fmt.Println("wssReader:", data.Error)
-					return
-				} else {
-					handler(data, sID)
-				}
-			}
-		}
+		handler(nil, sID)
 	}()
 
 	return
+}
+
+// This waits for the Authentication event and then sets the User ID.
+func (f *FIX) waitForUserID() error {
+	wg := sync.WaitGroup{}
+	wg.Add(1) // Ghetto once handler until once handlers get to the lib
+	f.bfx.Websocket.AttachEventHandler(func(ev interface{}) {
+		switch e := ev.(type) {
+		case bfx.AuthEvent:
+			if e.Status == "OK" {
+				f.bfxUserID = strconv.FormatInt(e.UserID, 10)
+				wg.Done()
+			}
+		}
+	})
+	defer f.bfx.Websocket.RemoveEventHandler()
+
+	err := wait(&wg, 4*time.Second)
+	return err
 }
 
 func (f *FIX) OnLogon(sID quickfix.SessionID) {
@@ -180,13 +116,10 @@ func (f *FIX) FromApp(msg *quickfix.Message, sID quickfix.SessionID) quickfix.Me
 
 func NewFIX(s *quickfix.Settings) (*FIX, error) {
 	f := &FIX{
-		MessageRouter:     quickfix.NewMessageRouter(),
-		marketDataChans:   map[string]*MarketDataChan{},
-		termDataChans:     map[quickfix.SessionID]chan bitfinex.TermData{},
-		bfxWSSDone:        map[quickfix.SessionID]chan struct{}{},
-		bfxPrivateWSSDone: map[quickfix.SessionID]chan struct{}{},
-		bfxUserIDs:        map[quickfix.SessionID]int64{},
-		logger:            log.Logger,
+		MessageRouter:           quickfix.NewMessageRouter(),
+		marketDataSubscriptions: map[string]*bfx.PublicSubscriptionRequest{},
+		bfxWSSDone:              make(<-chan struct{}),
+		logger:                  log.Logger,
 	}
 
 	f.AddRoute(fix42mdr.Route(f.OnFIX42MarketDataRequest))

@@ -5,9 +5,9 @@ package convert
 import (
 	//"errors"
 	"strconv"
-	"strings"
 
-	"github.com/knarz/bitfinex-api-go"
+	bfxv1 "github.com/bitfinexcom/bitfinex-api-go/v1"
+	"github.com/bitfinexcom/bitfinex-api-go/v2"
 	uuid "github.com/satori/go.uuid"
 
 	"github.com/quickfixgo/quickfix/enum"
@@ -51,73 +51,114 @@ func StringOrEmpty(i interface{}) string {
 	return ""
 }
 
-func OrdStatusFromOrder(o *bitfinex.Order) field.OrdStatusField {
-	orig, err := strconv.ParseFloat(o.OriginalAmount, 64)
+func OrderFromV1Order(o bfxv1.Order) (*bitfinex.Order, error) {
+	out := &bitfinex.Order{}
+
+	out.ID = o.ID
+	out.Symbol = o.Symbol
+	out.Hidden = o.IsHidden
+
+	ts, err := strconv.ParseFloat(o.Timestamp, 64)
 	if err != nil {
-		orig = 0.0
+		return nil, err
 	}
-	//exec, err := strconv.ParseFloat(o.ExecutedAmount, 64)
-	//if err != nil {
-	//exec = 0.0
-	//}
-	rem, err := strconv.ParseFloat(o.RemainingAmount, 64)
+	out.MTSCreated = int64(ts)
+	out.MTSUpdated = int64(ts)
+
+	p, err := strconv.ParseFloat(o.Price, 64)
 	if err != nil {
-		rem = 0.0
+		return nil, err
 	}
+	out.Price = p
+
+	ap, err := strconv.ParseFloat(o.AvgExecutionPrice, 64)
+	if err != nil {
+		return nil, err
+	}
+	out.PriceAvg = ap
 
 	switch {
+	case o.IsCanceled:
+		out.Status = bitfinex.OrderStatusCanceled
+	case o.IsLive:
+		out.Status = bitfinex.OrderStatusActive
+	}
+
+	var mul float64 = 1.0
+	if o.Side == "sell" {
+		mul = -1.0
+	}
+	oa, err := strconv.ParseFloat(o.OriginalAmount, 64)
+	if err != nil {
+		return nil, err
+	}
+	out.AmountOrig = oa
+	or, err := strconv.ParseFloat(o.RemainingAmount, 64)
+	if err != nil {
+		return nil, err
+	}
+	out.Amount = or * mul
+
+	switch o.Type {
+	case "market":
+		out.Type = bitfinex.OrderTypeMarket
+	case "limit":
+		out.Type = bitfinex.OrderTypeLimit
+	case "exchange limit":
+		out.Type = bitfinex.OrderTypeExchangeLimit
+	case "stop":
+		out.Type = bitfinex.OrderTypeStop
+	case "trailing-stop":
+		out.Type = bitfinex.OrderTypeTrailingStop
+	}
+
+	//out.PlacedID = o.
+	return out, nil
+}
+
+func OrdStatusFromOrder(o bitfinex.Order) field.OrdStatusField {
+	switch o.Status {
 	default:
 		return field.NewOrdStatus(enum.OrdStatus_NEW)
-	case o.IsCanceled:
+	case bitfinex.OrderStatusCanceled:
 		return field.NewOrdStatus(enum.OrdStatus_CANCELED)
-	case rem > 0.0 && rem < orig:
+	case bitfinex.OrderStatusPartiallyFilled:
 		return field.NewOrdStatus(enum.OrdStatus_PARTIALLY_FILLED)
-	case rem == 0.0:
+	case bitfinex.OrderStatusExecuted:
 		return field.NewOrdStatus(enum.OrdStatus_FILLED)
 	}
 }
 
-func SideFromOrder(o *bitfinex.Order) field.SideField {
+func SideFromOrder(o bitfinex.Order) field.SideField {
 	switch {
-	case strings.ToLower(o.Side) == "buy":
+	case o.Amount < 0.0:
 		return field.NewSide(enum.Side_BUY)
-	case strings.ToLower(o.Side) == "sell":
+	case o.Amount > 0.0:
 		return field.NewSide(enum.Side_SELL)
 	default:
 		return field.NewSide(enum.Side_UNDISCLOSED)
 	}
 }
 
-func LeavesQtyFromOrder(o *bitfinex.Order) field.LeavesQtyField {
-	d, err := decimal.NewFromString(o.RemainingAmount)
-	if err != nil {
-		return field.NewLeavesQty(decimal.Zero, 2)
-	}
-
+func LeavesQtyFromOrder(o bitfinex.Order) field.LeavesQtyField {
+	d := decimal.NewFromFloat(o.Amount)
 	return field.NewLeavesQty(d, 2)
 }
 
-func CumQtyFromOrder(o *bitfinex.Order) field.CumQtyField {
-	d, err := decimal.NewFromString(o.ExecutedAmount)
-	if err != nil {
-		return field.NewCumQty(decimal.Zero, 2)
-	}
-
-	return field.NewCumQty(d, 2)
+func CumQtyFromOrder(o bitfinex.Order) field.CumQtyField {
+	a := decimal.NewFromFloat(o.AmountOrig)
+	b := decimal.NewFromFloat(o.Amount)
+	return field.NewCumQty(a.Sub(b.Abs()), 2)
 }
 
-func AvgPxFromOrder(o *bitfinex.Order) field.AvgPxField {
-	d, err := decimal.NewFromString(o.AvgExecutionPrice)
-	if err != nil {
-		return field.NewAvgPx(decimal.Zero, 2)
-	}
-
+func AvgPxFromOrder(o bitfinex.Order) field.AvgPxField {
+	d := decimal.NewFromFloat(o.PriceAvg)
 	return field.NewAvgPx(d, 2)
 }
 
-func FIX44ExecutionReportFromOrder(o *bitfinex.Order) fix44er.ExecutionReport {
+func FIX44ExecutionReportFromOrder(o bitfinex.Order) fix44er.ExecutionReport {
 	e := fix44er.New(
-		field.NewOrderID(strconv.Itoa(o.Id)),
+		field.NewOrderID(strconv.FormatInt(o.ID, 10)),
 		field.NewExecID(uuid.NewV4().String()), // XXX: Can we just take a random ID here?
 		field.NewExecType(enum.ExecType_ORDER_STATUS),
 		OrdStatusFromOrder(o),
@@ -132,9 +173,9 @@ func FIX44ExecutionReportFromOrder(o *bitfinex.Order) fix44er.ExecutionReport {
 	return e
 }
 
-func FIX42ExecutionReportFromOrder(o *bitfinex.Order) fix42er.ExecutionReport {
+func FIX42ExecutionReportFromOrder(o bitfinex.Order) fix42er.ExecutionReport {
 	e := fix42er.New(
-		field.NewOrderID(strconv.Itoa(o.Id)),
+		field.NewOrderID(strconv.FormatInt(o.ID, 10)),
 		field.NewExecID(uuid.NewV4().String()), // XXX: Can we just take a random ID here?
 		// XXX: this method is only used to status at the moment but these should
 		// probably not be hardcoded.

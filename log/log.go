@@ -1,17 +1,26 @@
 package log
 
 import (
+	"log"
 	"os"
 
-	"github.com/uber-go/zap"
+	"go.uber.org/zap"
 )
 
-var Logger zap.Logger
+var Logger *zap.Logger
 
 func init() {
 	if os.Getenv("DEBUG") == "1" {
-		Logger = zap.New(zap.NewJSONEncoder(), zap.DebugLevel)
+		logger, err := zap.NewDevelopment()
+		if err != nil {
+			log.Fatalf("failed to initialize logger: %s", err)
+		}
+		Logger = logger
 	} else {
-		Logger = zap.New(zap.NewJSONEncoder())
+		logger, err := zap.NewProduction()
+		if err != nil {
+			log.Fatalf("failed to initialize logger: %s", err)
+		}
+		Logger = logger
 	}
 }

@@ -1,11 +1,9 @@
 package convert
 
 import (
-	"errors"
 	"strconv"
-	"strings"
 
-	"github.com/knarz/bitfinex-api-go"
+	"github.com/bitfinexcom/bitfinex-api-go/v2"
 	uuid "github.com/satori/go.uuid"
 
 	"github.com/quickfixgo/quickfix"
@@ -21,126 +19,43 @@ import (
 	fix42nos "github.com/quickfixgo/quickfix/fix42/newordersingle"
 )
 
-func OrderFromTermData(td []interface{}) (*bitfinex.WebSocketV2Order, error) {
-	if len(td) < 26 {
-		return nil, errors.New("not an order status")
-	}
+//func FIX44ExecutionReportFromOrder(o *bitfinex.Order) fix44er.ExecutionReport {
+//e := fix44er.New(
+//field.NewOrderID(strconv.FormatInt(o.ID, 10)),
+//field.NewExecID(uuid.NewV4().String()), // XXX: Can we just take a random ID here?
+//field.NewExecType(enum.ExecType_ORDER_STATUS),
+//OrdStatusFromOrder(o),
+//SideFromOrder(o),
+//LeavesQtyFromOrder(o),
+//CumQtyFromOrder(o),
+//AvgPxFromOrder(o),
+//)
 
-	// XXX: API docs say ID, GID, CID, MTS_CREATE, MTS_UPDATE are int but API returns float
+//e.SetSymbol(o.Symbol)
+//e.SetClOrdID(strconv.FormatInt(o.CID, 10))
 
-	os := &bitfinex.WebSocketV2Order{
-		ID:            int64(Float64OrZero(td[0])),
-		GID:           int64(Float64OrZero(td[1])),
-		CID:           int64(Float64OrZero(td[2])),
-		Symbol:        StringOrEmpty(td[3]),
-		MTSCreate:     int64(Float64OrZero(td[4])),
-		MTSUpdate:     int64(Float64OrZero(td[5])),
-		Amount:        Float64OrZero(td[6]),
-		AmountOrig:    Float64OrZero(td[7]),
-		Type:          StringOrEmpty(td[8]),
-		TypePrev:      StringOrEmpty(td[9]),
-		Flags:         Int64OrZero(td[12]),
-		OrderStatus:   StringOrEmpty(td[13]),
-		Price:         Float64OrZero(td[16]),
-		PriceAvg:      Float64OrZero(td[17]),
-		PriceTrailing: Float64OrZero(td[18]),
-		PriceAuxLimit: Float64OrZero(td[19]),
-		Notify:        BoolOrFalse(td[23]),
-		Hidden:        BoolOrFalse(td[24]),
-		PlacedID:      Int64OrZero(td[25]),
-	}
+//return e
+//}
 
-	return os, nil
-}
+//func FIX42ExecutionReportFromOrder(o *bitfinex.Order) fix42er.ExecutionReport {
+//e := fix42er.New(
+//field.NewOrderID(strconv.FormatInt(o.ID, 10)),
+//field.NewExecID(uuid.NewV4().String()), // XXX: Can we just take a random ID here?
+//field.NewExecTransType(enum.ExecTransType_STATUS),
+//field.NewExecType(enum.ExecType_ORDER_STATUS),
 
-func OrdStatusFromWebSocketV2Order(o *bitfinex.WebSocketV2Order) field.OrdStatusField {
-	switch strings.ToUpper(o.OrderStatus) {
-	default:
-		return field.NewOrdStatus(enum.OrdStatus_NEW)
-	case "CANCELED":
-		return field.NewOrdStatus(enum.OrdStatus_CANCELED)
-	case "EXECUTED":
-		return field.NewOrdStatus(enum.OrdStatus_FILLED)
-	case "PARTIALLY FILLED":
-		return field.NewOrdStatus(enum.OrdStatus_PARTIALLY_FILLED)
-	}
-}
+//OrdStatusFromOrder(o),
+//field.NewSymbol(o.Symbol),
+//SideFromOrder(o),
+//LeavesQtyFromOrder(o),
+//CumQtyFromOrder(o),
+//AvgPxFromOrder(o),
+//)
 
-func SideFromWebSocketV2Order(o *bitfinex.WebSocketV2Order) field.SideField {
-	switch {
-	case o.Amount > 0.0:
-		return field.NewSide(enum.Side_BUY)
-	case o.Amount < 0.0:
-		return field.NewSide(enum.Side_SELL)
-	default:
-		return field.NewSide(enum.Side_UNDISCLOSED)
-	}
-}
+//e.SetClOrdID(strconv.FormatInt(o.CID, 10))
 
-func LeavesQtyFromWebSocketV2Order(o *bitfinex.WebSocketV2Order) field.LeavesQtyField {
-	c := abs(o.AmountOrig) - abs(o.Amount)
-	d := decimal.NewFromFloat(c)
-
-	return field.NewLeavesQty(d, 2)
-}
-
-func abs(f float64) float64 {
-	if f < 0.0 {
-		return -f
-	}
-
-	return f
-}
-
-func CumQtyFromWebSocketV2Order(o *bitfinex.WebSocketV2Order) field.CumQtyField {
-	d := decimal.NewFromFloat(o.Amount)
-
-	return field.NewCumQty(d, 2)
-}
-
-func AvgPxFromWebSocketV2Order(o *bitfinex.WebSocketV2Order) field.AvgPxField {
-	d := decimal.NewFromFloat(o.PriceAvg)
-
-	return field.NewAvgPx(d, 2)
-}
-
-func FIX44ExecutionReportFromWebsocketV2Order(o *bitfinex.WebSocketV2Order) fix44er.ExecutionReport {
-	e := fix44er.New(
-		field.NewOrderID(strconv.FormatInt(o.ID, 10)),
-		field.NewExecID(uuid.NewV4().String()), // XXX: Can we just take a random ID here?
-		field.NewExecType(enum.ExecType_ORDER_STATUS),
-		OrdStatusFromWebSocketV2Order(o),
-		SideFromWebSocketV2Order(o),
-		LeavesQtyFromWebSocketV2Order(o),
-		CumQtyFromWebSocketV2Order(o),
-		AvgPxFromWebSocketV2Order(o),
-	)
-
-	e.SetSymbol(o.Symbol)
-	e.SetClOrdID(strconv.FormatInt(o.CID, 10))
-
-	return e
-}
-
-func FIX42ExecutionReportFromWebsocketV2Order(o *bitfinex.WebSocketV2Order) fix42er.ExecutionReport {
-	e := fix42er.New(
-		field.NewOrderID(strconv.FormatInt(o.ID, 10)),
-		field.NewExecID(uuid.NewV4().String()), // XXX: Can we just take a random ID here?
-		field.NewExecTransType(enum.ExecTransType_STATUS),
-		field.NewExecType(enum.ExecType_ORDER_STATUS),
-
-		OrdStatusFromWebSocketV2Order(o),
-		field.NewSymbol(o.Symbol),
-		SideFromWebSocketV2Order(o),
-		LeavesQtyFromWebSocketV2Order(o),
-		CumQtyFromWebSocketV2Order(o),
-		AvgPxFromWebSocketV2Order(o),
-	)
-
-	e.SetClOrdID(strconv.FormatInt(o.CID, 10))
-
-	return e
-}
+//return e
+//}
 
 func FIX44ExecutionReportRejectUnknown(oid, cid string) fix44er.ExecutionReport {
 	e := fix44er.New(
@@ -237,10 +152,10 @@ func OrderNewTypeFromFIX42NewOrderSingle(nos fix42nos.NewOrderSingle) string {
 	}
 }
 
-// WebSocketV2OrderNewFromFIX44NewOrderSingle converts a NewOrderSingle into a new order for the
+// OrderNewFromFIX44NewOrderSingle converts a NewOrderSingle into a new order for the
 // bitfinex websocket API, as best as it can.
-func WebSocketV2OrderNewFromFIX44NewOrderSingle(nos fix44nos.NewOrderSingle) (*bitfinex.WebSocketV2OrderNew, quickfix.MessageRejectError) {
-	on := &bitfinex.WebSocketV2OrderNew{}
+func OrderNewFromFIX44NewOrderSingle(nos fix44nos.NewOrderSingle) (*bitfinex.OrderNewRequest, quickfix.MessageRejectError) {
+	on := &bitfinex.OrderNewRequest{}
 
 	on.GID = 0
 	cidstr, err := nos.GetClOrdID()
@@ -288,10 +203,10 @@ func WebSocketV2OrderNewFromFIX44NewOrderSingle(nos fix44nos.NewOrderSingle) (*b
 	return on, nil
 }
 
-// WebSocketV2OrderNewFromFIX42NewOrderSingle converts a NewOrderSingle into a new order for the
+// OrderNewFromFIX42NewOrderSingle converts a NewOrderSingle into a new order for the
 // bitfinex websocket API, as best as it can.
-func WebSocketV2OrderNewFromFIX42NewOrderSingle(nos fix42nos.NewOrderSingle) (*bitfinex.WebSocketV2OrderNew, quickfix.MessageRejectError) {
-	on := &bitfinex.WebSocketV2OrderNew{}
+func OrderNewFromFIX42NewOrderSingle(nos fix42nos.NewOrderSingle) (*bitfinex.OrderNewRequest, quickfix.MessageRejectError) {
+	on := &bitfinex.OrderNewRequest{}
 
 	on.GID = 0
 	cidstr, err := nos.GetClOrdID()

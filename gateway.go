@@ -13,7 +13,7 @@ import (
 	"github.com/bitfinexcom/bfxfixgw/log"
 
 	"github.com/quickfixgo/quickfix"
-	"github.com/uber-go/zap"
+	"go.uber.org/zap"
 )
 
 var (

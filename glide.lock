@@ -1,34 +1,55 @@
-hash: 46fcfc21ade906a0b2b10b0043a77a1e3ab76b062b3000d2c844fe504d26895d
-updated: 2017-01-26T18:38:00.495927545+01:00
+hash: 5f95d826c4fdefac4982f32c6b6d82d8655fca81e5c06f18f17591dc53bd6e89
+updated: 2017-09-27T23:28:33.074452543+02:00
 imports:
 - name: github.com/bitfinexcom/bitfinex-api-go
-  version: 409c11d782c2194bcec415a43dcbd9aff50b9cf9
+  version: 3d070aa2d701fab06aa6754fa7631867265f4864
+  subpackages:
+  - utils
+  - v1
+  - v2
 - name: github.com/gorilla/websocket
-  version: 4e4c8d08b4b90add48392b80324adb3630ff3431
+  version: 4201258b820c74ac8e6922fc9e6b52f71fe46f8d
 - name: github.com/quickfixgo/quickfix
-  version: 4ec17e93103253252961cf408524b072a9b435b3
-#version: 232221cba13e48d6c032ac15873de9d6a222f707
+  version: 102166066b60662e45cc963e405d281cd3e20101
   subpackages:
   - config
   - datadictionary
   - enum
   - field
   - fix42
+  - fix42/executionreport
   - fix42/marketdatarequest
+  - fix42/marketdatarequestreject
+  - fix42/marketdatasnapshotfullrefresh
   - fix42/newordersingle
+  - fix42/ordercancelreject
   - fix42/ordercancelrequest
   - fix42/orderstatusrequest
   - fix44
+  - fix44/executionreport
   - fix44/marketdatarequest
+  - fix44/marketdatarequestreject
+  - fix44/marketdatasnapshotfullrefresh
   - fix44/newordersingle
+  - fix44/ordercancelreject
   - fix44/ordercancelrequest
   - fix44/orderstatusrequest
   - internal
   - tag
+- name: github.com/satori/go.uuid
+  version: 5bf94b69c6b68ee1b541973bb8e1144db23a194b
 - name: github.com/shopspring/decimal
-  version: d6f52241f332c63811249bd79a522406bea1a7c9
-- name: github.com/uber-go/atomic
-  version: 3b8db5e93c4c02efbc313e17b2e796b0914a01fb
-- name: github.com/uber-go/zap
-  version: a5783ee4b216a927da8f839c45cfbf9d694e1467
+  version: aed1bfe463fa3c9cc268d60dcc1491db613bff7e
+- name: go.uber.org/atomic
+  version: 4e336646b2ef9fc6e47be8e21594178f98e5ebcf
+- name: go.uber.org/multierr
+  version: 3c4937480c32f4c13a875a1829af76c98ca3d40a
+- name: go.uber.org/zap
+  version: 35aad584952c3e7020db7b839f6b102de6271f89
+  subpackages:
+  - buffer
+  - internal/bufferpool
+  - internal/color
+  - internal/exit
+  - zapcore
 testImports: []

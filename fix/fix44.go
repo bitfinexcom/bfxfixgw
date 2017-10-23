@@ -310,19 +310,13 @@ func (f *FIX) OnFIX44OrderStatusRequest(msg osr.OrderStatusRequest, sID quickfix
 	//return err
 	//}
 	oidi, nerr := strconv.ParseInt(oid, 10, 64)
-	restOrder, nerr := f.bfxV1.Orders.Status(oidi)
+	order, nerr := f.bfx.Orders.Status(oidi)
 	if nerr != nil {
 		r := quickfix.NewBusinessMessageRejectError(nerr.Error(), 0 /*OTHER*/, nil)
 		return r
 	}
 
-	wsOrder, nerr := convert.OrderFromV1Order(restOrder)
-	if nerr != nil {
-		r := quickfix.NewBusinessMessageRejectError(nerr.Error(), 0 /*OTHER*/, nil)
-		return r
-	}
-
-	er := convert.FIX44ExecutionReportFromOrder(*wsOrder)
+	er := convert.FIX44ExecutionReportFromOrder(order)
 	er.SetAccount(f.bfxUserID)
 	quickfix.SendToTarget(er, sID)
 

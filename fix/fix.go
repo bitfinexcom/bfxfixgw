@@ -8,7 +8,6 @@ import (
 
 	"github.com/bitfinexcom/bfxfixgw/log"
 
-	bfxV1 "github.com/bitfinexcom/bitfinex-api-go/v1"
 	bfx "github.com/bitfinexcom/bitfinex-api-go/v2"
 	"go.uber.org/zap"
 
@@ -30,8 +29,7 @@ type FIX struct {
 	mu sync.Mutex // Mutex to protect the marketDataSubscriptions.
 	*quickfix.MessageRouter
 
-	bfx   *bfx.Client
-	bfxV1 *bfxV1.Client
+	bfx *bfx.Client
 
 	bfxWSSDone <-chan struct{}
 	bfxUserID  string
@@ -46,9 +44,6 @@ type FIX struct {
 func (f *FIX) OnCreate(sID quickfix.SessionID) {
 	b := bfx.NewClient().Credentials(sID.SenderCompID, sID.TargetCompID)
 	f.bfx = b
-
-	b1 := bfxV1.NewClient().Auth(sID.SenderCompID, sID.TargetCompID)
-	f.bfxV1 = b1
 
 	err := f.bfx.Websocket.Connect()
 	if err != nil {

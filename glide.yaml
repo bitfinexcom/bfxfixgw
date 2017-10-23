@@ -4,27 +4,32 @@ import:
   subpackages:
   - v1
   - v2
+- package: github.com/quickfixgo/fix42
+  subpackages:
+  - executionreport
+  - marketdatarequest
+  - marketdatarequestreject
+  - marketdatasnapshotfullrefresh
+  - newordersingle
+  - ordercancelreject
+  - ordercancelrequest
+  - orderstatusrequest
+- package: github.com/quickfixgo/fix44
+  subpackages:
+  - executionreport
+  - marketdatarequest
+  - marketdatarequestreject
+  - marketdatasnapshotfullrefresh
+  - newordersingle
+  - ordercancelreject
+  - ordercancelrequest
+  - orderstatusrequest
 - package: github.com/quickfixgo/quickfix
   subpackages:
-  - enum
-  - field
-  - fix42/executionreport
-  - fix42/marketdatarequest
-  - fix42/marketdatarequestreject
-  - fix42/marketdatasnapshotfullrefresh
-  - fix42/newordersingle
-  - fix42/ordercancelreject
-  - fix42/ordercancelrequest
-  - fix42/orderstatusrequest
-  - fix44/executionreport
-  - fix44/marketdatarequest
-  - fix44/marketdatarequestreject
-  - fix44/marketdatasnapshotfullrefresh
-  - fix44/newordersingle
-  - fix44/ordercancelreject
-  - fix44/ordercancelrequest
-  - fix44/orderstatusrequest
-  - tag
+  - decimal
+- package: github.com/quickfixgo/tag
+- package: github.com/quickfixgo/field
+- package: github.com/quickfixgo/enum
 - package: github.com/satori/go.uuid
 - package: github.com/shopspring/decimal
 - package: go.uber.org/zap

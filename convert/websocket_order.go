@@ -6,56 +6,18 @@ import (
 	"github.com/bitfinexcom/bitfinex-api-go/v2"
 	uuid "github.com/satori/go.uuid"
 
+	"github.com/quickfixgo/enum"
+	"github.com/quickfixgo/field"
 	"github.com/quickfixgo/quickfix"
-	"github.com/quickfixgo/quickfix/enum"
-	"github.com/quickfixgo/quickfix/field"
 	"github.com/shopspring/decimal"
 
-	fix44er "github.com/quickfixgo/quickfix/fix44/executionreport"
+	fix44er "github.com/quickfixgo/fix44/executionreport"
 	//fix44mdsfr "github.com/quickfixgo/quickfix/fix44/marketdatasnapshotfullrefresh"
-	fix44nos "github.com/quickfixgo/quickfix/fix44/newordersingle"
+	fix44nos "github.com/quickfixgo/fix44/newordersingle"
 
-	fix42er "github.com/quickfixgo/quickfix/fix42/executionreport"
-	fix42nos "github.com/quickfixgo/quickfix/fix42/newordersingle"
+	fix42er "github.com/quickfixgo/fix42/executionreport"
+	fix42nos "github.com/quickfixgo/fix42/newordersingle"
 )
-
-//func FIX44ExecutionReportFromOrder(o *bitfinex.Order) fix44er.ExecutionReport {
-//e := fix44er.New(
-//field.NewOrderID(strconv.FormatInt(o.ID, 10)),
-//field.NewExecID(uuid.NewV4().String()), // XXX: Can we just take a random ID here?
-//field.NewExecType(enum.ExecType_ORDER_STATUS),
-//OrdStatusFromOrder(o),
-//SideFromOrder(o),
-//LeavesQtyFromOrder(o),
-//CumQtyFromOrder(o),
-//AvgPxFromOrder(o),
-//)
-
-//e.SetSymbol(o.Symbol)
-//e.SetClOrdID(strconv.FormatInt(o.CID, 10))
-
-//return e
-//}
-
-//func FIX42ExecutionReportFromOrder(o *bitfinex.Order) fix42er.ExecutionReport {
-//e := fix42er.New(
-//field.NewOrderID(strconv.FormatInt(o.ID, 10)),
-//field.NewExecID(uuid.NewV4().String()), // XXX: Can we just take a random ID here?
-//field.NewExecTransType(enum.ExecTransType_STATUS),
-//field.NewExecType(enum.ExecType_ORDER_STATUS),
-
-//OrdStatusFromOrder(o),
-//field.NewSymbol(o.Symbol),
-//SideFromOrder(o),
-//LeavesQtyFromOrder(o),
-//CumQtyFromOrder(o),
-//AvgPxFromOrder(o),
-//)
-
-//e.SetClOrdID(strconv.FormatInt(o.CID, 10))
-
-//return e
-//}
 
 func FIX44ExecutionReportRejectUnknown(oid, cid string) fix44er.ExecutionReport {
 	e := fix44er.New(

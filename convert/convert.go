@@ -10,16 +10,16 @@ import (
 	"github.com/bitfinexcom/bitfinex-api-go/v2"
 	uuid "github.com/satori/go.uuid"
 
-	"github.com/quickfixgo/quickfix/enum"
-	"github.com/quickfixgo/quickfix/field"
+	"github.com/quickfixgo/enum"
+	"github.com/quickfixgo/field"
 	"github.com/shopspring/decimal"
 
-	fix44er "github.com/quickfixgo/quickfix/fix44/executionreport"
-	fix44mdsfr "github.com/quickfixgo/quickfix/fix44/marketdatasnapshotfullrefresh"
+	fix44er "github.com/quickfixgo/fix44/executionreport"
+	fix44mdsfr "github.com/quickfixgo/fix44/marketdatasnapshotfullrefresh"
 	//fix44nos "github.com/quickfixgo/quickfix/fix44/newordersingle"
 
-	fix42er "github.com/quickfixgo/quickfix/fix42/executionreport"
-	fix42mdsfr "github.com/quickfixgo/quickfix/fix42/marketdatasnapshotfullrefresh"
+	fix42er "github.com/quickfixgo/fix42/executionreport"
+	fix42mdsfr "github.com/quickfixgo/fix42/marketdatasnapshotfullrefresh"
 	//fix42nos "github.com/quickfixgo/quickfix/fix42/newordersingle"
 )
 

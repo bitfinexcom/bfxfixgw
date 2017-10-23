@@ -12,20 +12,17 @@ import (
 	bfx "github.com/bitfinexcom/bitfinex-api-go/v2"
 	"go.uber.org/zap"
 
-	fix42mdr "github.com/quickfixgo/quickfix/fix42/marketdatarequest"
-	fix42nos "github.com/quickfixgo/quickfix/fix42/newordersingle"
-	fix42ocr "github.com/quickfixgo/quickfix/fix42/ordercancelrequest"
-	fix42osr "github.com/quickfixgo/quickfix/fix42/orderstatusrequest"
+	fix42mdr "github.com/quickfixgo/fix42/marketdatarequest"
+	fix42nos "github.com/quickfixgo/fix42/newordersingle"
+	fix42ocr "github.com/quickfixgo/fix42/ordercancelrequest"
+	fix42osr "github.com/quickfixgo/fix42/orderstatusrequest"
 
-	fix44mdr "github.com/quickfixgo/quickfix/fix44/marketdatarequest"
-	fix44nos "github.com/quickfixgo/quickfix/fix44/newordersingle"
-	fix44ocr "github.com/quickfixgo/quickfix/fix44/ordercancelrequest"
-	fix44osr "github.com/quickfixgo/quickfix/fix44/orderstatusrequest"
+	fix44mdr "github.com/quickfixgo/fix44/marketdatarequest"
+	fix44nos "github.com/quickfixgo/fix44/newordersingle"
+	fix44ocr "github.com/quickfixgo/fix44/ordercancelrequest"
+	fix44osr "github.com/quickfixgo/fix44/orderstatusrequest"
 
 	"github.com/quickfixgo/quickfix"
-	"github.com/quickfixgo/quickfix/enum"
-	_ "github.com/quickfixgo/quickfix/field"
-	_ "github.com/quickfixgo/quickfix/tag"
 	_ "github.com/shopspring/decimal"
 )
 
@@ -65,9 +62,9 @@ func (f *FIX) OnCreate(sID quickfix.SessionID) {
 		var handler func(o interface{}, sID quickfix.SessionID)
 
 		switch sID.BeginString {
-		case enum.BeginStringFIX44:
+		case quickfix.BeginStringFIX44:
 			handler = f.FIX44Handler
-		case enum.BeginStringFIX42:
+		case quickfix.BeginStringFIX42:
 			handler = f.FIX42Handler
 		default:
 			return // Unsupported

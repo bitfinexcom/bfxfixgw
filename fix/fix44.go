@@ -12,16 +12,16 @@ import (
 	"go.uber.org/zap"
 
 	//er "github.com/quickfixgo/quickfix/fix44/executionreport"
-	mdr "github.com/quickfixgo/quickfix/fix44/marketdatarequest"
-	mdrr "github.com/quickfixgo/quickfix/fix44/marketdatarequestreject"
-	mdsfr "github.com/quickfixgo/quickfix/fix44/marketdatasnapshotfullrefresh"
-	nos "github.com/quickfixgo/quickfix/fix44/newordersingle"
-	ocj "github.com/quickfixgo/quickfix/fix44/ordercancelreject"
-	ocr "github.com/quickfixgo/quickfix/fix44/ordercancelrequest"
-	osr "github.com/quickfixgo/quickfix/fix44/orderstatusrequest"
+	mdr "github.com/quickfixgo/fix44/marketdatarequest"
+	mdrr "github.com/quickfixgo/fix44/marketdatarequestreject"
+	mdsfr "github.com/quickfixgo/fix44/marketdatasnapshotfullrefresh"
+	nos "github.com/quickfixgo/fix44/newordersingle"
+	ocj "github.com/quickfixgo/fix44/ordercancelreject"
+	ocr "github.com/quickfixgo/fix44/ordercancelrequest"
+	osr "github.com/quickfixgo/fix44/orderstatusrequest"
 
-	"github.com/quickfixgo/quickfix/enum"
-	"github.com/quickfixgo/quickfix/field"
+	"github.com/quickfixgo/enum"
+	"github.com/quickfixgo/field"
 )
 
 func (f *FIX) FIX44Handler(o interface{}, sID quickfix.SessionID) {

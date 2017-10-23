@@ -8,20 +8,20 @@ import (
 	"github.com/bitfinexcom/bfxfixgw/convert"
 
 	"github.com/bitfinexcom/bitfinex-api-go/v2"
-	"github.com/quickfixgo/quickfix"
 	"go.uber.org/zap"
 
 	//er "github.com/quickfixgo/quickfix/fix42/executionreport"
-	mdr "github.com/quickfixgo/quickfix/fix42/marketdatarequest"
-	mdrr "github.com/quickfixgo/quickfix/fix42/marketdatarequestreject"
-	mdsfr "github.com/quickfixgo/quickfix/fix42/marketdatasnapshotfullrefresh"
-	nos "github.com/quickfixgo/quickfix/fix42/newordersingle"
-	ocj "github.com/quickfixgo/quickfix/fix42/ordercancelreject"
-	ocr "github.com/quickfixgo/quickfix/fix42/ordercancelrequest"
-	osr "github.com/quickfixgo/quickfix/fix42/orderstatusrequest"
+	mdr "github.com/quickfixgo/fix42/marketdatarequest"
+	mdrr "github.com/quickfixgo/fix42/marketdatarequestreject"
+	mdsfr "github.com/quickfixgo/fix42/marketdatasnapshotfullrefresh"
+	nos "github.com/quickfixgo/fix42/newordersingle"
+	ocj "github.com/quickfixgo/fix42/ordercancelreject"
+	ocr "github.com/quickfixgo/fix42/ordercancelrequest"
+	osr "github.com/quickfixgo/fix42/orderstatusrequest"
 
-	"github.com/quickfixgo/quickfix/enum"
-	"github.com/quickfixgo/quickfix/field"
+	"github.com/quickfixgo/enum"
+	"github.com/quickfixgo/field"
+	"github.com/quickfixgo/quickfix"
 )
 
 func (f *FIX) FIX42Handler(o interface{}, sID quickfix.SessionID) {

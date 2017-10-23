@@ -1,45 +1,53 @@
-hash: 5f95d826c4fdefac4982f32c6b6d82d8655fca81e5c06f18f17591dc53bd6e89
-updated: 2017-09-27T23:28:33.074452543+02:00
+hash: 80275336bd776e0b635e1b35a34ddbb5a7d49cc4b2d5f6a2062c2060e277ec65
+updated: 2017-10-23T22:13:36.354612926+02:00
 imports:
 - name: github.com/bitfinexcom/bitfinex-api-go
-  version: 3d070aa2d701fab06aa6754fa7631867265f4864
+  version: b79666cdf9e0f716eb5d5e94df10945b4a3e731c
   subpackages:
   - utils
   - v1
   - v2
 - name: github.com/gorilla/websocket
-  version: 4201258b820c74ac8e6922fc9e6b52f71fe46f8d
+  version: 71fa72d4842364bc5f74185f4161e0099ea3624a
+- name: github.com/quickfixgo/enum
+  version: 2cbed3730c3e92412b9a346fe45b5ddb1a9393da
+- name: github.com/quickfixgo/field
+  version: 74cea5ec78c70d357fb1ca68dfb26e299a28bbd0
+- name: github.com/quickfixgo/fix42
+  version: 86a4567f1c77d1e24a584caaa04b25762c9af960
+  subpackages:
+  - executionreport
+  - marketdatarequest
+  - marketdatarequestreject
+  - marketdatasnapshotfullrefresh
+  - newordersingle
+  - ordercancelreject
+  - ordercancelrequest
+  - orderstatusrequest
+- name: github.com/quickfixgo/fix44
+  version: f090a100621863abecaa6cd783811e8bea211370
+  subpackages:
+  - executionreport
+  - marketdatarequest
+  - marketdatarequestreject
+  - marketdatasnapshotfullrefresh
+  - newordersingle
+  - ordercancelreject
+  - ordercancelrequest
+  - orderstatusrequest
 - name: github.com/quickfixgo/quickfix
-  version: 102166066b60662e45cc963e405d281cd3e20101
+  version: 1696afcaa27f7b723673df08b6cb09b8f9e2ba2e
   subpackages:
   - config
   - datadictionary
-  - enum
-  - field
-  - fix42
-  - fix42/executionreport
-  - fix42/marketdatarequest
-  - fix42/marketdatarequestreject
-  - fix42/marketdatasnapshotfullrefresh
-  - fix42/newordersingle
-  - fix42/ordercancelreject
-  - fix42/ordercancelrequest
-  - fix42/orderstatusrequest
-  - fix44
-  - fix44/executionreport
-  - fix44/marketdatarequest
-  - fix44/marketdatarequestreject
-  - fix44/marketdatasnapshotfullrefresh
-  - fix44/newordersingle
-  - fix44/ordercancelreject
-  - fix44/ordercancelrequest
-  - fix44/orderstatusrequest
+  - decimal
   - internal
-  - tag
+- name: github.com/quickfixgo/tag
+  version: cbb4657605213a387c5ec1534192671a92c825c3
 - name: github.com/satori/go.uuid
   version: 5bf94b69c6b68ee1b541973bb8e1144db23a194b
 - name: github.com/shopspring/decimal
-  version: aed1bfe463fa3c9cc268d60dcc1491db613bff7e
+  version: faaed5fca71709f7bb4e0b0e564089c7a4a1b3a8
 - name: go.uber.org/atomic
   version: 4e336646b2ef9fc6e47be8e21594178f98e5ebcf
 - name: go.uber.org/multierr

@@ -1,14 +1,14 @@
 hash: f3abd79c8a75f48fb44848b841637b929a07f6d5a8380a8241a30feef6730525
-updated: 2017-10-23T22:58:38.500496388+02:00
+updated: 2017-11-02T17:12:36.538949402+01:00
 imports:
 - name: github.com/bitfinexcom/bitfinex-api-go
-  version: b79666cdf9e0f716eb5d5e94df10945b4a3e731c
+  version: 4f76741a5a962c0c06c3983cab989a5e4ce7f934
   subpackages:
   - utils
   - v1
   - v2
 - name: github.com/gorilla/websocket
-  version: 71fa72d4842364bc5f74185f4161e0099ea3624a
+  version: 3da6ca0cb65383f2b607a677b6b55e8358cacee6
 - name: github.com/quickfixgo/enum
   version: 2cbed3730c3e92412b9a346fe45b5ddb1a9393da
 - name: github.com/quickfixgo/field
@@ -53,7 +53,7 @@ imports:
 - name: go.uber.org/multierr
   version: 3c4937480c32f4c13a875a1829af76c98ca3d40a
 - name: go.uber.org/zap
-  version: 35aad584952c3e7020db7b839f6b102de6271f89
+  version: f85c78b1dd998214c5f2138155b320a4a43fbe36
   subpackages:
   - buffer
   - internal/bufferpool

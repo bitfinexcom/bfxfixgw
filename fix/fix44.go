@@ -26,8 +26,9 @@ import (
 
 func (f *FIX) FIX44Handler(o interface{}, sID quickfix.SessionID) {
 	f.logger.Debug("in FIX44TermDataHandler", zap.Any("object", o))
-
 	switch d := o.(type) {
+	case nil:
+		return
 	case bitfinex.OrderSnapshot: // Order snapshot
 		f.FIX44OrderSnapshotHandler(d, sID)
 	case bitfinex.OrderNew: // Order new
@@ -39,6 +40,7 @@ func (f *FIX) FIX44Handler(o interface{}, sID quickfix.SessionID) {
 	default: // unknown
 		return
 	}
+
 }
 
 func (f *FIX) FIX44NotificationHandler(d bitfinex.Notification, sID quickfix.SessionID) {
@@ -216,9 +218,9 @@ func (f *FIX) OnFIX44MarketDataRequest(msg mdr.MarketDataRequest, sID quickfix.S
 			// Every new market data subscription gets a new channel that constantly
 			// sends out reports.
 			// XXX: How does this handle multiple market data request for the same ticker?
-			f.mu.Lock()
-			f.marketDataSubscriptions[mdReqID] = msg
-			f.mu.Unlock()
+			f.MDMu.Lock()
+			f.marketDataSubscriptions[mdReqID] = BfxSubscription{Request: msg, Handler: h}
+			f.MDMu.Unlock()
 		case enum.SubscriptionRequestType_DISABLE_PREVIOUS_SNAPSHOT_PLUS_UPDATE_REQUEST:
 			if _, has := f.marketDataSubscriptions[mdReqID]; !has {
 				// If we don't have a channel for the req we just ignore the disable.
@@ -227,13 +229,13 @@ func (f *FIX) OnFIX44MarketDataRequest(msg mdr.MarketDataRequest, sID quickfix.S
 			}
 
 			ctx, _ := context.WithTimeout(context.Background(), time.Second*2)
-			err := f.bfx.Websocket.Unsubscribe(ctx, f.marketDataSubscriptions[mdReqID])
+			err := f.bfx.Websocket.Unsubscribe(ctx, f.marketDataSubscriptions[mdReqID].Request)
 			if err != nil {
 				f.logger.Error("unsub", zap.Error(err))
 			}
-			f.mu.Lock()
+			f.MDMu.Lock()
 			delete(f.marketDataSubscriptions, mdReqID)
-			f.mu.Unlock()
+			f.MDMu.Unlock()
 		}
 	}()
 

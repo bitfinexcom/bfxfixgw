@@ -1,14 +1,15 @@
 package fix
 
 import (
-	//"fmt"
+	"context"
+	"fmt"
 	"strconv"
 	"sync"
 	"time"
 
 	"github.com/bitfinexcom/bfxfixgw/log"
 
-	bfx "github.com/bitfinexcom/bitfinex-api-go/v2"
+	"github.com/bitfinexcom/bitfinex-api-go/v2"
 	"go.uber.org/zap"
 
 	fix42mdr "github.com/quickfixgo/fix42/marketdatarequest"
@@ -26,49 +27,163 @@ import (
 )
 
 type FIX struct {
-	mu sync.Mutex // Mutex to protect the marketDataSubscriptions.
 	*quickfix.MessageRouter
 
-	bfx *bfx.Client
+	bfxMu sync.Mutex
+	bfx   *bitfinex.Client
 
-	bfxWSSDone <-chan struct{}
-	bfxUserID  string
+	bfxUserID       string
+	isConnected     bool
+	maintenanceMode bool
 
-	marketDataSubscriptions map[string]*bfx.PublicSubscriptionRequest
+	MDMu                    sync.Mutex // Mutex to protect the marketDataSubscriptions.
+	marketDataSubscriptions map[string]BfxSubscription
 
 	acc *quickfix.Acceptor
 
 	logger *zap.Logger
 }
 
-func (f *FIX) OnCreate(sID quickfix.SessionID) {
-	b := bfx.NewClient().Credentials(sID.SenderCompID, sID.TargetCompID)
-	f.bfx = b
+type BfxSubscription struct {
+	Request *bitfinex.PublicSubscriptionRequest
+	Handler func(ev interface{})
+}
 
-	err := f.bfx.Websocket.Connect()
+func (f *FIX) OnCreate(sID quickfix.SessionID) {
+	err := f.initBfx(sID)
 	if err != nil {
 		f.logger.Error("websocket connect", zap.Error(err))
+		return
 	}
-	f.bfx.Websocket.SetReadTimeout(3 * time.Second)
+	go f.listener(sID)
 
-	f.bfxWSSDone = f.bfx.Websocket.Done()
+	if err := f.attachHandlers(sID); err != nil {
+		f.logger.Error("attaching handlers", zap.Error(err))
+		return
+	}
 
-	go func() {
-		var handler func(o interface{}, sID quickfix.SessionID)
-
-		switch sID.BeginString {
-		case quickfix.BeginStringFIX44:
-			handler = f.FIX44Handler
-		case quickfix.BeginStringFIX42:
-			handler = f.FIX42Handler
-		default:
-			return // Unsupported
-		}
-
-		handler(nil, sID)
-	}()
+	if err := f.subscribe(); err != nil {
+		f.logger.Error("websocket subscribe", zap.Error(err))
+		return
+	}
 
 	return
+}
+
+func (f *FIX) initBfx(sID quickfix.SessionID) error {
+	b := bitfinex.NewClient().Credentials(sID.SenderCompID, sID.TargetCompID)
+
+	err := b.Websocket.Connect()
+	if err != nil {
+		f.logger.Error("websocket connect", zap.Error(err))
+		return err
+	}
+	b.Websocket.SetReadTimeout(8 * time.Second)
+
+	f.bfxMu.Lock()
+	f.bfx = b
+	f.bfxMu.Unlock()
+
+	return nil
+}
+
+func (f *FIX) attachHandlers(sID quickfix.SessionID) error {
+	var handler func(o interface{}, sID quickfix.SessionID)
+
+	switch sID.BeginString {
+	case quickfix.BeginStringFIX44:
+		handler = f.FIX44Handler
+	case quickfix.BeginStringFIX42:
+		handler = f.FIX42Handler
+	default:
+		return fmt.Errorf("unsupported FIX version: %s", sID.BeginString)
+	}
+
+	f.bfx.Websocket.AttachPrivateHandler(func(ev interface{}) {
+		handler(ev, sID)
+	})
+
+	f.bfx.Websocket.AttachEventHandler(func(ev interface{}) {
+		switch e := ev.(type) {
+		case bitfinex.InfoEvent:
+			// TODO: handle maintenance mode/restarts
+		}
+	})
+
+	return nil
+}
+
+func (f *FIX) subscribe() error {
+	ctx, _ := context.WithTimeout(context.Background(), time.Second*1)
+	f.bfx.Websocket.Authenticate(ctx)
+	if err := f.waitForUserID(); err != nil {
+		return err
+	}
+
+	for _, v := range f.marketDataSubscriptions {
+		ctx, _ := context.WithTimeout(context.Background(), time.Second*2)
+		err := f.bfx.Websocket.Subscribe(ctx, v.Request, v.Handler)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (f *FIX) unsubscribe() error {
+	for _, v := range f.marketDataSubscriptions {
+		ctx, _ := context.WithTimeout(context.Background(), time.Second*2)
+		err := f.bfx.Websocket.Unsubscribe(ctx, v.Request)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (f *FIX) resubscribe() error {
+	if err := f.unsubscribe(); err != nil {
+		return err
+	}
+	return f.subscribe()
+}
+
+func (f *FIX) listener(sID quickfix.SessionID) {
+	for {
+		select {
+		case <-f.bfx.Websocket.Done():
+			f.logger.Error("ws quit", zap.Error(f.bfx.Websocket.Err()))
+			f.isConnected = false
+			defer f.reconnectWebsocket(sID)
+			return
+		}
+	}
+}
+
+func (f *FIX) reconnectWebsocket(sID quickfix.SessionID) {
+	err := f.initBfx(sID)
+	if err != nil {
+		f.logger.Error("websocket connect", zap.Error(err))
+		return
+	}
+
+	if err := f.subscribe(); err != nil {
+		f.logger.Error("websocket authenticate", zap.Error(err))
+		return
+	}
+
+	if err := f.attachHandlers(sID); err != nil {
+		f.logger.Error("attaching handlers", zap.Error(err))
+		return
+	}
+
+	go f.listener(sID)
+}
+
+func (f *FIX) inMaintenanceMode() bool {
+	return f.maintenanceMode
 }
 
 // This waits for the Authentication event and then sets the User ID.
@@ -77,7 +192,7 @@ func (f *FIX) waitForUserID() error {
 	wg.Add(1) // Ghetto once handler until once handlers get to the lib
 	f.bfx.Websocket.AttachEventHandler(func(ev interface{}) {
 		switch e := ev.(type) {
-		case bfx.AuthEvent:
+		case bitfinex.AuthEvent:
 			if e.Status == "OK" {
 				f.bfxUserID = strconv.FormatInt(e.UserID, 10)
 				wg.Done()
@@ -109,8 +224,7 @@ func (f *FIX) FromApp(msg *quickfix.Message, sID quickfix.SessionID) quickfix.Me
 func NewFIX(s *quickfix.Settings) (*FIX, error) {
 	f := &FIX{
 		MessageRouter:           quickfix.NewMessageRouter(),
-		marketDataSubscriptions: map[string]*bfx.PublicSubscriptionRequest{},
-		bfxWSSDone:              make(<-chan struct{}),
+		marketDataSubscriptions: map[string]BfxSubscription{},
 		logger:                  log.Logger,
 	}
 

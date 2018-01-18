@@ -157,9 +157,14 @@ func AvgPxFromOrder(o bitfinex.Order) field.AvgPxField {
 }
 
 func FIX44ExecutionReportFromOrder(o bitfinex.Order) fix44er.ExecutionReport {
+	uid, err := uuid.NewV4()
+	execID := ""
+	if err != nil {
+		execID = uid.String()
+	}
 	e := fix44er.New(
 		field.NewOrderID(strconv.FormatInt(o.ID, 10)),
-		field.NewExecID(uuid.NewV4().String()), // XXX: Can we just take a random ID here?
+		field.NewExecID(execID), // XXX: Can we just take a random ID here?
 		field.NewExecType(enum.ExecType_ORDER_STATUS),
 		OrdStatusFromOrder(o),
 		SideFromOrder(o),
@@ -174,9 +179,14 @@ func FIX44ExecutionReportFromOrder(o bitfinex.Order) fix44er.ExecutionReport {
 }
 
 func FIX42ExecutionReportFromOrder(o bitfinex.Order) fix42er.ExecutionReport {
+	uid, err := uuid.NewV4()
+	execID := ""
+	if err != nil {
+		execID = uid.String()
+	}
 	e := fix42er.New(
 		field.NewOrderID(strconv.FormatInt(o.ID, 10)),
-		field.NewExecID(uuid.NewV4().String()), // XXX: Can we just take a random ID here?
+		field.NewExecID(execID), // XXX: Can we just take a random ID here?
 		// XXX: this method is only used to status at the moment but these should
 		// probably not be hardcoded.
 		field.NewExecTransType(enum.ExecTransType_STATUS),

@@ -2,6 +2,7 @@ package fix
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"sync"
@@ -10,6 +11,7 @@ import (
 	"github.com/bitfinexcom/bfxfixgw/log"
 
 	"github.com/bitfinexcom/bitfinex-api-go/v2"
+	"github.com/bitfinexcom/bitfinex-api-go/v2/websocket"
 	"go.uber.org/zap"
 
 	fix42mdr "github.com/quickfixgo/fix42/marketdatarequest"
@@ -30,7 +32,7 @@ type FIX struct {
 	*quickfix.MessageRouter
 
 	bfxMu sync.Mutex
-	bfx   *bitfinex.Client
+	bfx   *websocket.Client
 
 	bfxUserID       string
 	isConnected     bool
@@ -45,8 +47,8 @@ type FIX struct {
 }
 
 type BfxSubscription struct {
-	Request *bitfinex.PublicSubscriptionRequest
-	Handler func(ev interface{})
+	Request *websocket.SubscriptionRequest
+	Handler func(ev interface{}) // TODO
 }
 
 func (f *FIX) OnCreate(sID quickfix.SessionID) {
@@ -71,20 +73,36 @@ func (f *FIX) OnCreate(sID quickfix.SessionID) {
 }
 
 func (f *FIX) initBfx(sID quickfix.SessionID) error {
-	b := bitfinex.NewClient().Credentials(sID.SenderCompID, sID.TargetCompID)
+	b := websocket.NewClient().Credentials(sID.SenderCompID, sID.TargetCompID)
 
-	err := b.Websocket.Connect()
+	err := b.Connect()
 	if err != nil {
 		f.logger.Error("websocket connect", zap.Error(err))
 		return err
 	}
-	b.Websocket.SetReadTimeout(8 * time.Second)
+	b.SetReadTimeout(8 * time.Second)
 
 	f.bfxMu.Lock()
 	f.bfx = b
 	f.bfxMu.Unlock()
 
 	return nil
+}
+
+func (f *FIX) listen() {
+	for msg := range f.bfx.Listen() {
+		switch msg.(type) {
+		case *websocket.InfoEvent:
+			// TODO
+		case *bitfinex.BookUpdate:
+			// TODO
+		default:
+			b, err := json.Marshal(msg)
+			if err != nil {
+				f.logger.Error("unhandled event: %s", zap.String("msg", string(b)))
+			}
+		}
+	}
 }
 
 func (f *FIX) attachHandlers(sID quickfix.SessionID) error {

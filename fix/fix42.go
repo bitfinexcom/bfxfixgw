@@ -8,6 +8,7 @@ import (
 	"github.com/bitfinexcom/bfxfixgw/convert"
 
 	"github.com/bitfinexcom/bitfinex-api-go/v2"
+	"github.com/bitfinexcom/bitfinex-api-go/v2/websocket"
 	"go.uber.org/zap"
 
 	//er "github.com/quickfixgo/quickfix/fix42/executionreport"
@@ -99,10 +100,10 @@ func (f *FIX) OnFIX42NewOrderSingle(msg nos.NewOrderSingle, sID quickfix.Session
 		return err
 	}
 
-	go func() {
-		// XXX: handle error?
-		f.bfx.Websocket.Send(context.Background(), bo)
-	}()
+	e := f.bfx.SubmitOrder(context.Background(), bo)
+	if e != nil {
+		f.logger.Warn("could not submit order", zap.Error(e))
+	}
 
 	return nil
 }
@@ -137,11 +138,10 @@ func (f *FIX) OnFIX42MarketDataRequest(msg mdr.MarketDataRequest, sID quickfix.S
 			quickfix.SendToTarget(rej, sID)
 		case enum.SubscriptionRequestType_SNAPSHOT:
 			ctx, _ := context.WithTimeout(context.Background(), time.Second*2)
-			msg := &bitfinex.PublicSubscriptionRequest{
-				Event:   "subscribe",
-				Channel: bitfinex.ChanTicker,
-				Symbol:  symbol,
-			}
+			id, err := f.bfx.SubscribeTicker(ctx, symbol)
+			// TODO unsubscribe after receiving ack
+			// TODO how to manage subscriptions on reconnect? put into list?
+			// TODO split this into factories
 
 			h := func(ev interface{}) {
 				// For a simple snapshot request we just need to read one message from the channel.

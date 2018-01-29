@@ -267,6 +267,7 @@
    </group>
    <field name='BfxApiKey' required='Y' />
    <field name='BfxApiSecret' required='Y' />
+   <field name='BfxUserID' required='Y' />
   </message>
   <message name='News' msgtype='B' msgcat='app'>
    <field name='OrigTime' required='N' />

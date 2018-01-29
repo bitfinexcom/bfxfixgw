@@ -7,9 +7,8 @@ import (
 	_ "net/http/pprof"
 	"os"
 	"path"
-	"path/filepath"
 
-	"github.com/bitfinexcom/bfxfixgw/link"
+	"github.com/bitfinexcom/bfxfixgw/fix"
 	"github.com/bitfinexcom/bfxfixgw/log"
 
 	"github.com/quickfixgo/quickfix"
@@ -32,38 +31,31 @@ func configDirectory() string {
 // and vice versa.
 type Gateway struct {
 	logger *zap.Logger
-	links  []*link.Link
+	*fix.FIX
+}
+
+func (g *Gateway) Start() error {
+	return g.FIX.Up()
 }
 
 func main() {
-	ps, err := filepath.Glob(path.Join(FIXConfigDirectory, "*.cfg"))
+	f, err := os.Open(path.Join(FIXConfigDirectory, "bfx.cfg"))
 	if err != nil {
-		log.Logger.Fatal("glob FIX configs", zap.Error(err))
+		log.Logger.Fatal("FIX config", zap.Error(err))
 	}
-
-	links := []*link.Link{}
-	for _, p := range ps {
-		cfg, err := os.Open(p)
-		if err != nil {
-			log.Logger.Fatal("open FIX settings", zap.Error(err))
-		}
-		s, err := quickfix.ParseSettings(cfg)
-		if err != nil {
-			log.Logger.Fatal("parse FIX settings", zap.Error(err))
-		}
-
-		l, err := link.NewLink(s)
-		if err != nil {
-			log.Logger.Fatal("creating new Link", zap.Error(err))
-		}
-		err = l.Establish()
-		if err != nil {
-			log.Logger.Fatal("establish new Link", zap.Error(err))
-		}
-		links = append(links, l)
+	s, err := quickfix.ParseSettings(f)
+	if err != nil {
+		log.Logger.Fatal("parse FIX settings", zap.Error(err))
 	}
-
-	g := &Gateway{logger: log.Logger, links: links}
+	fix, err := fix.NewFIX(s)
+	if err != nil {
+		log.Logger.Fatal("create FIX", zap.Error(err))
+	}
+	g := &Gateway{logger: log.Logger, FIX: fix}
+	err = g.Start()
+	if err != nil {
+		log.Logger.Fatal("start FIX", zap.Error(err))
+	}
 
 	g.logger.Info("starting stat server")
 	g.logger.Error("stat server", zap.Error(http.ListenAndServe(":8080", nil)))

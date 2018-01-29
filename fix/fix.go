@@ -1,14 +1,11 @@
 package fix
 
 import (
-	"context"
 	"sync"
 	"time"
 
 	"github.com/bitfinexcom/bfxfixgw/log"
 
-	"github.com/bitfinexcom/bitfinex-api-go/v2"
-	"github.com/bitfinexcom/bitfinex-api-go/v2/websocket"
 	"go.uber.org/zap"
 
 	fix42mdr "github.com/quickfixgo/fix42/marketdatarequest"
@@ -22,136 +19,52 @@ import (
 	fix44osr "github.com/quickfixgo/fix44/orderstatusrequest"
 
 	"github.com/quickfixgo/quickfix"
-	_ "github.com/shopspring/decimal"
 )
 
+// FIX types, defined in BitfinexFIX42.xml
+var msgTypeLogon = string([]byte("A"))
+var tagBfxAPIKey = quickfix.Tag(20000)
+var tagBfxAPISecret = quickfix.Tag(20001)
+var tagBfxUserID = quickfix.Tag(20002)
+
+// FIX establishes an acceptor and manages peer websocket clients
 type FIX struct {
 	*quickfix.MessageRouter
 
-	bfxMu sync.Mutex
-	bfx   *websocket.Client
+	// signaling to control peer threading model
+	peerMutex sync.Mutex
+	peers     map[quickfix.SessionID]*Peer
 
-	bfxUserID       string
-	isConnected     bool
-	maintenanceMode bool
-
-	MDMu                    sync.Mutex // Mutex to protect the marketDataSubscriptions.
-	marketDataSubscriptions map[string]*BfxSubscription
-
-	acc *quickfix.Acceptor
-
+	acc    *quickfix.Acceptor
 	logger *zap.Logger
 }
 
-type BfxSubscription struct {
-	Request        *websocket.SubscriptionRequest
-	SubscriptionID string
-}
+func (f *FIX) makePeer(sID quickfix.SessionID) error {
+	peer := newPeer(sID)
+	f.peers[sID] = peer
 
-// TODO move to OnLogon
-func (f *FIX) OnCreate(sID quickfix.SessionID) {
-	err := f.initBfx(sID)
+	peer.bfx.SetReadTimeout(8 * time.Second)
+	err := peer.bfx.Connect()
 	if err != nil {
 		f.logger.Error("websocket connect", zap.Error(err))
-		return
+		return err
 	}
-	// TODO go listen per client
 
-	// TODO attach handlers?
+	return nil
+}
 
+func (f *FIX) peer(sID quickfix.SessionID) (p *Peer, ok bool) {
+	f.peerMutex.Lock()
+	defer f.peerMutex.Unlock()
+	p, ok = f.peers[sID]
 	return
 }
 
-func (f *FIX) initBfx(sID quickfix.SessionID) error {
-	f.bfx = websocket.NewClient().Credentials(sID.SenderCompID, sID.TargetCompID)
-
-	go f.listen()
-	f.bfx.SetReadTimeout(8 * time.Second)
-	err := f.bfx.Connect()
-	if err != nil {
-		f.logger.Error("websocket connect", zap.Error(err))
-		return err
-	}
-
-	return nil
-}
-
-// TODO mux to FIX clients
-func (f *FIX) listen() {
-	for msg := range f.bfx.Listen() {
-		if msg == nil {
-			f.logger.Info("upstream disconnect")
-			return
-		}
-		switch msg.(type) {
-		case *websocket.AuthEvent:
-			err := f.subscribe()
-			if err != nil {
-				f.logger.Error("could not subscribe", zap.Any("msg", msg))
-			}
-		case *bitfinex.BookUpdate:
-			// TODO
-		default:
-			f.logger.Error("unhandled event: %#v", zap.Any("msg", msg))
-		}
-	}
-}
-
-/*
-func (f *FIX) attachHandlers(sID quickfix.SessionID) error {
-	var handler func(o interface{}, sID quickfix.SessionID)
-
-	switch sID.BeginString {
-	case quickfix.BeginStringFIX44:
-		handler = f.FIX44Handler
-	case quickfix.BeginStringFIX42:
-		handler = f.FIX42Handler
-	default:
-		return fmt.Errorf("unsupported FIX version: %s", sID.BeginString)
-	}
-
-	// TODO attach handlers
-
-	return nil
-}
-*/
-
-func (f *FIX) subscribe() error {
-	ctx, _ := context.WithTimeout(context.Background(), time.Second*1)
-
-	for _, v := range f.marketDataSubscriptions {
-		ctx, _ := context.WithTimeout(context.Background(), time.Second*2)
-		id, err := f.bfx.Subscribe(ctx, v.Request)
-		if err != nil {
-			return err
-		}
-		v.SubscriptionID = id
-	}
-
-	return nil
-}
-
-func (f *FIX) unsubscribe() error {
-	for _, v := range f.marketDataSubscriptions {
-		ctx, _ := context.WithTimeout(context.Background(), time.Second*2)
-		err := f.bfx.Unsubscribe(ctx, v.SubscriptionID)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (f *FIX) resubscribe() error {
-	if err := f.unsubscribe(); err != nil {
-		return err
-	}
-	return f.subscribe()
-}
-
-func (f *FIX) inMaintenanceMode() bool {
-	return f.maintenanceMode
+func (f *FIX) OnCreate(sID quickfix.SessionID) {
+	f.peerMutex.Lock()
+	f.peers[sID] = newPeer(sID)
+	f.peerMutex.Unlock()
+	return
 }
 
 func (f *FIX) OnLogon(sID quickfix.SessionID) {
@@ -163,6 +76,26 @@ func (f *FIX) OnLogout(sID quickfix.SessionID)                           { retur
 func (f *FIX) ToAdmin(msg *quickfix.Message, sID quickfix.SessionID)     { return }
 func (f *FIX) ToApp(msg *quickfix.Message, sID quickfix.SessionID) error { return nil }
 func (f *FIX) FromAdmin(msg *quickfix.Message, sID quickfix.SessionID) quickfix.MessageRejectError {
+	if msg.IsMsgTypeOf(msgTypeLogon) {
+		f.peerMutex.Lock()
+		apiKey, err := msg.Body.GetString(tagBfxAPIKey)
+		if err != nil {
+			log.Logger.Warn("received Logon without BfxApiKey (20000)", zap.Error(err))
+			return err
+		}
+		apiSecret, err := msg.Body.GetString(tagBfxAPISecret)
+		if err != nil {
+			log.Logger.Warn("received Logon without BfxApiSecret (20001)", zap.Error(err))
+			return err
+		}
+		bfxUserID, err := msg.Body.GetString(tagBfxUserID)
+		if err != nil {
+			log.Logger.Warn("received Logon without BfxUserID (20002)", zap.Error(err))
+			return err
+		}
+		f.peers[sID].Logon(apiKey, apiSecret, bfxUserID)
+		f.peerMutex.Unlock()
+	}
 	return nil
 }
 
@@ -170,11 +103,12 @@ func (f *FIX) FromApp(msg *quickfix.Message, sID quickfix.SessionID) quickfix.Me
 	return f.Route(msg, sID)
 }
 
+// NewFIX creates a new FIX acceptor & associated services
 func NewFIX(s *quickfix.Settings) (*FIX, error) {
 	f := &FIX{
-		MessageRouter:           quickfix.NewMessageRouter(),
-		marketDataSubscriptions: make(map[string]*BfxSubscription),
-		logger:                  log.Logger,
+		MessageRouter: quickfix.NewMessageRouter(),
+		logger:        log.Logger,
+		peers:         make(map[quickfix.SessionID]*Peer),
 	}
 
 	f.AddRoute(fix42mdr.Route(f.OnFIX42MarketDataRequest))
@@ -198,14 +132,12 @@ func NewFIX(s *quickfix.Settings) (*FIX, error) {
 	return f, nil
 }
 
+// Up starts the FIX acceptor service
 func (f *FIX) Up() error {
-	if err := f.acc.Start(); err != nil {
-		return err
-	}
-
-	return nil
+	return f.acc.Start()
 }
 
+// Down stops the FIX acceptor service
 func (f *FIX) Down() {
 	f.acc.Stop()
 }

@@ -1,10 +1,8 @@
 package fix
 
 import (
-	"sync"
-	"time"
-
 	"github.com/bitfinexcom/bfxfixgw/log"
+	"github.com/bitfinexcom/bfxfixgw/service"
 
 	"go.uber.org/zap"
 
@@ -31,84 +29,65 @@ var tagBfxUserID = quickfix.Tag(20002)
 type FIX struct {
 	*quickfix.MessageRouter
 
-	// signaling to control peer threading model
-	peerMutex sync.Mutex
-	peers     map[quickfix.SessionID]*Peer
+	service.Peers
 
 	acc    *quickfix.Acceptor
 	logger *zap.Logger
 }
 
-func (f *FIX) makePeer(sID quickfix.SessionID) error {
-	peer := newPeer(sID)
-	f.peers[sID] = peer
-
-	peer.bfx.SetReadTimeout(8 * time.Second)
-	err := peer.bfx.Connect()
-	if err != nil {
-		f.logger.Error("websocket connect", zap.Error(err))
-		return err
-	}
-
-	return nil
-}
-
-func (f *FIX) peer(sID quickfix.SessionID) (p *Peer, ok bool) {
-	f.peerMutex.Lock()
-	defer f.peerMutex.Unlock()
-	p, ok = f.peers[sID]
-	return
-}
-
 func (f *FIX) OnCreate(sID quickfix.SessionID) {
-	f.peerMutex.Lock()
-	f.peers[sID] = newPeer(sID)
-	f.peerMutex.Unlock()
-	return
+	log.Logger.Info("FIX.OnCreate", zap.Any("SessionID", sID))
+	f.Peers.AddPeer(sID.String())
 }
 
 func (f *FIX) OnLogon(sID quickfix.SessionID) {
 	log.Logger.Info("FIX.OnLogon", zap.Error(nil))
-	return
 }
 
-func (f *FIX) OnLogout(sID quickfix.SessionID)                           { return }
-func (f *FIX) ToAdmin(msg *quickfix.Message, sID quickfix.SessionID)     { return }
+func (f *FIX) OnLogout(sID quickfix.SessionID) { return }
+func (f *FIX) ToAdmin(msg *quickfix.Message, sID quickfix.SessionID) {
+	f.logger.Info("FIX.ToAdmin", zap.Any("msg", msg))
+}
 func (f *FIX) ToApp(msg *quickfix.Message, sID quickfix.SessionID) error { return nil }
 func (f *FIX) FromAdmin(msg *quickfix.Message, sID quickfix.SessionID) quickfix.MessageRejectError {
+	f.logger.Info("FIX.FromAdmin", zap.Any("msg", msg))
+
 	if msg.IsMsgTypeOf(msgTypeLogon) {
-		f.peerMutex.Lock()
 		apiKey, err := msg.Body.GetString(tagBfxAPIKey)
-		if err != nil {
-			log.Logger.Warn("received Logon without BfxApiKey (20000)", zap.Error(err))
+		if err != nil || apiKey == "" {
+			f.logger.Warn("received Logon without BfxApiKey (20000)", zap.Error(err))
 			return err
 		}
 		apiSecret, err := msg.Body.GetString(tagBfxAPISecret)
-		if err != nil {
-			log.Logger.Warn("received Logon without BfxApiSecret (20001)", zap.Error(err))
+		if err != nil || apiSecret == "" {
+			f.logger.Warn("received Logon without BfxApiSecret (20001)", zap.Error(err))
 			return err
 		}
 		bfxUserID, err := msg.Body.GetString(tagBfxUserID)
-		if err != nil {
-			log.Logger.Warn("received Logon without BfxUserID (20002)", zap.Error(err))
+		if err != nil || bfxUserID == "" {
+			f.logger.Warn("received Logon without BfxUserID (20002)", zap.Error(err))
 			return err
 		}
-		f.peers[sID].Logon(apiKey, apiSecret, bfxUserID)
-		f.peerMutex.Unlock()
+		if p, ok := f.FindPeer(sID.String()); ok {
+			p.Logon(apiKey, apiSecret, bfxUserID)
+		} else {
+			f.logger.Warn("could not find peer", zap.String("SessionID", sID.String()))
+		}
 	}
 	return nil
 }
 
 func (f *FIX) FromApp(msg *quickfix.Message, sID quickfix.SessionID) quickfix.MessageRejectError {
+	f.logger.Info("FIX.FromApp", zap.Any("msg", msg))
 	return f.Route(msg, sID)
 }
 
 // NewFIX creates a new FIX acceptor & associated services
-func NewFIX(s *quickfix.Settings) (*FIX, error) {
+func NewFIX(s *quickfix.Settings, peers service.Peers) (*FIX, error) {
 	f := &FIX{
 		MessageRouter: quickfix.NewMessageRouter(),
 		logger:        log.Logger,
-		peers:         make(map[quickfix.SessionID]*Peer),
+		Peers:         peers,
 	}
 
 	f.AddRoute(fix42mdr.Route(f.OnFIX42MarketDataRequest))

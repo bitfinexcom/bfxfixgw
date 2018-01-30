@@ -1,22 +1,33 @@
-package fix
+package service
 
 import (
 	"context"
-	"github.com/bitfinexcom/bfxfixgw/log"
+	bfxlog "github.com/bitfinexcom/bfxfixgw/log"
 	"github.com/bitfinexcom/bitfinex-api-go/v2"
 	"github.com/bitfinexcom/bitfinex-api-go/v2/websocket"
-	"github.com/quickfixgo/quickfix"
 	"go.uber.org/zap"
+	"log"
 	"time"
 )
 
+type ClientFactory interface {
+	NewClient() *websocket.Client
+}
+
+// Peers is an interface to create, remove, and lookup peers.
+type Peers interface {
+	FindPeer(id string) (*Peer, bool)
+	RemovePeer(id string) bool
+	AddPeer(id string)
+}
+
 // Peer represents a FIX-websocket peer user
 type Peer struct {
-	SessionID     quickfix.SessionID
 	subscriptions map[string]*subscription
-	bfx           *websocket.Client
+	Bfx           *websocket.Client
 	logger        *zap.Logger
-	bfxUserID     string
+
+	bfxUserID string
 }
 
 type subscription struct {
@@ -24,21 +35,20 @@ type subscription struct {
 	SubscriptionID string
 }
 
-// creates a peer, but does not establish a websocket connection yet
-func newPeer(sID quickfix.SessionID) *Peer {
+// NewPeer creates a peer, but does not establish a websocket connection yet
+func NewPeer(factory ClientFactory) *Peer {
 	return &Peer{
-		SessionID:     sID,
 		subscriptions: make(map[string]*subscription),
-		bfx:           websocket.NewClient(),
-		logger:        log.Logger,
+		Bfx:           factory.NewClient(),
+		logger:        bfxlog.Logger,
 	}
 }
 
 // Logon establishes a websocket connection and attempts to authenticate with the given apiKey and apiSecret
 func (p *Peer) Logon(apiKey, apiSecret, bfxUserID string) error {
-	p.bfx.Credentials(apiKey, apiSecret)
+	p.Bfx.Credentials(apiKey, apiSecret)
 	p.bfxUserID = bfxUserID
-	err := p.bfx.Connect()
+	err := p.Bfx.Connect()
 	if err != nil {
 		return err
 	}
@@ -50,7 +60,7 @@ func (p *Peer) subscribe() error {
 	for _, v := range p.subscriptions {
 		ctx, cxl := context.WithTimeout(context.Background(), time.Second*2)
 		defer cxl()
-		id, err := p.bfx.Subscribe(ctx, v.Request)
+		id, err := p.Bfx.Subscribe(ctx, v.Request)
 		if err != nil {
 			return err
 		}
@@ -63,7 +73,7 @@ func (p *Peer) unsubscribe() error {
 	for _, v := range p.subscriptions {
 		ctx, cxl := context.WithTimeout(context.Background(), time.Second*2)
 		defer cxl()
-		err := p.bfx.Unsubscribe(ctx, v.SubscriptionID)
+		err := p.Bfx.Unsubscribe(ctx, v.SubscriptionID)
 		if err != nil {
 			return err
 		}
@@ -79,13 +89,16 @@ func (p *Peer) resubscribe() error {
 }
 
 func (p *Peer) listen() {
-	for msg := range p.bfx.Listen() {
+	for msg := range p.Bfx.Listen() {
+		log.Printf("peer got msg: %#v", msg)
 		if msg == nil {
 			p.logger.Info("upstream disconnect")
 			// TODO log out peer
 			return
 		}
 		switch msg.(type) {
+		case *websocket.InfoEvent:
+			// TODO logon? no logon--client has not yet set credentials
 		case *websocket.AuthEvent:
 			err := p.subscribe()
 			if err != nil {
@@ -102,4 +115,8 @@ func (p *Peer) listen() {
 // BfxUserID is an immutable accessor to the bitfinex user ID
 func (p *Peer) BfxUserID() string {
 	return p.bfxUserID
+}
+
+func (p *Peer) Close() {
+	p.Bfx.Close()
 }

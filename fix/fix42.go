@@ -2,17 +2,16 @@ package fix
 
 import (
 	"context"
-	"strconv"
+	"time"
 
 	"github.com/bitfinexcom/bfxfixgw/convert"
 
-	"github.com/bitfinexcom/bitfinex-api-go/v2"
 	"go.uber.org/zap"
 
 	//er "github.com/quickfixgo/quickfix/fix42/executionreport"
 	mdr "github.com/quickfixgo/fix42/marketdatarequest"
+	mdrr "github.com/quickfixgo/fix42/marketdatarequestreject"
 	nos "github.com/quickfixgo/fix42/newordersingle"
-	ocj "github.com/quickfixgo/fix42/ordercancelreject"
 	ocr "github.com/quickfixgo/fix42/ordercancelrequest"
 	osr "github.com/quickfixgo/fix42/orderstatusrequest"
 
@@ -21,104 +20,15 @@ import (
 	"github.com/quickfixgo/quickfix"
 )
 
-var rejectReasonCompIDProblem = 9
+// Handle FIX42 messages and process them upstream to Bitfinex.
 
-// FIX42Handler processes websocket -> FIX
-func (f *FIX) FIX42Handler(o interface{}, sID quickfix.SessionID) {
-	f.logger.Debug("in FIX42TermDataHandler", zap.Any("object", o))
-
-	switch d := o.(type) {
-	case bitfinex.OrderSnapshot: // Order snapshot
-		f.FIX42OrderSnapshotHandler(d, sID)
-	case bitfinex.OrderNew: // Order new
-		f.FIX42OrderNewHandler(d, sID)
-	case bitfinex.OrderCancel: // Order cancel
-		f.FIX42OrderCancelHandler(d, sID)
-	case bitfinex.Notification: // Notification
-		f.FIX42NotificationHandler(d, sID)
-	default: // unknown
-		return
-	}
-}
-
-func (f *FIX) FIX42NotificationHandler(d bitfinex.Notification, sID quickfix.SessionID) {
-	p, ok := f.peer(sID)
-	if !ok {
-		f.logger.Warn("could not find peer for SessionID", zap.String("SessionID", sID.String()))
-		return
-	}
-	switch o := d.NotifyInfo.(type) {
-	case bitfinex.OrderCancel:
-		// Only handling error currently.
-		if d.Status == "ERROR" && d.Text == "Order not found." {
-			// Send out an OrderCancelReject
-			r := ocj.New(
-				field.NewOrderID("NONE"),
-				field.NewClOrdID("NONE"), // XXX: This should be the actual ClOrdID which we don't have in this context.
-				field.NewOrigClOrdID(strconv.FormatInt(o.CID, 10)),
-				field.NewOrdStatus(enum.OrdStatus_REJECTED),
-				field.NewCxlRejResponseTo(enum.CxlRejResponseTo_ORDER_CANCEL_REQUEST),
-			)
-			r.SetCxlRejReason(enum.CxlRejReason_UNKNOWN_ORDER)
-			r.SetAccount(p.BfxUserID())
-			quickfix.SendToTarget(r, sID)
-			return
-		}
-		return
-	case bitfinex.OrderNew:
-		// XXX: Handle this at some point.
-		return
-	default:
-		return
-	}
-}
-
-func (f *FIX) FIX42OrderSnapshotHandler(os bitfinex.OrderSnapshot, sID quickfix.SessionID) {
-	p, ok := f.peer(sID)
-	if !ok {
-		f.logger.Warn("could not find peer for SessionID", zap.String("SessionID", sID.String()))
-		return
-	}
-	for _, o := range os {
-		er := convert.FIX42ExecutionReportFromOrder(bitfinex.Order(o))
-		er.SetAccount(p.BfxUserID())
-		er.SetExecType(enum.ExecType_ORDER_STATUS)
-		quickfix.SendToTarget(er, sID)
-	}
-	return
-}
-
-func (f *FIX) FIX42OrderNewHandler(o bitfinex.OrderNew, sID quickfix.SessionID) {
-	p, ok := f.peer(sID)
-	if !ok {
-		f.logger.Warn("could not find peer for SessionID", zap.String("SessionID", sID.String()))
-		return
-	}
-	er := convert.FIX42ExecutionReportFromOrder(bitfinex.Order(o))
-	er.SetAccount(p.BfxUserID())
-	quickfix.SendToTarget(er, sID)
-	return
-}
-
-func (f *FIX) FIX42OrderCancelHandler(o bitfinex.OrderCancel, sID quickfix.SessionID) {
-	p, ok := f.peer(sID)
-	if !ok {
-		f.logger.Warn("could not find peer for SessionID", zap.String("SessionID", sID.String()))
-		return
-	}
-	er := convert.FIX42ExecutionReportFromOrder(bitfinex.Order(o))
-	er.SetExecType(enum.ExecType_CANCELED)
-	er.SetAccount(p.BfxUserID())
-	quickfix.SendToTarget(er, sID)
-	return
-}
+var rejectReasonOther = 0
 
 func (f *FIX) OnFIX42NewOrderSingle(msg nos.NewOrderSingle, sID quickfix.SessionID) quickfix.MessageRejectError {
-	p, ok := f.peer(sID)
+	p, ok := f.FindPeer(sID.String())
 	if !ok {
 		f.logger.Warn("could not find peer for SessionID", zap.String("SessionID", sID.String()))
-		tag := quickfix.Tag(49)
-		return quickfix.NewMessageRejectError("could not find established peer for session ID", rejectReasonCompIDProblem, &tag)
+		return quickfix.NewMessageRejectError("could not find established peer for session ID", rejectReasonOther, nil)
 	}
 
 	bo, err := convert.OrderNewFromFIX42NewOrderSingle(msg)
@@ -126,7 +36,7 @@ func (f *FIX) OnFIX42NewOrderSingle(msg nos.NewOrderSingle, sID quickfix.Session
 		return err
 	}
 
-	e := p.bfx.SubmitOrder(context.Background(), bo)
+	e := p.Bfx.SubmitOrder(context.Background(), bo)
 	if e != nil {
 		f.logger.Warn("could not submit order", zap.Error(e))
 	}
@@ -134,43 +44,60 @@ func (f *FIX) OnFIX42NewOrderSingle(msg nos.NewOrderSingle, sID quickfix.Session
 	return nil
 }
 
+func makeReject(msg string) quickfix.MessageRejectError {
+	return quickfix.NewBusinessMessageRejectError(msg, 0, nil)
+}
+
 func (f *FIX) OnFIX42MarketDataRequest(msg mdr.MarketDataRequest, sID quickfix.SessionID) quickfix.MessageRejectError {
-	/*
-		relSym, err := msg.GetNoRelatedSym()
+
+	p, ok := f.FindPeer(sID.String())
+	if !ok {
+		f.logger.Warn("could not find peer for SessionID", zap.String("SessionID", sID.String()))
+		return quickfix.NewMessageRejectError("could not find established peer for session ID", rejectReasonOther, nil)
+	}
+
+	relSym, err := msg.GetNoRelatedSym()
+	if err != nil {
+		return err
+	}
+
+	// Lazy shortcut
+
+	symbol, err := relSym.Get(0).GetSymbol()
+	if err != nil {
+		return err
+	}
+
+	mdReqID, err := msg.GetMDReqID()
+	if err != nil {
+		return err
+	}
+
+	subType, err := msg.GetSubscriptionRequestType()
+	if err != nil {
+		return err
+	}
+
+	// XXX: The following could most likely be abtracted to work both for 4.2 and 4.4.
+	switch subType {
+	default:
+		rej := mdrr.New(field.NewMDReqID(mdReqID))
+		quickfix.SendToTarget(rej, sID)
+	case enum.SubscriptionRequestType_SNAPSHOT:
+
+		ctx, cxl := context.WithTimeout(context.Background(), time.Second*2)
+		defer cxl()
+		_, err := p.Bfx.SubscribeTicker(ctx, symbol)
 		if err != nil {
-			return err
+
 		}
 
-		// Lazy shortcut
-
-				symbol, err := relSym.Get(0).GetSymbol()
-				if err != nil {
-					return err
-				}
-
-				mdReqID, err := msg.GetMDReqID()
-				if err != nil {
-					return err
-				}
-
-				subType, err := msg.GetSubscriptionRequestType()
-				if err != nil {
-					return err
-				}
-
-			// XXX: The following could most likely be abtracted to work both for 4.2 and 4.4.
-			go func() {
-				switch subType {
-				default:
-					rej := mdrr.New(field.NewMDReqID(mdReqID))
-					quickfix.SendToTarget(rej, sID)
-				case enum.SubscriptionRequestType_SNAPSHOT:
-					//ctx, _ := context.WithTimeout(context.Background(), time.Second*2)
-					//id, err := f.bfx.SubscribeTicker(ctx, symbol)
-					// TODO unsubscribe after receiving ack
-					// TODO how to manage subscriptions on reconnect? put into list?
-					// TODO split this into factories
-
+		//ctx, _ := context.WithTimeout(context.Background(), time.Second*2)
+		//id, err := f.bfx.SubscribeTicker(ctx, symbol)
+		// TODO unsubscribe after receiving ack
+		// TODO how to manage subscriptions on reconnect? put into list?
+		// TODO split this into factories
+		/*
 						h := func(ev interface{}) {
 							// For a simple snapshot request we just need to read one message from the channel.
 							//go f.bfx.Websocket.Unsubscribe(context.Background(), msg)
@@ -194,20 +121,20 @@ func (f *FIX) OnFIX42MarketDataRequest(msg mdr.MarketDataRequest, sID quickfix.S
 							}
 						}
 
-							err := f.bfx.Websocket.Subscribe(ctx, msg, h)
-							if err != nil {
-								rej := mdrr.New(field.NewMDReqID(mdReqID))
-								quickfix.SendToTarget(rej, sID)
-								return
-							}
+						err = p.Bfx.Subscribe(ctx, msg)
+						if err != nil {
+							rej := mdrr.New(field.NewMDReqID(mdReqID))
+							quickfix.SendToTarget(rej, sID)
+							return
+						}
 
-				case enum.SubscriptionRequestType_SNAPSHOT_PLUS_UPDATES:
-					if _, has := f.marketDataSubscriptions[mdReqID]; has {
-						rej := mdrr.New(field.NewMDReqID(mdReqID))
-						rej.SetMDReqRejReason(enum.MDReqRejReason_DUPLICATE_MDREQID)
-						quickfix.SendToTarget(rej, sID)
-						return
-					}
+					case enum.SubscriptionRequestType_SNAPSHOT_PLUS_UPDATES:
+						if _, has := f.marketDataSubscriptions[mdReqID]; has {
+							rej := mdrr.New(field.NewMDReqID(mdReqID))
+							rej.SetMDReqRejReason(enum.MDReqRejReason_DUPLICATE_MDREQID)
+							quickfix.SendToTarget(rej, sID)
+							return
+						}
 
 						h := func(ev interface{}) {
 							var data [][]float64
@@ -229,44 +156,42 @@ func (f *FIX) OnFIX42MarketDataRequest(msg mdr.MarketDataRequest, sID quickfix.S
 							}
 						}
 
-							ctx, _ := context.WithTimeout(context.Background(), time.Second*2)
-							msg := &bitfinex.PublicSubscriptionRequest{
-								Event:   "subscribe",
-								Channel: bitfinex.ChanTicker,
-								Symbol:  symbol,
-							}
-
-							err := f.bfx.Websocket.Subscribe(ctx, msg, h)
-							if err != nil {
-								rej := mdrr.New(field.NewMDReqID(mdReqID))
-								quickfix.SendToTarget(rej, sID)
-								return
-							}
-
-					// Every new market data subscription gets a new channel that constantly
-					// sends out reports.
-					// XXX: How does this handle multiple market data request for the same ticker?
-					f.MDMu.Lock()
-					//f.marketDataSubscriptions[mdReqID] = BfxSubscription{Request: msg, Handler: h}
-					f.MDMu.Unlock()
-				case enum.SubscriptionRequestType_DISABLE_PREVIOUS_SNAPSHOT_PLUS_UPDATE_REQUEST:
-					if _, has := f.marketDataSubscriptions[mdReqID]; !has {
-						// If we don't have a channel for the req we just ignore the disable.
-						// XXX: Should we tell the other side about that?
-						return
-					}
-
 						ctx, _ := context.WithTimeout(context.Background(), time.Second*2)
-						err := f.bfx.Websocket.Unsubscribe(ctx, f.marketDataSubscriptions[mdReqID].Request)
-						if err != nil {
-							f.logger.Error("unsub", zap.Error(err))
+						msg := &bitfinex.PublicSubscriptionRequest{
+							Event:   "subscribe",
+							Channel: bitfinex.ChanTicker,
+							Symbol:  symbol,
 						}
-						f.MDMu.Lock()
-						delete(f.marketDataSubscriptions, mdReqID)
-						f.MDMu.Unlock()
+
+						err := f.bfx.Websocket.Subscribe(ctx, msg, h)
+						if err != nil {
+							rej := mdrr.New(field.NewMDReqID(mdReqID))
+							quickfix.SendToTarget(rej, sID)
+							return
+						}
+
+				// Every new market data subscription gets a new channel that constantly
+				// sends out reports.
+				// XXX: How does this handle multiple market data request for the same ticker?
+				f.MDMu.Lock()
+				//f.marketDataSubscriptions[mdReqID] = BfxSubscription{Request: msg, Handler: h}
+				f.MDMu.Unlock()
+			case enum.SubscriptionRequestType_DISABLE_PREVIOUS_SNAPSHOT_PLUS_UPDATE_REQUEST:
+				if _, has := f.marketDataSubscriptions[mdReqID]; !has {
+					// If we don't have a channel for the req we just ignore the disable.
+					// XXX: Should we tell the other side about that?
+					return
 				}
-			}()
-	*/
+
+				ctx, _ := context.WithTimeout(context.Background(), time.Second*2)
+				err := f.bfx.Websocket.Unsubscribe(ctx, f.marketDataSubscriptions[mdReqID].Request)
+				if err != nil {
+					f.logger.Error("unsub", zap.Error(err))
+				}
+				f.MDMu.Lock()
+				delete(f.marketDataSubscriptions, mdReqID)
+				f.MDMu.Unlock()*/
+	}
 
 	return nil
 }

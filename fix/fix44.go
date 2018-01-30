@@ -1,115 +1,16 @@
 package fix
 
 import (
-	"strconv"
-
-	"github.com/bitfinexcom/bfxfixgw/convert"
-
-	"github.com/bitfinexcom/bitfinex-api-go/v2"
 	"github.com/quickfixgo/quickfix"
-	"go.uber.org/zap"
 
 	//er "github.com/quickfixgo/quickfix/fix44/executionreport"
 	mdr "github.com/quickfixgo/fix44/marketdatarequest"
 	nos "github.com/quickfixgo/fix44/newordersingle"
-	ocj "github.com/quickfixgo/fix44/ordercancelreject"
 	ocr "github.com/quickfixgo/fix44/ordercancelrequest"
 	osr "github.com/quickfixgo/fix44/orderstatusrequest"
-
-	"github.com/quickfixgo/enum"
-	"github.com/quickfixgo/field"
 )
 
-func (f *FIX) FIX44Handler(o interface{}, sID quickfix.SessionID) {
-	f.logger.Debug("in FIX44TermDataHandler", zap.Any("object", o))
-	switch d := o.(type) {
-	case nil:
-		return
-	case bitfinex.OrderSnapshot: // Order snapshot
-		f.FIX44OrderSnapshotHandler(d, sID)
-	case bitfinex.OrderNew: // Order new
-		f.FIX44OrderNewHandler(d, sID)
-	case bitfinex.OrderCancel: // Order cancel
-		f.FIX44OrderCancelHandler(d, sID)
-	case bitfinex.Notification: // Notification
-		f.FIX44NotificationHandler(d, sID)
-	default: // unknown
-		return
-	}
-
-}
-
-func (f *FIX) FIX44NotificationHandler(d bitfinex.Notification, sID quickfix.SessionID) {
-	p, ok := f.peer(sID)
-	if !ok {
-		f.logger.Warn("could not find peer for SessionID", zap.String("SessionID", sID.String()))
-	}
-
-	switch o := d.NotifyInfo.(type) {
-	case bitfinex.OrderCancel:
-		// Only handling error currently.
-		if d.Status == "ERROR" && d.Text == "Order not found." {
-			// Send out an OrderCancelReject
-			r := ocj.New(
-				field.NewOrderID("NONE"),
-				field.NewClOrdID("NONE"), // XXX: This should be the actual ClOrdID which we don't have in this context.
-				field.NewOrigClOrdID(strconv.FormatInt(o.CID, 10)),
-				field.NewOrdStatus(enum.OrdStatus_REJECTED),
-				field.NewCxlRejResponseTo(enum.CxlRejResponseTo_ORDER_CANCEL_REQUEST),
-			)
-			r.SetCxlRejReason(enum.CxlRejReason_UNKNOWN_ORDER)
-			r.SetAccount(p.BfxUserID())
-			quickfix.SendToTarget(r, sID)
-			return
-		}
-		return
-	case bitfinex.OrderNew:
-		// XXX: Handle this at some point.
-		return
-	default:
-		return
-	}
-}
-
-func (f *FIX) FIX44OrderSnapshotHandler(os bitfinex.OrderSnapshot, sID quickfix.SessionID) {
-	p, ok := f.peer(sID)
-	if !ok {
-		f.logger.Warn("could not find peer for SessionID", zap.String("SessionID", sID.String()))
-	}
-
-	for _, o := range os {
-		er := convert.FIX44ExecutionReportFromOrder(bitfinex.Order(o))
-		er.SetAccount(p.BfxUserID())
-		er.SetExecType(enum.ExecType_ORDER_STATUS)
-		quickfix.SendToTarget(er, sID)
-	}
-	return
-}
-
-func (f *FIX) FIX44OrderNewHandler(o bitfinex.OrderNew, sID quickfix.SessionID) {
-	p, ok := f.peer(sID)
-	if !ok {
-		f.logger.Warn("could not find peer for SessionID", zap.String("SessionID", sID.String()))
-	}
-
-	er := convert.FIX44ExecutionReportFromOrder(bitfinex.Order(o))
-	er.SetAccount(p.BfxUserID())
-	quickfix.SendToTarget(er, sID)
-	return
-}
-
-func (f *FIX) FIX44OrderCancelHandler(o bitfinex.OrderCancel, sID quickfix.SessionID) {
-	p, ok := f.peer(sID)
-	if !ok {
-		f.logger.Warn("could not find peer for SessionID", zap.String("SessionID", sID.String()))
-	}
-
-	er := convert.FIX44ExecutionReportFromOrder(bitfinex.Order(o))
-	er.SetExecType(enum.ExecType_CANCELED)
-	er.SetAccount(p.BfxUserID())
-	quickfix.SendToTarget(er, sID)
-	return
-}
+// Handle FIX44 messages and process them upstream to Bitfinex.
 
 func (f *FIX) OnFIX44NewOrderSingle(msg nos.NewOrderSingle, sID quickfix.SessionID) quickfix.MessageRejectError {
 	/*bo, err := convert.OrderNewFromFIX44NewOrderSingle(msg)

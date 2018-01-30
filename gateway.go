@@ -7,9 +7,14 @@ import (
 	_ "net/http/pprof"
 	"os"
 	"path"
+	"sync"
+	"time"
+
+	"github.com/bitfinexcom/bitfinex-api-go/v2/websocket"
 
 	"github.com/bitfinexcom/bfxfixgw/fix"
 	"github.com/bitfinexcom/bfxfixgw/log"
+	"github.com/bitfinexcom/bfxfixgw/service"
 
 	"github.com/quickfixgo/quickfix"
 	"go.uber.org/zap"
@@ -32,10 +37,65 @@ func configDirectory() string {
 type Gateway struct {
 	logger *zap.Logger
 	*fix.FIX
+
+	peerMutex sync.Mutex
+	peers     map[string]*service.Peer
+
+	factory service.ClientFactory
+}
+
+func (g *Gateway) AddPeer(id string) {
+	peer := service.NewPeer(g.factory)
+	peer.Bfx.SetReadTimeout(8 * time.Second)
+	g.peers[id] = peer
+}
+
+func (g *Gateway) FindPeer(id string) (p *service.Peer, ok bool) {
+	g.peerMutex.Lock()
+	defer g.peerMutex.Unlock()
+	p, ok = g.peers[id]
+	return
+}
+
+func (g *Gateway) RemovePeer(id string) bool {
+	g.peerMutex.Lock()
+	defer g.peerMutex.Unlock()
+	if p, ok := g.peers[id]; ok {
+		p.Close()
+		delete(g.peers, id)
+		return true
+	}
+	return false
 }
 
 func (g *Gateway) Start() error {
 	return g.FIX.Up()
+}
+
+func (g *Gateway) Stop() {
+	g.FIX.Down()
+}
+
+func newGateway(s *quickfix.Settings, factory service.ClientFactory) (*Gateway, bool) {
+	g := &Gateway{
+		logger:  log.Logger,
+		peers:   make(map[string]*service.Peer),
+		factory: factory,
+	}
+	fix, err := fix.NewFIX(s, g)
+	if err != nil {
+		log.Logger.Fatal("create FIX", zap.Error(err))
+		return nil, false
+	}
+	g.FIX = fix
+	return g, true
+}
+
+type defaultClientFactory struct {
+}
+
+func (d *defaultClientFactory) NewClient() *websocket.Client {
+	return websocket.NewClient()
 }
 
 func main() {
@@ -47,11 +107,10 @@ func main() {
 	if err != nil {
 		log.Logger.Fatal("parse FIX settings", zap.Error(err))
 	}
-	fix, err := fix.NewFIX(s)
-	if err != nil {
-		log.Logger.Fatal("create FIX", zap.Error(err))
+	g, ok := newGateway(s, &defaultClientFactory{})
+	if !ok {
+		return
 	}
-	g := &Gateway{logger: log.Logger, FIX: fix}
 	err = g.Start()
 	if err != nil {
 		log.Logger.Fatal("start FIX", zap.Error(err))

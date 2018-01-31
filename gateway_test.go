@@ -149,7 +149,7 @@ func TestNewOrderSingle(t *testing.T) {
 		t.Fatal(err)
 	}
 	if `{"subId":"nonce1","event":"auth","apiKey":"apiKey1","authSig":"2744ec1afc974eadbda7e09efa03da80578628ba90e2aa5fcba8c2c61014b811f3a8be5a041c3ee35c464a59856b3869","authPayload":"AUTHnonce1","authNonce":"nonce1"}` != msg {
-		t.Fatalf("unexpectedly got: %s", msg)
+		t.Fatalf("unexpectedly got for logon: %s", msg)
 	}
 
 	// send NOS
@@ -161,7 +161,12 @@ func TestNewOrderSingle(t *testing.T) {
 		field.NewOrdType(enum.OrdType_MARKET))
 	session := mockFIX.LastSession()
 	session.Send(nos)
-	// TODO assert recv websocket OrderNew
+
+	// assert OrderNew
+	msg, err = mockWs.WaitForMessage(0, 1)
+	if `{}` != msg {
+		t.Fatalf("unexpectedly got for order: %s", msg)
+	}
 
 	mockFIX.Stop()
 	mockWs.Stop()

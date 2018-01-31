@@ -51,6 +51,9 @@ func (c *client) readPump() {
 			break
 		}
 		message = bytes.TrimSpace(bytes.Replace(message, []byte("\n"), []byte(" "), -1))
+		if string(message) == "" {
+			log.Printf("got empty message!")
+		}
 		c.lock.Lock()
 		c.received = append(c.received, string(message))
 		c.lock.Unlock()

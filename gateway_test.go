@@ -13,6 +13,7 @@ import (
 	"github.com/quickfixgo/enum"
 	"github.com/quickfixgo/field"
 	fix42nos "github.com/quickfixgo/fix42/newordersingle"
+	"github.com/shopspring/decimal"
 )
 
 type mockClientFactory struct {
@@ -151,6 +152,9 @@ func TestNewOrderSingle(t *testing.T) {
 	if `{"subId":"nonce1","event":"auth","apiKey":"apiKey1","authSig":"2744ec1afc974eadbda7e09efa03da80578628ba90e2aa5fcba8c2c61014b811f3a8be5a041c3ee35c464a59856b3869","authPayload":"AUTHnonce1","authNonce":"nonce1"}` != msg {
 		t.Fatalf("unexpectedly got for logon: %s", msg)
 	}
+	// publish sub ack
+	// 2018/02/02 17:01:22 [WARN]: invalid character 'c' looking for beginning of value ?
+	mockWs.Broadcast(`{"event":"auth","status":"OK","chanId":0,"userId":1,"subId":"nonce1","auth_id":"valid-auth-guid","caps":{"orders":{"read":1,"write":0},"account":{"read":1,"write":0},"funding":{"read":1,"write":0},"history":{"read":1,"write":0},"wallets":{"read":1,"write":0},"withdraw":{"read":0,"write":0},"positions":{"read":1,"write":0}}}`)
 
 	// send NOS
 	nos := fix42nos.New(field.NewClOrdID("clordid1"),
@@ -158,15 +162,29 @@ func TestNewOrderSingle(t *testing.T) {
 		field.NewSymbol("BTCUSD"),
 		field.NewSide(enum.Side_BUY),
 		field.NewTransactTime(time.Now()),
-		field.NewOrdType(enum.OrdType_MARKET))
+		field.NewOrdType(enum.OrdType_LIMIT))
+	nos.Set(field.NewOrderQty(decimal.NewFromFloat(1.0), 1))
+	nos.Set(field.NewPrice(decimal.NewFromFloat(12000.0), 1))
 	session := mockFIX.LastSession()
 	session.Send(nos)
 
 	// assert OrderNew
 	msg, err = mockWs.WaitForMessage(0, 1)
-	if `{}` != msg {
+	if `[0,"on",null,{"gid":0,"cid":0,"type":"EXCHANGE LIMIT","symbol":"BTCUSD","amount":"1","price":"12000"}]` != msg {
 		t.Fatalf("unexpectedly got for order: %s", msg)
 	}
+
+	// ack new
+	mockWs.Broadcast(`[0,"n",[null,"on-req",null,null,[1234567,null,clordid1,"tBTCUSD",null,null,1,1,"LIMIT",null,null,null,null,null,null,null,12000,null,null,null,null,null,null,0,null,null],null,"SUCCESS","Submitting limit buy order for 1.0 BTC."]]`)
+
+	// position update
+	mockWs.Broadcast(`[0,"pu",["tBTCUSD","ACTIVE",0.21679716,915.9,0,0,null,null,null,null]]`)
+	mockWs.Broadcast(`[0,"pu",["tBTCUSD","ACTIVE",1,916.13496085,0,0,null,null,null,null]]`)
+
+	// trade execution
+	mockWs.Broadcast(`[0,"te",[1,"tBTCUSD",1514909325593,1234567,0.21679716,915.9,null,null,-1]]`)
+
+	// TODO order update?
 
 	mockFIX.Stop()
 	mockWs.Stop()

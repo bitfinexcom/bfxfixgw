@@ -165,7 +165,7 @@ func TestNewOrderSingle(t *testing.T) {
 	session := mockFIX.LastSession()
 	session.Send(nos)
 
-	// assert OrderNew
+	// assert OrderNew request
 	msg, err = mockWs.WaitForMessage(0, 1)
 	if `[0,"on",null,{"gid":0,"cid":0,"type":"EXCHANGE LIMIT","symbol":"BTCUSD","amount":"1","price":"12000"}]` != msg {
 		t.Fatalf("unexpectedly got for order: %s", msg)
@@ -173,15 +173,16 @@ func TestNewOrderSingle(t *testing.T) {
 
 	// ack new
 	mockWs.Broadcast(`[0,"n",[null,"on-req",null,null,[1234567,null,clordid1,"tBTCUSD",null,null,1,1,"LIMIT",null,null,null,null,null,null,null,12000,null,null,null,null,null,null,0,null,null],null,"SUCCESS","Submitting limit buy order for 1.0 BTC."]]`)
+	// TODO assert FIX execution report for ack
 
 	// position update
 	mockWs.Broadcast(`[0,"pu",["tBTCUSD","ACTIVE",0.21679716,915.9,0,0,null,null,null,null]]`)
 	mockWs.Broadcast(`[0,"pu",["tBTCUSD","ACTIVE",1,916.13496085,0,0,null,null,null,null]]`)
+	// TODO which messeages are generated while sending a NOS? assert?
 
 	// trade execution
 	mockWs.Broadcast(`[0,"te",[1,"tBTCUSD",1514909325593,1234567,0.21679716,915.9,null,null,-1]]`)
-
-	// TODO order update?
+	// TODO assert order update?
 
 	mockFIX.Stop()
 	mockWs.Stop()

@@ -2,28 +2,20 @@ package main
 
 import (
 	"fmt"
-	"github.com/bitfinexcom/bfxfixgw/integration_test/mock"
-	"github.com/quickfixgo/quickfix"
 	"log"
 	"os"
 	"testing"
 	"time"
 
+	"github.com/bitfinexcom/bfxfixgw/integration_test/mock"
 	"github.com/bitfinexcom/bitfinex-api-go/v2/websocket"
+	"github.com/quickfixgo/quickfix"
+
 	"github.com/quickfixgo/enum"
 	"github.com/quickfixgo/field"
 	fix42nos "github.com/quickfixgo/fix42/newordersingle"
 	"github.com/shopspring/decimal"
 )
-
-type mockClientFactory struct {
-	url   string
-	Nonce *mock.MockNonceGenerator
-}
-
-func (m *mockClientFactory) NewClient() *websocket.Client {
-	return websocket.NewClientWithURLNonce(m.url, m.Nonce)
-}
 
 func loadSettings(file string) *quickfix.Settings {
 	cfg, err := os.Open(file)
@@ -42,10 +34,13 @@ type mockFixSettings struct {
 	FixVersion                   fixVersion
 }
 
-func setup(t *testing.T, port int, settings mockFixSettings) (*mock.MockFIX, *mock.MockWs, *Gateway, *mockClientFactory) {
+func setup(t *testing.T, port int, settings mockFixSettings) (*mock.MockFIX, *mock.MockWs, *Gateway, *defaultClientFactory) {
 	// setup mocks
 	mockFIXSettings := loadSettings(fmt.Sprintf("integration_test/conf/mock_%s_client.cfg", settings.FixVersion))
 	mockFIX, err := mock.NewMockFIX(mockFIXSettings)
+	if err != nil {
+		t.Fatal(err)
+	}
 	mockFIX.ApiKey = settings.ApiKey
 	mockFIX.ApiSecret = settings.ApiSecret
 	mockFIX.BfxUserID = settings.BfxUserID
@@ -56,9 +51,11 @@ func setup(t *testing.T, port int, settings mockFixSettings) (*mock.MockFIX, *mo
 	mockFIX.Start()
 	wsService := mock.NewMockWs(port)
 	wsService.Start()
-	factory := mockClientFactory{
-		url:   "ws://localhost:6001",
-		Nonce: &mock.MockNonceGenerator{},
+	params := websocket.NewDefaultParameters()
+	params.URL = fmt.Sprintf("ws://localhost:%d", port)
+	factory := defaultClientFactory{
+		Parameters:     params,
+		NonceGenerator: &mock.IncrementingNonceGenerator{},
 	}
 
 	// create gateway

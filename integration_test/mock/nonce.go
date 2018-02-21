@@ -4,19 +4,13 @@ import (
 	"fmt"
 )
 
-type MockNonceGenerator struct {
-	nonce string
-	inc   int
+// IncrementingNonceGenerator starts at nonce1 and increments each by +1: nonce1, nonce2, ..., nonceN
+type IncrementingNonceGenerator struct {
+	nonce int
 }
 
-func (m *MockNonceGenerator) Next(nonce string) {
-	m.nonce = nonce
-}
-
-func (m *MockNonceGenerator) GetNonce() string {
-	if m.nonce == "" {
-		m.inc++
-		return fmt.Sprintf("nonce%d", m.inc)
-	}
-	return m.nonce
+// GetNonce returns an incrementing nonce value.
+func (m *IncrementingNonceGenerator) GetNonce() string {
+	m.nonce++
+	return fmt.Sprintf("nonce%d", m.nonce)
 }

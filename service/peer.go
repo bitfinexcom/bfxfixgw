@@ -2,16 +2,17 @@ package service
 
 import (
 	"context"
+	"log"
+	"time"
+
 	bfxlog "github.com/bitfinexcom/bfxfixgw/log"
 	"github.com/bitfinexcom/bitfinex-api-go/v2"
 	"github.com/bitfinexcom/bitfinex-api-go/v2/websocket"
 	"go.uber.org/zap"
-	"log"
-	"time"
 )
 
 type ClientFactory interface {
-	NewClient() *websocket.Client
+	Create() *websocket.Client
 }
 
 // Peers is an interface to create, remove, and lookup peers.
@@ -39,7 +40,7 @@ type subscription struct {
 func NewPeer(factory ClientFactory) *Peer {
 	return &Peer{
 		subscriptions: make(map[string]*subscription),
-		Bfx:           factory.NewClient(),
+		Bfx:           factory.Create(),
 		logger:        bfxlog.Logger,
 	}
 }

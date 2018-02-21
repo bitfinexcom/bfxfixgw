@@ -7,10 +7,15 @@ import (
 	_ "net/http/pprof"
 	"os"
 	"path"
-	"path/filepath"
+	"sync"
 
-	"github.com/bitfinexcom/bfxfixgw/link"
+	"github.com/bitfinexcom/bitfinex-api-go/utils"
+
+	"github.com/bitfinexcom/bitfinex-api-go/v2/websocket"
+
+	"github.com/bitfinexcom/bfxfixgw/fix"
 	"github.com/bitfinexcom/bfxfixgw/log"
+	"github.com/bitfinexcom/bfxfixgw/service"
 
 	"github.com/quickfixgo/quickfix"
 	"go.uber.org/zap"
@@ -32,38 +37,89 @@ func configDirectory() string {
 // and vice versa.
 type Gateway struct {
 	logger *zap.Logger
-	links  []*link.Link
+	*fix.FIX
+
+	peerMutex sync.Mutex
+	peers     map[string]*service.Peer
+
+	factory service.ClientFactory
+}
+
+func (g *Gateway) AddPeer(id string) {
+	peer := service.NewPeer(g.factory)
+	g.peers[id] = peer
+}
+
+func (g *Gateway) FindPeer(id string) (p *service.Peer, ok bool) {
+	g.peerMutex.Lock()
+	defer g.peerMutex.Unlock()
+	p, ok = g.peers[id]
+	return
+}
+
+func (g *Gateway) RemovePeer(id string) bool {
+	g.peerMutex.Lock()
+	defer g.peerMutex.Unlock()
+	if p, ok := g.peers[id]; ok {
+		p.Close()
+		delete(g.peers, id)
+		return true
+	}
+	return false
+}
+
+func (g *Gateway) Start() error {
+	return g.FIX.Up()
+}
+
+func (g *Gateway) Stop() {
+	g.FIX.Down()
+}
+
+func newGateway(s *quickfix.Settings, factory service.ClientFactory) (*Gateway, bool) {
+	g := &Gateway{
+		logger:  log.Logger,
+		peers:   make(map[string]*service.Peer),
+		factory: factory,
+	}
+	fix, err := fix.NewFIX(s, g)
+	if err != nil {
+		log.Logger.Fatal("create FIX", zap.Error(err))
+		return nil, false
+	}
+	g.FIX = fix
+	return g, true
+}
+
+type defaultClientFactory struct {
+	*websocket.Parameters
+	utils.NonceGenerator
+}
+
+func (d *defaultClientFactory) Create() *websocket.Client {
+	return websocket.NewWithParamsNonce(d.Parameters, d.NonceGenerator)
 }
 
 func main() {
-	ps, err := filepath.Glob(path.Join(FIXConfigDirectory, "*.cfg"))
+	f, err := os.Open(path.Join(FIXConfigDirectory, "bfx.cfg"))
 	if err != nil {
-		log.Logger.Fatal("glob FIX configs", zap.Error(err))
+		log.Logger.Fatal("FIX config", zap.Error(err))
 	}
-
-	links := []*link.Link{}
-	for _, p := range ps {
-		cfg, err := os.Open(p)
-		if err != nil {
-			log.Logger.Fatal("open FIX settings", zap.Error(err))
-		}
-		s, err := quickfix.ParseSettings(cfg)
-		if err != nil {
-			log.Logger.Fatal("parse FIX settings", zap.Error(err))
-		}
-
-		l, err := link.NewLink(s)
-		if err != nil {
-			log.Logger.Fatal("creating new Link", zap.Error(err))
-		}
-		err = l.Establish()
-		if err != nil {
-			log.Logger.Fatal("establish new Link", zap.Error(err))
-		}
-		links = append(links, l)
+	s, err := quickfix.ParseSettings(f)
+	if err != nil {
+		log.Logger.Fatal("parse FIX settings", zap.Error(err))
 	}
-
-	g := &Gateway{logger: log.Logger, links: links}
+	g, ok := newGateway(s, &defaultClientFactory{
+		Parameters:     websocket.NewDefaultParameters(),
+		NonceGenerator: utils.NewEpochNonceGenerator(),
+	})
+	if !ok {
+		return
+	}
+	err = g.Start()
+	if err != nil {
+		log.Logger.Fatal("start FIX", zap.Error(err))
+	}
 
 	g.logger.Info("starting stat server")
 	g.logger.Error("stat server", zap.Error(http.ListenAndServe(":8080", nil)))

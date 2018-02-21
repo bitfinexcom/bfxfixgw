@@ -1,15 +1,9 @@
 package fix
 
 import (
-	"context"
-	"fmt"
-	"strconv"
-	"sync"
-	"time"
-
 	"github.com/bitfinexcom/bfxfixgw/log"
+	"github.com/bitfinexcom/bfxfixgw/service"
 
-	"github.com/bitfinexcom/bitfinex-api-go/v2"
 	"go.uber.org/zap"
 
 	fix42mdr "github.com/quickfixgo/fix42/marketdatarequest"
@@ -23,209 +17,77 @@ import (
 	fix44osr "github.com/quickfixgo/fix44/orderstatusrequest"
 
 	"github.com/quickfixgo/quickfix"
-	_ "github.com/shopspring/decimal"
 )
 
+// FIX types, defined in BitfinexFIX42.xml
+var msgTypeLogon = string([]byte("A"))
+var tagBfxAPIKey = quickfix.Tag(20000)
+var tagBfxAPISecret = quickfix.Tag(20001)
+var tagBfxUserID = quickfix.Tag(20002)
+
+// FIX establishes an acceptor and manages peer websocket clients
 type FIX struct {
 	*quickfix.MessageRouter
 
-	bfxMu sync.Mutex
-	bfx   *bitfinex.Client
+	service.Peers
 
-	bfxUserID       string
-	isConnected     bool
-	maintenanceMode bool
-
-	MDMu                    sync.Mutex // Mutex to protect the marketDataSubscriptions.
-	marketDataSubscriptions map[string]BfxSubscription
-
-	acc *quickfix.Acceptor
-
+	acc    *quickfix.Acceptor
 	logger *zap.Logger
 }
 
-type BfxSubscription struct {
-	Request *bitfinex.PublicSubscriptionRequest
-	Handler func(ev interface{})
-}
-
 func (f *FIX) OnCreate(sID quickfix.SessionID) {
-	err := f.initBfx(sID)
-	if err != nil {
-		f.logger.Error("websocket connect", zap.Error(err))
-		return
-	}
-	go f.listener(sID)
-
-	if err := f.attachHandlers(sID); err != nil {
-		f.logger.Error("attaching handlers", zap.Error(err))
-		return
-	}
-
-	if err := f.subscribe(); err != nil {
-		f.logger.Error("websocket subscribe", zap.Error(err))
-		return
-	}
-
-	return
-}
-
-func (f *FIX) initBfx(sID quickfix.SessionID) error {
-	b := bitfinex.NewClient().Credentials(sID.SenderCompID, sID.TargetCompID)
-
-	err := b.Websocket.Connect()
-	if err != nil {
-		f.logger.Error("websocket connect", zap.Error(err))
-		return err
-	}
-	b.Websocket.SetReadTimeout(8 * time.Second)
-
-	f.bfxMu.Lock()
-	f.bfx = b
-	f.bfxMu.Unlock()
-
-	return nil
-}
-
-func (f *FIX) attachHandlers(sID quickfix.SessionID) error {
-	var handler func(o interface{}, sID quickfix.SessionID)
-
-	switch sID.BeginString {
-	case quickfix.BeginStringFIX44:
-		handler = f.FIX44Handler
-	case quickfix.BeginStringFIX42:
-		handler = f.FIX42Handler
-	default:
-		return fmt.Errorf("unsupported FIX version: %s", sID.BeginString)
-	}
-
-	f.bfx.Websocket.AttachPrivateHandler(func(ev interface{}) {
-		handler(ev, sID)
-	})
-
-	f.bfx.Websocket.AttachEventHandler(func(ev interface{}) {
-		switch e := ev.(type) {
-		case bitfinex.InfoEvent:
-			// TODO: handle maintenance mode/restarts
-		}
-	})
-
-	return nil
-}
-
-func (f *FIX) subscribe() error {
-	ctx, _ := context.WithTimeout(context.Background(), time.Second*1)
-	f.bfx.Websocket.Authenticate(ctx)
-	if err := f.waitForUserID(); err != nil {
-		return err
-	}
-
-	for _, v := range f.marketDataSubscriptions {
-		ctx, _ := context.WithTimeout(context.Background(), time.Second*2)
-		err := f.bfx.Websocket.Subscribe(ctx, v.Request, v.Handler)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (f *FIX) unsubscribe() error {
-	for _, v := range f.marketDataSubscriptions {
-		ctx, _ := context.WithTimeout(context.Background(), time.Second*2)
-		err := f.bfx.Websocket.Unsubscribe(ctx, v.Request)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (f *FIX) resubscribe() error {
-	if err := f.unsubscribe(); err != nil {
-		return err
-	}
-	return f.subscribe()
-}
-
-func (f *FIX) listener(sID quickfix.SessionID) {
-	for {
-		select {
-		case <-f.bfx.Websocket.Done():
-			f.logger.Error("ws quit", zap.Error(f.bfx.Websocket.Err()))
-			f.isConnected = false
-			defer f.reconnectWebsocket(sID)
-			return
-		}
-	}
-}
-
-func (f *FIX) reconnectWebsocket(sID quickfix.SessionID) {
-	err := f.initBfx(sID)
-	if err != nil {
-		f.logger.Error("websocket connect", zap.Error(err))
-		return
-	}
-
-	if err := f.subscribe(); err != nil {
-		f.logger.Error("websocket authenticate", zap.Error(err))
-		return
-	}
-
-	if err := f.attachHandlers(sID); err != nil {
-		f.logger.Error("attaching handlers", zap.Error(err))
-		return
-	}
-
-	go f.listener(sID)
-}
-
-func (f *FIX) inMaintenanceMode() bool {
-	return f.maintenanceMode
-}
-
-// This waits for the Authentication event and then sets the User ID.
-func (f *FIX) waitForUserID() error {
-	wg := sync.WaitGroup{}
-	wg.Add(1) // Ghetto once handler until once handlers get to the lib
-	f.bfx.Websocket.AttachEventHandler(func(ev interface{}) {
-		switch e := ev.(type) {
-		case bitfinex.AuthEvent:
-			if e.Status == "OK" {
-				f.bfxUserID = strconv.FormatInt(e.UserID, 10)
-				wg.Done()
-			}
-		}
-	})
-	defer f.bfx.Websocket.RemoveEventHandler()
-
-	err := wait(&wg, 4*time.Second)
-	return err
+	log.Logger.Info("FIX.OnCreate", zap.Any("SessionID", sID))
+	f.Peers.AddPeer(sID.String())
 }
 
 func (f *FIX) OnLogon(sID quickfix.SessionID) {
 	log.Logger.Info("FIX.OnLogon", zap.Error(nil))
-	return
 }
 
-func (f *FIX) OnLogout(sID quickfix.SessionID)                           { return }
-func (f *FIX) ToAdmin(msg *quickfix.Message, sID quickfix.SessionID)     { return }
+func (f *FIX) OnLogout(sID quickfix.SessionID) { return }
+func (f *FIX) ToAdmin(msg *quickfix.Message, sID quickfix.SessionID) {
+	f.logger.Info("FIX.ToAdmin", zap.Any("msg", msg))
+}
 func (f *FIX) ToApp(msg *quickfix.Message, sID quickfix.SessionID) error { return nil }
 func (f *FIX) FromAdmin(msg *quickfix.Message, sID quickfix.SessionID) quickfix.MessageRejectError {
+	f.logger.Info("FIX.FromAdmin", zap.Any("msg", msg))
+
+	if msg.IsMsgTypeOf(msgTypeLogon) {
+		apiKey, err := msg.Body.GetString(tagBfxAPIKey)
+		if err != nil || apiKey == "" {
+			f.logger.Warn("received Logon without BfxApiKey (20000)", zap.Error(err))
+			return err
+		}
+		apiSecret, err := msg.Body.GetString(tagBfxAPISecret)
+		if err != nil || apiSecret == "" {
+			f.logger.Warn("received Logon without BfxApiSecret (20001)", zap.Error(err))
+			return err
+		}
+		bfxUserID, err := msg.Body.GetString(tagBfxUserID)
+		if err != nil || bfxUserID == "" {
+			f.logger.Warn("received Logon without BfxUserID (20002)", zap.Error(err))
+			return err
+		}
+		if p, ok := f.FindPeer(sID.String()); ok {
+			p.Logon(apiKey, apiSecret, bfxUserID)
+		} else {
+			f.logger.Warn("could not find peer", zap.String("SessionID", sID.String()))
+		}
+	}
 	return nil
 }
 
 func (f *FIX) FromApp(msg *quickfix.Message, sID quickfix.SessionID) quickfix.MessageRejectError {
+	f.logger.Info("FIX.FromApp", zap.Any("msg", msg))
 	return f.Route(msg, sID)
 }
 
-func NewFIX(s *quickfix.Settings) (*FIX, error) {
+// NewFIX creates a new FIX acceptor & associated services
+func NewFIX(s *quickfix.Settings, peers service.Peers) (*FIX, error) {
 	f := &FIX{
-		MessageRouter:           quickfix.NewMessageRouter(),
-		marketDataSubscriptions: map[string]BfxSubscription{},
-		logger:                  log.Logger,
+		MessageRouter: quickfix.NewMessageRouter(),
+		logger:        log.Logger,
+		Peers:         peers,
 	}
 
 	f.AddRoute(fix42mdr.Route(f.OnFIX42MarketDataRequest))
@@ -249,14 +111,12 @@ func NewFIX(s *quickfix.Settings) (*FIX, error) {
 	return f, nil
 }
 
+// Up starts the FIX acceptor service
 func (f *FIX) Up() error {
-	if err := f.acc.Start(); err != nil {
-		return err
-	}
-
-	return nil
+	return f.acc.Start()
 }
 
+// Down stops the FIX acceptor service
 func (f *FIX) Down() {
 	f.acc.Stop()
 }

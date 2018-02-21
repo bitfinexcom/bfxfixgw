@@ -20,9 +20,14 @@ import (
 )
 
 func FIX44ExecutionReportRejectUnknown(oid, cid string) fix44er.ExecutionReport {
+	uid, err := uuid.NewV4()
+	execID := ""
+	if err != nil {
+		execID = uid.String()
+	}
 	e := fix44er.New(
 		field.NewOrderID(oid),
-		field.NewExecID(uuid.NewV4().String()), // XXX: Can we just take a random ID here?
+		field.NewExecID(execID), // XXX: Can we just take a random ID here?
 		field.NewExecType(enum.ExecType_ORDER_STATUS),
 		field.NewOrdStatus(enum.OrdStatus_REJECTED),
 		field.NewSide(enum.Side_UNDISCLOSED),
@@ -38,9 +43,14 @@ func FIX44ExecutionReportRejectUnknown(oid, cid string) fix44er.ExecutionReport 
 }
 
 func FIX42ExecutionReportRejectUnknown(oid, cid string) fix42er.ExecutionReport {
+	uid, err := uuid.NewV4()
+	execID := ""
+	if err != nil {
+		execID = uid.String()
+	}
 	e := fix42er.New(
 		field.NewOrderID(oid),
-		field.NewExecID(uuid.NewV4().String()), // XXX: Can we just take a random ID here?
+		field.NewExecID(execID), // XXX: Can we just take a random ID here?
 		field.NewExecTransType(enum.ExecTransType_STATUS),
 		field.NewExecType(enum.ExecType_ORDER_STATUS),
 

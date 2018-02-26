@@ -8,7 +8,6 @@ import (
 	"os"
 	"path"
 	"sync"
-	"time"
 
 	"github.com/bitfinexcom/bitfinex-api-go/v2/websocket"
 
@@ -46,7 +45,6 @@ type Gateway struct {
 
 func (g *Gateway) AddPeer(id string) {
 	peer := service.NewPeer(g.factory)
-	peer.Bfx.SetReadTimeout(8 * time.Second)
 	g.peers[id] = peer
 }
 
@@ -92,10 +90,14 @@ func newGateway(s *quickfix.Settings, factory service.ClientFactory) (*Gateway, 
 }
 
 type defaultClientFactory struct {
+	*websocket.Parameters
 }
 
 func (d *defaultClientFactory) NewClient() *websocket.Client {
-	return websocket.NewClient()
+	if d.Parameters == nil {
+		d.Parameters = websocket.NewDefaultParameters()
+	}
+	return websocket.New()
 }
 
 func main() {

@@ -19,7 +19,7 @@ import (
 	//fix42nos "github.com/quickfixgo/quickfix/fix42/newordersingle"
 )
 
-func FIX42ExecutionReportFromOrder(o bitfinex.Order, account string, execType enum.ExecType) fix42er.ExecutionReport {
+func FIX42ExecutionReportFromOrder(o *bitfinex.Order, account string, execType enum.ExecType) fix42er.ExecutionReport {
 	uid, err := uuid.NewV4()
 	execID := ""
 	if err != nil {
@@ -45,7 +45,7 @@ func FIX42ExecutionReportFromOrder(o bitfinex.Order, account string, execType en
 	return e
 }
 
-func FIX42OrderCancelRejectFromCancel(o bitfinex.OrderCancel, account string) ocj.OrderCancelReject {
+func FIX42OrderCancelRejectFromCancel(o *bitfinex.OrderCancel, account string) ocj.OrderCancelReject {
 	r := ocj.New(
 		field.NewOrderID("NONE"),
 		field.NewClOrdID("NONE"), // XXX: This should be the actual ClOrdID which we don't have in this context.

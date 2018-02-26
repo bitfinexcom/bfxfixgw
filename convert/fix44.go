@@ -16,7 +16,7 @@ import (
 
 // converts bitfinex messages to FIX44
 
-func FIX44ExecutionReportFromOrder(o bitfinex.Order) fix44er.ExecutionReport {
+func FIX44ExecutionReportFromOrder(o *bitfinex.Order) fix44er.ExecutionReport {
 	uid, err := uuid.NewV4()
 	execID := ""
 	if err != nil {

@@ -16,13 +16,13 @@ func (w *Websocket) FIX44Handler(o interface{}, sID quickfix.SessionID) {
 	switch d := o.(type) {
 	case nil:
 		return
-	case bitfinex.OrderSnapshot: // Order snapshot
+	case *bitfinex.OrderSnapshot: // Order snapshot
 		w.FIX44OrderSnapshotHandler(d, sID)
-	case bitfinex.OrderNew: // Order new
+	case *bitfinex.OrderNew: // Order new
 		w.FIX44OrderNewHandler(d, sID)
-	case bitfinex.OrderCancel: // Order cancel
+	case *bitfinex.OrderCancel: // Order cancel
 		w.FIX44OrderCancelHandler(d, sID)
-	case bitfinex.Notification: // Notification
+	case *bitfinex.Notification: // Notification
 		w.FIX44NotificationHandler(d, sID)
 	default: // unknown
 		return
@@ -30,7 +30,7 @@ func (w *Websocket) FIX44Handler(o interface{}, sID quickfix.SessionID) {
 
 }
 
-func (w *Websocket) FIX44NotificationHandler(d bitfinex.Notification, sID quickfix.SessionID) {
+func (w *Websocket) FIX44NotificationHandler(d *bitfinex.Notification, sID quickfix.SessionID) {
 	p, ok := w.FindPeer(sID.String())
 	if !ok {
 		w.logger.Warn("could not find peer for SessionID", zap.String("SessionID", sID.String()))
@@ -62,14 +62,15 @@ func (w *Websocket) FIX44NotificationHandler(d bitfinex.Notification, sID quickf
 	}
 }
 
-func (w *Websocket) FIX44OrderSnapshotHandler(os bitfinex.OrderSnapshot, sID quickfix.SessionID) {
+func (w *Websocket) FIX44OrderSnapshotHandler(os *bitfinex.OrderSnapshot, sID quickfix.SessionID) {
 	p, ok := w.FindPeer(sID.String())
 	if !ok {
 		w.logger.Warn("could not find peer for SessionID", zap.String("SessionID", sID.String()))
 	}
 
-	for _, o := range os {
-		er := convert.FIX44ExecutionReportFromOrder(bitfinex.Order(o))
+	for _, o := range os.Snapshot {
+		ord := bitfinex.Order(*o)
+		er := convert.FIX44ExecutionReportFromOrder(&ord)
 		er.SetAccount(p.BfxUserID())
 		er.SetExecType(enum.ExecType_ORDER_STATUS)
 		quickfix.SendToTarget(er, sID)
@@ -77,25 +78,27 @@ func (w *Websocket) FIX44OrderSnapshotHandler(os bitfinex.OrderSnapshot, sID qui
 	return
 }
 
-func (w *Websocket) FIX44OrderNewHandler(o bitfinex.OrderNew, sID quickfix.SessionID) {
+func (w *Websocket) FIX44OrderNewHandler(o *bitfinex.OrderNew, sID quickfix.SessionID) {
 	p, ok := w.FindPeer(sID.String())
 	if !ok {
 		w.logger.Warn("could not find peer for SessionID", zap.String("SessionID", sID.String()))
 	}
 
-	er := convert.FIX44ExecutionReportFromOrder(bitfinex.Order(o))
+	ord := bitfinex.Order(*o)
+	er := convert.FIX44ExecutionReportFromOrder(&ord)
 	er.SetAccount(p.BfxUserID())
 	quickfix.SendToTarget(er, sID)
 	return
 }
 
-func (w *Websocket) FIX44OrderCancelHandler(o bitfinex.OrderCancel, sID quickfix.SessionID) {
+func (w *Websocket) FIX44OrderCancelHandler(o *bitfinex.OrderCancel, sID quickfix.SessionID) {
 	p, ok := w.FindPeer(sID.String())
 	if !ok {
 		w.logger.Warn("could not find peer for SessionID", zap.String("SessionID", sID.String()))
 	}
 
-	er := convert.FIX44ExecutionReportFromOrder(bitfinex.Order(o))
+	ord := bitfinex.Order(*o)
+	er := convert.FIX44ExecutionReportFromOrder(&ord)
 	er.SetExecType(enum.ExecType_CANCELED)
 	er.SetAccount(p.BfxUserID())
 	quickfix.SendToTarget(er, sID)

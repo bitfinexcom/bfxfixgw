@@ -9,7 +9,7 @@ import (
 
 // Generic FIX types.
 
-func OrdStatusFromOrder(o bitfinex.Order) field.OrdStatusField {
+func OrdStatusFromOrder(o *bitfinex.Order) field.OrdStatusField {
 	switch o.Status {
 	default:
 		return field.NewOrdStatus(enum.OrdStatus_NEW)
@@ -22,7 +22,7 @@ func OrdStatusFromOrder(o bitfinex.Order) field.OrdStatusField {
 	}
 }
 
-func SideFromOrder(o bitfinex.Order) field.SideField {
+func SideFromOrder(o *bitfinex.Order) field.SideField {
 	switch {
 	case o.Amount < 0.0:
 		return field.NewSide(enum.Side_BUY)
@@ -33,18 +33,18 @@ func SideFromOrder(o bitfinex.Order) field.SideField {
 	}
 }
 
-func LeavesQtyFromOrder(o bitfinex.Order) field.LeavesQtyField {
+func LeavesQtyFromOrder(o *bitfinex.Order) field.LeavesQtyField {
 	d := decimal.NewFromFloat(o.Amount)
 	return field.NewLeavesQty(d, 2)
 }
 
-func CumQtyFromOrder(o bitfinex.Order) field.CumQtyField {
+func CumQtyFromOrder(o *bitfinex.Order) field.CumQtyField {
 	a := decimal.NewFromFloat(o.AmountOrig)
 	b := decimal.NewFromFloat(o.Amount)
 	return field.NewCumQty(a.Sub(b.Abs()), 2)
 }
 
-func AvgPxFromOrder(o bitfinex.Order) field.AvgPxField {
+func AvgPxFromOrder(o *bitfinex.Order) field.AvgPxField {
 	d := decimal.NewFromFloat(o.PriceAvg)
 	return field.NewAvgPx(d, 2)
 }

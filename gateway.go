@@ -3,12 +3,14 @@
 package main
 
 import (
+	"flag"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
 	"path"
 	"sync"
 
+	"github.com/bitfinexcom/bitfinex-api-go/v2/rest"
 	"github.com/bitfinexcom/bitfinex-api-go/v2/websocket"
 
 	"github.com/bitfinexcom/bfxfixgw/fix"
@@ -17,6 +19,13 @@ import (
 
 	"github.com/quickfixgo/quickfix"
 	"go.uber.org/zap"
+)
+
+var (
+	mdcfg  = flag.String("mdcfg", "demo_fix_marketdata.cfg", "Market data FIX configuration file name")
+	ordcfg = flag.String("ordcfg", "demo_fix_orders.cfg", "Order flow FIX configuration file name")
+	//flag.StringVar(&logfile, "logfile", "logs/debug.log", "path to the log file")
+	//flag.StringVar(&configfile, "configfile", "config/server.cfg", "path to the config file")
 )
 
 var (
@@ -35,7 +44,8 @@ func configDirectory() string {
 // and vice versa.
 type Gateway struct {
 	logger *zap.Logger
-	*fix.FIX
+	MD     *fix.FIX
+	Orders *fix.FIX
 
 	peerMutex sync.Mutex
 	peers     map[string]*service.Peer
@@ -43,49 +53,64 @@ type Gateway struct {
 	factory service.ClientFactory
 }
 
-func (g *Gateway) AddPeer(id string) {
+func (g *Gateway) AddPeer(fixSessionID string) {
 	peer := service.NewPeer(g.factory)
-	g.peers[id] = peer
+	g.peers[fixSessionID] = peer
 }
 
-func (g *Gateway) FindPeer(id string) (p *service.Peer, ok bool) {
+func (g *Gateway) FindPeer(fixSessionID string) (p *service.Peer, ok bool) {
 	g.peerMutex.Lock()
 	defer g.peerMutex.Unlock()
-	p, ok = g.peers[id]
+	p, ok = g.peers[fixSessionID]
 	return
 }
 
-func (g *Gateway) RemovePeer(id string) bool {
+func (g *Gateway) RemovePeer(fixSessionID string) bool {
 	g.peerMutex.Lock()
 	defer g.peerMutex.Unlock()
-	if p, ok := g.peers[id]; ok {
+	if p, ok := g.peers[fixSessionID]; ok {
 		p.Close()
-		delete(g.peers, id)
+		delete(g.peers, fixSessionID)
 		return true
 	}
 	return false
 }
 
 func (g *Gateway) Start() error {
-	return g.FIX.Up()
+	md := g.MD.Up()
+	if md != nil {
+		return md
+	}
+	ord := g.Orders.Up()
+	if ord != nil {
+		return ord
+	}
+	return nil
 }
 
 func (g *Gateway) Stop() {
-	g.FIX.Down()
+	g.Orders.Down()
+	g.MD.Down()
 }
 
-func newGateway(s *quickfix.Settings, factory service.ClientFactory) (*Gateway, bool) {
+func newGateway(mdSettings, orderSettings *quickfix.Settings, factory service.ClientFactory) (*Gateway, bool) {
 	g := &Gateway{
 		logger:  log.Logger,
 		peers:   make(map[string]*service.Peer),
 		factory: factory,
 	}
-	fix, err := fix.NewFIX(s, g)
+	md, err := fix.NewFIX(mdSettings, g)
 	if err != nil {
-		log.Logger.Fatal("create FIX", zap.Error(err))
+		log.Logger.Fatal("create market data FIX", zap.Error(err))
 		return nil, false
 	}
-	g.FIX = fix
+	g.MD = md
+	ord, err := fix.NewFIX(orderSettings, g)
+	if err != nil {
+		log.Logger.Fatal("create order flow FIX", zap.Error(err))
+		return nil, false
+	}
+	g.Orders = ord
 	return g, true
 }
 
@@ -93,23 +118,38 @@ type defaultClientFactory struct {
 	*websocket.Parameters
 }
 
-func (d *defaultClientFactory) NewClient() *websocket.Client {
+func (d *defaultClientFactory) NewWs() *websocket.Client {
 	if d.Parameters == nil {
 		d.Parameters = websocket.NewDefaultParameters()
 	}
-	return websocket.New()
+	return websocket.NewWithParams(d.Parameters)
+}
+
+func (d *defaultClientFactory) NewRest() *rest.Client {
+	return rest.NewClient()
 }
 
 func main() {
-	f, err := os.Open(path.Join(FIXConfigDirectory, "bfx.cfg"))
+	flag.Parse()
+
+	mdf, err := os.Open(path.Join(FIXConfigDirectory, *mdcfg))
 	if err != nil {
-		log.Logger.Fatal("FIX config", zap.Error(err))
+		log.Logger.Fatal("FIX market data config", zap.Error(err))
 	}
-	s, err := quickfix.ParseSettings(f)
+	mds, err := quickfix.ParseSettings(mdf)
 	if err != nil {
-		log.Logger.Fatal("parse FIX settings", zap.Error(err))
+		log.Logger.Fatal("parse FIX market data settings", zap.Error(err))
 	}
-	g, ok := newGateway(s, &defaultClientFactory{})
+	ordf, err := os.Open(path.Join(FIXConfigDirectory, *ordcfg))
+	if err != nil {
+		log.Logger.Fatal("FIX order flow config", zap.Error(err))
+	}
+	ords, err := quickfix.ParseSettings(ordf)
+	if err != nil {
+		log.Logger.Fatal("parse FIX order flow settings", zap.Error(err))
+	}
+	factory := &defaultClientFactory{}
+	g, ok := newGateway(mds, ords, factory)
 	if !ok {
 		return
 	}
@@ -119,5 +159,7 @@ func main() {
 	}
 
 	g.logger.Info("starting stat server")
+
+	// TODO remove profiling below for deployments
 	g.logger.Error("stat server", zap.Error(http.ListenAndServe(":8080", nil)))
 }

@@ -14,10 +14,60 @@ import (
 	"github.com/shopspring/decimal"
 
 	fix42er "github.com/quickfixgo/fix42/executionreport"
+	fix42mdir "github.com/quickfixgo/fix42/marketdataincrementalrefresh"
 	fix42mdsfr "github.com/quickfixgo/fix42/marketdatasnapshotfullrefresh"
 	ocj "github.com/quickfixgo/fix42/ordercancelreject"
 	//fix42nos "github.com/quickfixgo/quickfix/fix42/newordersingle"
 )
+
+func FIX42MarketDataFullRefreshFromBookSnapshot(mdReqID string, snapshot *bitfinex.BookUpdateSnapshot) *fix42mdsfr.MarketDataSnapshotFullRefresh {
+	if len(snapshot.Snapshot) <= 0 {
+		return nil
+	}
+	first := snapshot.Snapshot[0]
+	message := fix42mdsfr.New(field.NewSymbol(first.Symbol))
+	message.SetMDReqID(mdReqID)
+	// TODO securityID?
+	// TODO securityIDSource?
+	group := fix42mdsfr.NewNoMDEntriesRepeatingGroup()
+	for _, update := range snapshot.Snapshot {
+		entry := group.Add()
+		var t enum.MDEntryType
+		switch update.Side {
+		case bitfinex.Bid:
+			t = enum.MDEntryType_BID
+		case bitfinex.Ask:
+			t = enum.MDEntryType_OFFER
+		}
+		entry.SetMDEntryType(t)
+		entry.SetMDEntryPx(decimal.NewFromFloat(update.Price), 4)
+		entry.SetMDEntrySize(decimal.NewFromFloat(update.Amount), 4)
+	}
+	message.SetNoMDEntries(group)
+	return &message
+}
+
+func FIX42MarketDataIncrementalRefreshFromBookUpdate(mdReqID string, update *bitfinex.BookUpdate) *fix42mdir.MarketDataIncrementalRefresh {
+	message := fix42mdir.New()
+	message.SetMDReqID(mdReqID)
+	// TODO securityID?
+	// TODO securityIDSource?
+	// TODO symbol?
+	group := fix42mdir.NewNoMDEntriesRepeatingGroup()
+	entry := group.Add()
+	var t enum.MDEntryType
+	switch update.Side {
+	case bitfinex.Bid:
+		t = enum.MDEntryType_BID
+	case bitfinex.Ask:
+		t = enum.MDEntryType_OFFER
+	}
+	entry.SetMDEntryType(t)
+	entry.SetMDEntryPx(decimal.NewFromFloat(update.Price), 4)
+	entry.SetMDEntrySize(decimal.NewFromFloat(update.Amount), 4)
+	message.SetNoMDEntries(group)
+	return &message
+}
 
 func FIX42ExecutionReportFromOrder(o *bitfinex.Order, account string, execType enum.ExecType) fix42er.ExecutionReport {
 	uid, err := uuid.NewV4()

@@ -2,7 +2,7 @@ package fix
 
 import (
 	"context"
-	"time"
+	"fmt"
 
 	"github.com/bitfinexcom/bfxfixgw/convert"
 
@@ -18,6 +18,12 @@ import (
 	"github.com/quickfixgo/enum"
 	"github.com/quickfixgo/field"
 	"github.com/quickfixgo/quickfix"
+
+	"github.com/bitfinexcom/bitfinex-api-go/v2/rest"
+)
+
+const (
+	PricePrecision quickfix.Tag = 20100
 )
 
 // Handle FIX42 messages and process them upstream to Bitfinex.
@@ -36,7 +42,7 @@ func (f *FIX) OnFIX42NewOrderSingle(msg nos.NewOrderSingle, sID quickfix.Session
 		return err
 	}
 
-	e := p.Bfx.SubmitOrder(context.Background(), bo)
+	e := p.Ws.SubmitOrder(context.Background(), bo)
 	if e != nil {
 		f.logger.Warn("could not submit order", zap.Error(e))
 	}
@@ -44,8 +50,28 @@ func (f *FIX) OnFIX42NewOrderSingle(msg nos.NewOrderSingle, sID quickfix.Session
 	return nil
 }
 
+func reject(err error) quickfix.MessageRejectError {
+	return quickfix.NewMessageRejectError(err.Error(), rejectReasonOther, nil)
+}
+
 func makeReject(msg string) quickfix.MessageRejectError {
-	return quickfix.NewBusinessMessageRejectError(msg, 0, nil)
+	return quickfix.NewBusinessMessageRejectError(msg, rejectReasonOther, nil)
+}
+
+func validatePrecision(prec string) (rest.BookPrecision, bool) {
+	switch prec {
+	case string(rest.Precision0):
+		return rest.Precision0, true
+	case string(rest.Precision1):
+		return rest.Precision1, true
+	case string(rest.Precision2):
+		return rest.Precision2, true
+	case string(rest.Precision3):
+		return rest.Precision3, true
+	case string(rest.PrecisionRawBook):
+		return rest.PrecisionRawBook, true
+	}
+	return rest.Precision0, false
 }
 
 func (f *FIX) OnFIX42MarketDataRequest(msg mdr.MarketDataRequest, sID quickfix.SessionID) quickfix.MessageRejectError {
@@ -61,11 +87,9 @@ func (f *FIX) OnFIX42MarketDataRequest(msg mdr.MarketDataRequest, sID quickfix.S
 		return err
 	}
 
-	// Lazy shortcut
-
-	symbol, err := relSym.Get(0).GetSymbol()
-	if err != nil {
-		return err
+	if relSym.Len() <= 0 {
+		f.logger.Warn("no symbol provided", zap.String("SessionID", sID.String()))
+		return quickfix.NewMessageRejectError("no symbol provided", rejectReasonOther, nil)
 	}
 
 	mdReqID, err := msg.GetMDReqID()
@@ -78,119 +102,54 @@ func (f *FIX) OnFIX42MarketDataRequest(msg mdr.MarketDataRequest, sID quickfix.S
 		return err
 	}
 
-	// XXX: The following could most likely be abtracted to work both for 4.2 and 4.4.
-	switch subType {
-	default:
-		rej := mdrr.New(field.NewMDReqID(mdReqID))
-		quickfix.SendToTarget(rej, sID)
-	case enum.SubscriptionRequestType_SNAPSHOT:
+	depth, err := msg.GetMarketDepth()
+	if err != nil {
+		return err
+	}
 
-		ctx, cxl := context.WithTimeout(context.Background(), time.Second*2)
-		defer cxl()
-		_, err := p.Bfx.SubscribeTicker(ctx, symbol)
+	var precision rest.BookPrecision
+	fixPrecision, err := msg.GetString(PricePrecision)
+	if err != nil {
+		precision = rest.Precision0
+	} else {
+		var ok bool
+		precision, ok = validatePrecision(fixPrecision)
+		if !ok {
+			return makeReject(fmt.Sprintf("invalid precision for market data request: %s", fixPrecision))
+		}
+	}
+
+	for i := 0; i < relSym.Len(); i++ {
+
+		symbol, err := relSym.Get(i).GetSymbol()
 		if err != nil {
-
+			return err
 		}
 
-		//ctx, _ := context.WithTimeout(context.Background(), time.Second*2)
-		//id, err := f.bfx.SubscribeTicker(ctx, symbol)
-		// TODO unsubscribe after receiving ack
-		// TODO how to manage subscriptions on reconnect? put into list?
-		// TODO split this into factories
-		/*
-						h := func(ev interface{}) {
-							// For a simple snapshot request we just need to read one message from the channel.
-							//go f.bfx.Websocket.Unsubscribe(context.Background(), msg)
+		// XXX: The following could most likely be abtracted to work both for 4.2 and 4.4.
+		switch subType {
+		default:
+			rej := mdrr.New(field.NewMDReqID(mdReqID))
+			text := fmt.Sprintf("subscription type not supported: %s", subType)
+			f.logger.Warn(text)
+			rej.SetText(text)
+			quickfix.SendToTarget(rej, sID)
 
-							var data [][]float64
-							switch e := ev.(type) {
-							case []float64:
-								return // We only care about the snapshot.
-							case [][]float64:
-								data = e
-							}
+		case enum.SubscriptionRequestType_SNAPSHOT:
+			snapshot, err := p.Rest.Book.All(symbol, precision, depth)
+			if err != nil {
+				return reject(err)
+			}
+			fix := convert.FIX42MarketDataFullRefreshFromBookSnapshot(mdReqID, snapshot)
+			quickfix.SendToTarget(fix, sID)
 
-							for _, d := range data {
-								r := mdsfr.New(field.NewSymbol(symbol))
+		case enum.SubscriptionRequestType_SNAPSHOT_PLUS_UPDATES:
+			// TODO susbcribe
 
-								mdEntriesGroup := convert.FIX42NoMDEntriesRepeatingGroupFromTradeTicker(d)
-								r.SetNoMDEntries(mdEntriesGroup)
+		case enum.SubscriptionRequestType_DISABLE_PREVIOUS_SNAPSHOT_PLUS_UPDATE_REQUEST:
+			// TODO unsubscribe
+		}
 
-								r.SetSymbol(symbol)
-								quickfix.SendToTarget(r, sID)
-							}
-						}
-
-						err = p.Bfx.Subscribe(ctx, msg)
-						if err != nil {
-							rej := mdrr.New(field.NewMDReqID(mdReqID))
-							quickfix.SendToTarget(rej, sID)
-							return
-						}
-
-					case enum.SubscriptionRequestType_SNAPSHOT_PLUS_UPDATES:
-						if _, has := f.marketDataSubscriptions[mdReqID]; has {
-							rej := mdrr.New(field.NewMDReqID(mdReqID))
-							rej.SetMDReqRejReason(enum.MDReqRejReason_DUPLICATE_MDREQID)
-							quickfix.SendToTarget(rej, sID)
-							return
-						}
-
-						h := func(ev interface{}) {
-							var data [][]float64
-							switch e := ev.(type) {
-							case []float64:
-								data = append(data, e)
-							case [][]float64:
-								data = e
-							}
-
-							for _, d := range data {
-								r := mdsfr.New(field.NewSymbol(symbol))
-
-								mdEntriesGroup := convert.FIX42NoMDEntriesRepeatingGroupFromTradeTicker(d)
-								r.SetNoMDEntries(mdEntriesGroup)
-
-								r.SetSymbol(symbol)
-								quickfix.SendToTarget(r, sID)
-							}
-						}
-
-						ctx, _ := context.WithTimeout(context.Background(), time.Second*2)
-						msg := &bitfinex.PublicSubscriptionRequest{
-							Event:   "subscribe",
-							Channel: bitfinex.ChanTicker,
-							Symbol:  symbol,
-						}
-
-						err := f.bfx.Websocket.Subscribe(ctx, msg, h)
-						if err != nil {
-							rej := mdrr.New(field.NewMDReqID(mdReqID))
-							quickfix.SendToTarget(rej, sID)
-							return
-						}
-
-				// Every new market data subscription gets a new channel that constantly
-				// sends out reports.
-				// XXX: How does this handle multiple market data request for the same ticker?
-				f.MDMu.Lock()
-				//f.marketDataSubscriptions[mdReqID] = BfxSubscription{Request: msg, Handler: h}
-				f.MDMu.Unlock()
-			case enum.SubscriptionRequestType_DISABLE_PREVIOUS_SNAPSHOT_PLUS_UPDATE_REQUEST:
-				if _, has := f.marketDataSubscriptions[mdReqID]; !has {
-					// If we don't have a channel for the req we just ignore the disable.
-					// XXX: Should we tell the other side about that?
-					return
-				}
-
-				ctx, _ := context.WithTimeout(context.Background(), time.Second*2)
-				err := f.bfx.Websocket.Unsubscribe(ctx, f.marketDataSubscriptions[mdReqID].Request)
-				if err != nil {
-					f.logger.Error("unsub", zap.Error(err))
-				}
-				f.MDMu.Lock()
-				delete(f.marketDataSubscriptions, mdReqID)
-				f.MDMu.Unlock()*/
 	}
 
 	return nil

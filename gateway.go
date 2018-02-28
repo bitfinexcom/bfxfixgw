@@ -8,12 +8,10 @@ import (
 	_ "net/http/pprof"
 	"os"
 	"path"
-	"sync"
 
 	"github.com/bitfinexcom/bitfinex-api-go/v2/rest"
 	"github.com/bitfinexcom/bitfinex-api-go/v2/websocket"
 
-	"github.com/bitfinexcom/bfxfixgw/fix"
 	"github.com/bitfinexcom/bfxfixgw/log"
 	"github.com/bitfinexcom/bfxfixgw/service"
 
@@ -44,73 +42,42 @@ func configDirectory() string {
 // and vice versa.
 type Gateway struct {
 	logger *zap.Logger
-	MD     *fix.FIX
-	Orders *fix.FIX
 
-	peerMutex sync.Mutex
-	peers     map[string]*service.Peer
+	MarketData   *service.Service
+	OrderRouting *service.Service
 
 	factory service.ClientFactory
 }
 
-func (g *Gateway) AddPeer(fixSessionID string) {
-	peer := service.NewPeer(g.factory)
-	g.peers[fixSessionID] = peer
-}
-
-func (g *Gateway) FindPeer(fixSessionID string) (p *service.Peer, ok bool) {
-	g.peerMutex.Lock()
-	defer g.peerMutex.Unlock()
-	p, ok = g.peers[fixSessionID]
-	return
-}
-
-func (g *Gateway) RemovePeer(fixSessionID string) bool {
-	g.peerMutex.Lock()
-	defer g.peerMutex.Unlock()
-	if p, ok := g.peers[fixSessionID]; ok {
-		p.Close()
-		delete(g.peers, fixSessionID)
-		return true
-	}
-	return false
-}
-
 func (g *Gateway) Start() error {
-	md := g.MD.Up()
-	if md != nil {
-		return md
+	err := g.MarketData.Start()
+	if err != nil {
+		return err
 	}
-	ord := g.Orders.Up()
-	if ord != nil {
-		return ord
-	}
-	return nil
+	return g.OrderRouting.Start()
 }
 
 func (g *Gateway) Stop() {
-	g.Orders.Down()
-	g.MD.Down()
+	g.OrderRouting.Stop()
+	g.MarketData.Stop()
 }
 
-func newGateway(mdSettings, orderSettings *quickfix.Settings, factory service.ClientFactory) (*Gateway, bool) {
+func New(mdSettings, orderSettings *quickfix.Settings, factory service.ClientFactory) (*Gateway, bool) {
 	g := &Gateway{
 		logger:  log.Logger,
-		peers:   make(map[string]*service.Peer),
 		factory: factory,
 	}
-	md, err := fix.NewFIX(mdSettings, g)
+	var err error
+	g.MarketData, err = service.New(factory, mdSettings, service.MarketDataService)
 	if err != nil {
 		log.Logger.Fatal("create market data FIX", zap.Error(err))
 		return nil, false
 	}
-	g.MD = md
-	ord, err := fix.NewFIX(orderSettings, g)
+	g.OrderRouting, err = service.New(factory, orderSettings, service.OrderRoutingService)
 	if err != nil {
-		log.Logger.Fatal("create order flow FIX", zap.Error(err))
+		log.Logger.Fatal("create order routing FIX", zap.Error(err))
 		return nil, false
 	}
-	g.Orders = ord
 	return g, true
 }
 
@@ -149,7 +116,7 @@ func main() {
 		log.Logger.Fatal("parse FIX order flow settings", zap.Error(err))
 	}
 	factory := &defaultClientFactory{}
-	g, ok := newGateway(mds, ords, factory)
+	g, ok := New(mds, ords, factory)
 	if !ok {
 		return
 	}

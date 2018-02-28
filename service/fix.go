@@ -1,8 +1,7 @@
-package fix
+package service
 
 import (
 	"github.com/bitfinexcom/bfxfixgw/log"
-	"github.com/bitfinexcom/bfxfixgw/service"
 
 	"go.uber.org/zap"
 
@@ -10,14 +9,17 @@ import (
 	fix42nos "github.com/quickfixgo/fix42/newordersingle"
 	fix42ocr "github.com/quickfixgo/fix42/ordercancelrequest"
 	fix42osr "github.com/quickfixgo/fix42/orderstatusrequest"
-
-	fix44mdr "github.com/quickfixgo/fix44/marketdatarequest"
-	fix44nos "github.com/quickfixgo/fix44/newordersingle"
-	fix44ocr "github.com/quickfixgo/fix44/ordercancelrequest"
-	fix44osr "github.com/quickfixgo/fix44/orderstatusrequest"
-
+	/*
+		fix44mdr "github.com/quickfixgo/fix44/marketdatarequest"
+		fix44nos "github.com/quickfixgo/fix44/newordersingle"
+		fix44ocr "github.com/quickfixgo/fix44/ordercancelrequest"
+		fix44osr "github.com/quickfixgo/fix44/orderstatusrequest"
+	*/
 	"github.com/quickfixgo/quickfix"
 )
+
+// send messages to FIX clients (global w/ session ID)
+// send messages to websocket (peer map)
 
 // FIX types, defined in BitfinexFIX42.xml
 var msgTypeLogon = string([]byte("A"))
@@ -25,11 +27,18 @@ var tagBfxAPIKey = quickfix.Tag(20000)
 var tagBfxAPISecret = quickfix.Tag(20001)
 var tagBfxUserID = quickfix.Tag(20002)
 
+type FIXServiceType byte
+
+const (
+	MarketDataService FIXServiceType = iota
+	OrderRoutingService
+)
+
 // FIX establishes an acceptor and manages peer websocket clients
 type FIX struct {
 	*quickfix.MessageRouter
 
-	service.Peers
+	Peers
 
 	acc    *quickfix.Acceptor
 	logger *zap.Logger
@@ -83,25 +92,33 @@ func (f *FIX) FromApp(msg *quickfix.Message, sID quickfix.SessionID) quickfix.Me
 }
 
 // NewFIX creates a new FIX acceptor & associated services
-func NewFIX(s *quickfix.Settings, peers service.Peers) (*FIX, error) {
+func NewFIX(s *quickfix.Settings, peers Peers, serviceType FIXServiceType) (*FIX, error) {
 	f := &FIX{
 		MessageRouter: quickfix.NewMessageRouter(),
 		logger:        log.Logger,
 		Peers:         peers,
 	}
 
-	f.AddRoute(fix42mdr.Route(f.OnFIX42MarketDataRequest))
-	f.AddRoute(fix42nos.Route(f.OnFIX42NewOrderSingle))
-	f.AddRoute(fix42ocr.Route(f.OnFIX42OrderCancelRequest))
-	f.AddRoute(fix42osr.Route(f.OnFIX42OrderStatusRequest))
-
-	f.AddRoute(fix44mdr.Route(f.OnFIX44MarketDataRequest))
-	f.AddRoute(fix44nos.Route(f.OnFIX44NewOrderSingle))
-	f.AddRoute(fix44ocr.Route(f.OnFIX44OrderCancelRequest))
-	f.AddRoute(fix44osr.Route(f.OnFIX44OrderStatusRequest))
-
+	/*
+		// TODO FIX44
+		f.AddRoute(fix44mdr.Route(f.OnFIX44MarketDataRequest))
+		f.AddRoute(fix44nos.Route(f.OnFIX44NewOrderSingle))
+		f.AddRoute(fix44ocr.Route(f.OnFIX44OrderCancelRequest))
+		f.AddRoute(fix44osr.Route(f.OnFIX44OrderStatusRequest))
+	*/
 	lf := quickfix.NewScreenLogFactory()
-	a, err := quickfix.NewAcceptor(f, quickfix.NewMemoryStoreFactory(), s, lf)
+	var factory quickfix.MessageStoreFactory
+	if serviceType == OrderRoutingService {
+		f.AddRoute(fix42nos.Route(f.OnFIX42NewOrderSingle))
+		f.AddRoute(fix42ocr.Route(f.OnFIX42OrderCancelRequest))
+		f.AddRoute(fix42osr.Route(f.OnFIX42OrderStatusRequest))
+		factory = quickfix.NewFileStoreFactory(s)
+	} else {
+		f.AddRoute(fix42mdr.Route(f.OnFIX42MarketDataRequest))
+		factory = NewNoStoreFactory()
+	}
+
+	a, err := quickfix.NewAcceptor(f, factory, s, lf)
 	if err != nil {
 		return nil, err
 	}

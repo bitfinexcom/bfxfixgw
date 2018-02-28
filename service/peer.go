@@ -23,11 +23,13 @@ type Peers interface {
 
 // Peer represents a FIX-websocket peer user
 type Peer struct {
-	Ws     *websocket.Client
-	Rest   *rest.Client
+	Ws   *websocket.Client
+	Rest *rest.Client
+
 	logger *zap.Logger
 
-	bfxUserID string
+	bfxUserID    string
+	fixSessionID string
 }
 
 // could be from FIX market data, or FIX order flow
@@ -37,11 +39,12 @@ type subscription struct {
 }
 
 // NewPeer creates a peer, but does not establish a websocket connection yet
-func NewPeer(factory ClientFactory) *Peer {
+func newPeer(factory ClientFactory, fixSessionID string) *Peer {
 	return &Peer{
-		Ws:     factory.NewWs(),
-		Rest:   factory.NewRest(),
-		logger: bfxlog.Logger,
+		Ws:           factory.NewWs(),
+		Rest:         factory.NewRest(),
+		logger:       bfxlog.Logger,
+		fixSessionID: fixSessionID,
 	}
 }
 
@@ -82,6 +85,10 @@ func (p *Peer) listen() {
 // BfxUserID is an immutable accessor to the bitfinex user ID
 func (p *Peer) BfxUserID() string {
 	return p.bfxUserID
+}
+
+func (p *Peer) FIXSessionID() string {
+	return p.fixSessionID
 }
 
 func (p *Peer) Close() {

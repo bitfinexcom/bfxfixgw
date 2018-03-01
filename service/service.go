@@ -24,7 +24,7 @@ type Service struct {
 }
 
 func New(factory ClientFactory, settings *quickfix.Settings, srvType FIXServiceType) (*Service, error) {
-	service := &Service{factory: factory, log: log.Logger}
+	service := &Service{factory: factory, log: log.Logger, peers: make(map[string]*Peer)}
 	var err error
 	service.FIX, err = NewFIX(settings, service, srvType)
 	if err != nil {
@@ -40,11 +40,16 @@ func (s *Service) Start() error {
 
 func (s *Service) Stop() {
 	s.FIX.Down()
+	s.lock.Lock()
+	for _, p := range s.peers {
+		p.Close()
+	}
+	s.lock.Unlock()
 }
 
-func (s *Service) AddPeer(fixSessionID string) {
+func (s *Service) AddPeer(fixSessionID quickfix.SessionID) {
 	s.lock.Lock()
-	s.peers[fixSessionID] = newPeer(s.factory, fixSessionID)
+	s.peers[fixSessionID.String()] = newPeer(s.factory, fixSessionID)
 	s.lock.Unlock()
 }
 

@@ -62,7 +62,7 @@ func (g *Gateway) Stop() {
 	g.MarketData.Stop()
 }
 
-func New(mdSettings, orderSettings *quickfix.Settings, factory service.ClientFactory) (*Gateway, bool) {
+func New(mdSettings, orderSettings *quickfix.Settings, factory service.ClientFactory) (*Gateway, error) {
 	g := &Gateway{
 		logger:  log.Logger,
 		factory: factory,
@@ -71,14 +71,14 @@ func New(mdSettings, orderSettings *quickfix.Settings, factory service.ClientFac
 	g.MarketData, err = service.New(factory, mdSettings, service.MarketDataService)
 	if err != nil {
 		log.Logger.Fatal("create market data FIX", zap.Error(err))
-		return nil, false
+		return nil, err
 	}
 	g.OrderRouting, err = service.New(factory, orderSettings, service.OrderRoutingService)
 	if err != nil {
 		log.Logger.Fatal("create order routing FIX", zap.Error(err))
-		return nil, false
+		return nil, err
 	}
-	return g, true
+	return g, nil
 }
 
 type defaultClientFactory struct {
@@ -116,9 +116,9 @@ func main() {
 		log.Logger.Fatal("parse FIX order flow settings", zap.Error(err))
 	}
 	factory := &defaultClientFactory{}
-	g, ok := New(mds, ords, factory)
-	if !ok {
-		return
+	g, err := New(mds, ords, factory)
+	if err != nil {
+		log.Logger.Fatal("could not create gateway", zap.Error(err))
 	}
 	err = g.Start()
 	if err != nil {

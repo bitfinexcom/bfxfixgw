@@ -75,6 +75,7 @@ func (s *MockWs) WaitForClientCount(count int) error {
 	loops := 16
 	delay := time.Millisecond * 250
 	for i := 0; i < loops; i++ {
+		log.Printf("exp count (%d), total clients: %d", count, s.totalClients)
 		if s.totalClients == count {
 			return nil
 		}

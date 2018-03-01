@@ -46,7 +46,7 @@ type FIX struct {
 
 func (f *FIX) OnCreate(sID quickfix.SessionID) {
 	log.Logger.Info("FIX.OnCreate", zap.Any("SessionID", sID))
-	f.Peers.AddPeer(sID.String())
+	f.Peers.AddPeer(sID)
 }
 
 func (f *FIX) OnLogon(sID quickfix.SessionID) {

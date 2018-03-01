@@ -161,18 +161,20 @@ func TestLogon(t *testing.T) {
 	}
 	srvWs.Broadcast(`{"event":"info","version":2}`)
 
+	// TODO need a better way of identifying clients to get exact msg here
+	// ID by initial nonce auth? what about non auth?
 	msg, err := srvWs.WaitForMessage(0, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if `{"subId":"nonce2","event":"auth","apiKey":"apiKey1","authSig":"0c7c6fa4205423c1b0140000357bc9fd6cc114ee72370e8d6791e2dbe7a257abf6d6e42880cfc15b0db084ec6653052f","authPayload":"AUTHnonce2","authNonce":"nonce2"}` != msg {
+	if `{"subId":"nonce1","event":"auth","apiKey":"apiKey1","authSig":"2744ec1afc974eadbda7e09efa03da80578628ba90e2aa5fcba8c2c61014b811f3a8be5a041c3ee35c464a59856b3869","authPayload":"AUTHnonce1","authNonce":"nonce1"}` != msg {
 		t.Fatalf("unexpectedly got: %s", msg)
 	}
 	msg, err = srvWs.WaitForMessage(1, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if `{"subId":"nonce1","event":"auth","apiKey":"apiKey1","authSig":"2744ec1afc974eadbda7e09efa03da80578628ba90e2aa5fcba8c2c61014b811f3a8be5a041c3ee35c464a59856b3869","authPayload":"AUTHnonce1","authNonce":"nonce1"}` != msg {
+	if `{"subId":"nonce2","event":"auth","apiKey":"apiKey1","authSig":"0c7c6fa4205423c1b0140000357bc9fd6cc114ee72370e8d6791e2dbe7a257abf6d6e42880cfc15b0db084ec6653052f","authPayload":"AUTHnonce2","authNonce":"nonce2"}` != msg {
 		t.Fatalf("unexpectedly got: %s", msg)
 	}
 

@@ -2,11 +2,15 @@ package main
 
 import (
 	"flag"
-	"github.com/bitfinexcom/bfx-fix-mkt-go/test"
 	"log"
 	"os"
 	"os/signal"
 	"syscall"
+
+	"github.com/quickfixgo/quickfix"
+
+	"github.com/bitfinexcom/bfxfixgw/integration_test/fix_client/cmd"
+	"github.com/bitfinexcom/bfxfixgw/integration_test/mock"
 )
 
 func listenSignal(sig chan os.Signal, exit chan int) {
@@ -31,19 +35,24 @@ func main() {
 	cfg := flag.String("cfg", "integration_test/conf/mock_fix42_client.cfg", "config path")
 	flag.Parse()
 
-	tracker := &spread{}
+	//tracker := &spread{}
 
 	// setup mocks
 	mockGainSettings := loadSettings(*cfg)
-	mockGainClient, err := test.NewTestFixClient(mockGainSettings)
+	mockGainClient, err := mock.NewTestFixClient(mockGainSettings, quickfix.NewMemoryStoreFactory())
 	if err != nil {
 		log.Fatal(err)
 	}
+	control := newControl(mockGainClient)
+	control.cmds["nos"] = &cmd.Order{}
+	control.cmds["md"] = &cmd.MarketData{}
 	mockGainClient.OmitLogMessages = true
-	mockGainClient.MessageHandler = tracker
-	mockGainClient.SendOnLogon(buildFixRequests([]string{"BTCUSD"}))
+	mockGainClient.MessageHandler = control
+	//mockGainClient.SendOnLogon(buildFixMdRequests([]string{"BTCUSD"}))
 	mockGainClient.Start()
 	defer mockGainClient.Stop()
+
+	go control.run()
 
 	c := make(chan os.Signal, 1)
 	exit := make(chan int)

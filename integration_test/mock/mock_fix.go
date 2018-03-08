@@ -85,6 +85,15 @@ func (t *TestFixClient) LastSession() *Session {
 	return t.last
 }
 
+func (t *TestFixClient) SendFIX(msg fix.Messagable) {
+	if len(t.Sessions) > 0 {
+		for _, s := range t.Sessions {
+			s.Send(msg)
+			return
+		}
+	}
+}
+
 func NewTestFixClient(settings *fix.Settings, msgStore fix.MessageStoreFactory) (*TestFixClient, error) {
 	f := &TestFixClient{
 		router:   fix.NewMessageRouter(),

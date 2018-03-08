@@ -3,6 +3,7 @@ package fix
 import (
 	"context"
 	"fmt"
+	"strconv"
 
 	"github.com/bitfinexcom/bfxfixgw/convert"
 
@@ -12,6 +13,7 @@ import (
 	mdr "github.com/quickfixgo/fix42/marketdatarequest"
 	mdrr "github.com/quickfixgo/fix42/marketdatarequestreject"
 	nos "github.com/quickfixgo/fix42/newordersingle"
+	ocj "github.com/quickfixgo/fix42/ordercancelreject"
 	ocr "github.com/quickfixgo/fix42/ordercancelrequest"
 	osr "github.com/quickfixgo/fix42/orderstatusrequest"
 
@@ -19,7 +21,9 @@ import (
 	"github.com/quickfixgo/field"
 	"github.com/quickfixgo/quickfix"
 
+	bitfinex "github.com/bitfinexcom/bitfinex-api-go/v2"
 	"github.com/bitfinexcom/bitfinex-api-go/v2/rest"
+	"github.com/bitfinexcom/bitfinex-api-go/v2/websocket"
 )
 
 const (
@@ -144,7 +148,9 @@ func (f *FIX) OnFIX42MarketDataRequest(msg mdr.MarketDataRequest, sID quickfix.S
 			quickfix.SendToTarget(fix, sID)
 
 		case enum.SubscriptionRequestType_SNAPSHOT_PLUS_UPDATES:
-			// TODO susbcribe
+			// TODO manage subscription
+			// TODO price levels
+			p.Ws.SubscribeBook(context.Background(), symbol, websocket.PrecisionRawBook, websocket.FrequencyRealtime, 25)
 
 		case enum.SubscriptionRequestType_DISABLE_PREVIOUS_SNAPSHOT_PLUS_UPDATE_REQUEST:
 			// TODO unsubscribe
@@ -156,87 +162,92 @@ func (f *FIX) OnFIX42MarketDataRequest(msg mdr.MarketDataRequest, sID quickfix.S
 }
 
 func (f *FIX) OnFIX42OrderCancelRequest(msg ocr.OrderCancelRequest, sID quickfix.SessionID) quickfix.MessageRejectError {
-	/*
-		ocid, err := msg.GetOrigClOrdID() // Required
-		if err != nil {
-			return err
+	ocid, err := msg.GetOrigClOrdID() // Required
+	if err != nil {
+		return err
+	}
+
+	cid, _ := msg.GetClOrdID()
+
+	id, _ := msg.GetOrderID()
+
+	// The spec says that a quantity and side are also required but the bitfinex API does not
+	// care about either of those for cancelling.
+	//txnT, _ := msg.GetTransactTime()
+
+	oc := &bitfinex.OrderCancelRequest{}
+
+	peer, ok := f.FindPeer(sID.String())
+	if !ok {
+		return reject(fmt.Errorf("could not find route for FIX session %s", sID.String()))
+	}
+
+	if id != "" {
+		//idi, err := strconv.ParseInt(id, 10, 64)
+		if err != nil { // bitfinex uses int IDs so we can reject right away.
+			r := ocj.New(
+				field.NewOrderID(id),
+				field.NewClOrdID(cid),
+				field.NewOrigClOrdID(ocid),
+				field.NewOrdStatus(enum.OrdStatus_REJECTED),
+				field.NewCxlRejResponseTo(enum.CxlRejResponseTo_ORDER_CANCEL_REQUEST),
+			)
+			r.SetCxlRejReason(enum.CxlRejReason_UNKNOWN_ORDER)
+			r.SetAccount(peer.BfxUserID())
+			quickfix.SendToTarget(r, sID)
+			return nil
 		}
-
-		cid, _ := msg.GetClOrdID()
-
-		id, _ := msg.GetOrderID()
-
-		// The spec says that a quantity and side are also required but the bitfinex API does not
-		// care about either of those for cancelling.
-		txnT, _ := msg.GetTransactTime()
-
-			oc := &bitfinex.OrderCancelRequest{}
-
-			if id != "" {
-				idi, err := strconv.ParseInt(id, 10, 64)
-				if err != nil { // bitfinex uses int IDs so we can reject right away.
-					r := ocj.New(
-						field.NewOrderID(id),
-						field.NewClOrdID(cid),
-						field.NewOrigClOrdID(ocid),
-						field.NewOrdStatus(enum.OrdStatus_REJECTED),
-						field.NewCxlRejResponseTo(enum.CxlRejResponseTo_ORDER_CANCEL_REQUEST),
-					)
-					r.SetCxlRejReason(enum.CxlRejReason_UNKNOWN_ORDER)
-					r.SetAccount(f.bfxUserID)
-					quickfix.SendToTarget(r, sID)
-					return nil
-				}
-				//oc.ID = &idi
-			} else {
-				ocidi, err := strconv.ParseInt(ocid, 10, 64)
-				if err != nil {
-					r := ocj.New(
-						field.NewOrderID(id),
-						field.NewClOrdID(cid),
-						field.NewOrigClOrdID(ocid),
-						field.NewOrdStatus(enum.OrdStatus_REJECTED),
-						field.NewCxlRejResponseTo(enum.CxlRejResponseTo_ORDER_CANCEL_REQUEST),
-					)
-					r.SetCxlRejReason(enum.CxlRejReason_UNKNOWN_ORDER)
-					r.SetAccount(f.bfxUserID)
-					quickfix.SendToTarget(r, sID)
-					return nil
-				}
-				//oc.CID = &ocidi
-				d := txnT.Format("2006-01-02")
-				//oc.CIDDate = &d
-			}
-	*/
-	go func() {
-		//f.bfx.Websocket.Send(context.Background(), oc)
-	}()
+		//oc.ID = &idi
+	} else {
+		//ocidi, err := strconv.ParseInt(ocid, 10, 64)
+		if err != nil {
+			r := ocj.New(
+				field.NewOrderID(id),
+				field.NewClOrdID(cid),
+				field.NewOrigClOrdID(ocid),
+				field.NewOrdStatus(enum.OrdStatus_REJECTED),
+				field.NewCxlRejResponseTo(enum.CxlRejResponseTo_ORDER_CANCEL_REQUEST),
+			)
+			r.SetCxlRejReason(enum.CxlRejReason_UNKNOWN_ORDER)
+			r.SetAccount(peer.BfxUserID())
+			quickfix.SendToTarget(r, sID)
+			return nil
+		}
+		//oc.CID = &ocidi
+		//d := txnT.Format("2006-01-02")
+		//oc.CIDDate = &d
+	}
+	peer.Ws.Send(context.Background(), oc)
 
 	return nil
 }
 
 func (f *FIX) OnFIX42OrderStatusRequest(msg osr.OrderStatusRequest, sID quickfix.SessionID) quickfix.MessageRejectError {
-	/*oid, err := msg.GetOrderID()
+	oid, err := msg.GetOrderID()
 	if err != nil {
 		return err
-	}*/
+	}
+	/*
+		cid, err := msg.GetClOrdID()
+		if err != nil {
+			return err
+		}
+	*/
+	oidi, nerr := strconv.ParseInt(oid, 10, 64)
 
-	//cid, err := msg.GetClOrdID()
-	//if err != nil {
-	//return err
-	//}
+	peer, ok := f.FindPeer(sID.String())
+	if !ok {
+		return reject(fmt.Errorf("could not find route for FIX session %s", sID.String()))
+	}
 
-	//oidi, nerr := strconv.ParseInt(oid, 10, 64)
+	order, nerr := peer.Rest.Orders.Status(oidi)
+	if nerr != nil {
+		r := quickfix.NewBusinessMessageRejectError(nerr.Error(), 0 /*OTHER*/, nil)
+		return r
+	}
 
-	//order, nerr := f.bfx.Orders.Status(oidi)
-	//if nerr != nil {
-	//	r := quickfix.NewBusinessMessageRejectError(nerr.Error(), 0 /*OTHER*/, nil)
-	//	return r
-	//}
-
-	//er := convert.FIX42ExecutionReportFromOrder(order)
-	//er.SetAccount(f.bfxUserID)
-	//quickfix.SendToTarget(er, sID)
+	er := convert.FIX42ExecutionReportFromOrder(order, peer.BfxUserID(), enum.ExecType_ORDER_STATUS)
+	quickfix.SendToTarget(er, sID)
 
 	return nil
 }

@@ -36,6 +36,7 @@ type Peer struct {
 
 	bfxUserID string
 	sessionID quickfix.SessionID
+	*cache
 }
 
 // could be from FIX market data, or FIX order flow
@@ -53,11 +54,13 @@ func New(factory ClientFactory, fixSessionID quickfix.SessionID, toParent chan<-
 		sessionID: fixSessionID,
 		toParent:  toParent,
 		exit:      make(chan struct{}),
+		cache:     newCache(bfxlog.Logger),
 	}
 }
 
 // Logon establishes a websocket connection and attempts to authenticate with the given apiKey and apiSecret
 func (p *Peer) Logon(apiKey, apiSecret, bfxUserID string) error {
+	p.Rest.Credentials(apiKey, apiSecret)
 	p.Ws.Credentials(apiKey, apiSecret)
 	p.bfxUserID = bfxUserID
 	err := p.Ws.Connect()

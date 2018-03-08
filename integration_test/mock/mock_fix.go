@@ -182,7 +182,7 @@ func (m *TestFixClient) Stop() {
 }
 
 func (m *TestFixClient) OnLogout(sessionID fix.SessionID) {
-	log.Print("MockFix.OnLogout", sessionID)
+	log.Print("[FIX] MockFix.OnLogout: ", sessionID)
 	m.Sessions[sessionID.String()].LoggedOn = false
 	return
 }
@@ -203,7 +203,7 @@ func (m *TestFixClient) onLogon(sessionID fix.SessionID) {
 }
 
 func (m *TestFixClient) OnLogon(sessionID fix.SessionID) {
-	log.Print("MockFix.OnLogon", sessionID)
+	log.Print("[FIX] MockFix.OnLogon", sessionID)
 	m.Sessions[sessionID.String()].LoggedOn = true
 	m.onLogon(sessionID)
 	return
@@ -215,22 +215,22 @@ func fixString(msg fix.Messagable) string {
 
 // outgoing admin
 func (m *TestFixClient) ToAdmin(msg *fix.Message, sessionID fix.SessionID) {
-	log.Print("MockFix.ToAdmin (outgoing)", fixString(msg))
 	msgType, err := msg.MsgType()
 	if err != nil {
 		return
 	}
 	if "A" == msgType {
-		msg.Body.SetString(fix.Tag(20000), m.ApiKey)
-		msg.Body.SetString(fix.Tag(20001), m.ApiSecret)
-		msg.Body.SetString(fix.Tag(20002), m.BfxUserID)
+		msg.Header.SetString(fix.Tag(20000), m.ApiKey)
+		msg.Header.SetString(fix.Tag(20001), m.ApiSecret)
+		msg.Header.SetString(fix.Tag(20002), m.BfxUserID)
 	}
+	log.Print("[FIX] MockFix.ToAdmin (outgoing): ", fixString(msg))
 	return
 }
 
 // incoming admin
 func (m *TestFixClient) FromAdmin(msg *fix.Message, sID fix.SessionID) fix.MessageRejectError {
-	log.Print("MockFix.FromAdmin (incoming)", fixString(msg))
+	log.Print("[FIX] MockFix.FromAdmin (incoming): ", fixString(msg))
 	s := m.Sessions[sID.String()]
 	s.m.Lock()
 	defer s.m.Unlock()
@@ -245,7 +245,7 @@ func (m *TestFixClient) FromAdmin(msg *fix.Message, sID fix.SessionID) fix.Messa
 // outgoing app
 func (m *TestFixClient) ToApp(msg *fix.Message, sID fix.SessionID) error {
 	if !m.OmitLogMessages {
-		log.Print("MockFix.ToApp (outgoing)", fixString(msg))
+		log.Print("[FIX] MockFix.ToApp (outgoing): ", fixString(msg))
 	}
 	s := m.Sessions[sID.String()]
 	seq, err := msg.Header.GetInt(34)
@@ -259,7 +259,7 @@ func (m *TestFixClient) ToApp(msg *fix.Message, sID fix.SessionID) error {
 // incoming app
 func (m *TestFixClient) FromApp(msg *fix.Message, sID fix.SessionID) fix.MessageRejectError {
 	if !m.OmitLogMessages {
-		log.Print("MockFix.FromApp (incoming)", fixString(msg))
+		log.Print("[FIX] MockFix.FromApp (incoming): ", fixString(msg))
 	}
 	s := m.Sessions[sID.String()]
 	s.m.Lock()
@@ -274,7 +274,7 @@ func (m *TestFixClient) FromApp(msg *fix.Message, sID fix.SessionID) fix.Message
 }
 
 func (m *TestFixClient) OnCreate(sessionID fix.SessionID) {
-	log.Print("MockFix.OnCreate ", sessionID)
+	log.Print("[FIX] MockFix.OnCreate ", sessionID)
 	s := &Session{
 		ID:       sessionID,
 		LoggedOn: false,

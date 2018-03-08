@@ -49,6 +49,8 @@ func (f *FIX) OnFIX42NewOrderSingle(msg nos.NewOrderSingle, sID quickfix.Session
 	e := p.Ws.SubmitOrder(context.Background(), bo)
 	if e != nil {
 		f.logger.Warn("could not submit order", zap.Error(e))
+	} else {
+
 	}
 
 	return nil
@@ -245,8 +247,14 @@ func (f *FIX) OnFIX42OrderStatusRequest(msg osr.OrderStatusRequest, sID quickfix
 		r := quickfix.NewBusinessMessageRejectError(nerr.Error(), 0 /*OTHER*/, nil)
 		return r
 	}
-
-	er := convert.FIX42ExecutionReportFromOrder(order, peer.BfxUserID(), enum.ExecType_ORDER_STATUS)
+	orderID := strconv.FormatInt(order.ID, 10)
+	clOrdID := strconv.FormatInt(order.CID, 10)
+	cached, err2 := peer.Lookup(orderID)
+	if err2 == nil {
+		cached = peer.AddOrder(orderID, clOrdID, cached.Px, cached.Qty)
+	}
+	status := convert.OrdStatusToFIX(order.Status)
+	er := convert.FIX42ExecutionReportFromOrder(order, peer.BfxUserID(), enum.ExecType_ORDER_STATUS, cached.FilledQty(), status, "")
 	quickfix.SendToTarget(er, sID)
 
 	return nil

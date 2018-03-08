@@ -16,21 +16,23 @@ import (
 
 // converts bitfinex messages to FIX44
 
-func FIX44ExecutionReportFromOrder(o *bitfinex.Order) fix44er.ExecutionReport {
+func FIX44ExecutionReportFromOrder(o *bitfinex.Order, cumQty float64) fix44er.ExecutionReport {
 	uid, err := uuid.NewV4()
 	execID := ""
 	if err != nil {
 		execID = uid.String()
 	}
+	amt := decimal.NewFromFloat(cumQty)
+
 	e := fix44er.New(
 		field.NewOrderID(strconv.FormatInt(o.ID, 10)),
 		field.NewExecID(execID), // XXX: Can we just take a random ID here?
 		field.NewExecType(enum.ExecType_ORDER_STATUS),
-		OrdStatusFromOrder(o),
-		SideFromOrder(o),
-		LeavesQtyFromOrder(o),
-		CumQtyFromOrder(o),
-		AvgPxFromOrder(o),
+		field.NewOrdStatus(OrdStatusToFIX(o.Status)),
+		SideToFIX(o.Amount),
+		LeavesQtyToFIX(o.Amount),
+		field.NewCumQty(amt, 2),
+		AvgPxToFIX(o.PriceAvg),
 	)
 
 	e.SetSymbol(o.Symbol)

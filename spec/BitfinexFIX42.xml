@@ -265,9 +265,9 @@
     <field name='RefMsgType' required='N' />
     <field name='MsgDirection' required='N' />
    </group>
-   <field name='BfxApiKey' required='Y' />
-   <field name='BfxApiSecret' required='Y' />
-   <field name='BfxUserID' required='Y' />
+   <field name='BfxApiKey' required='N' />
+   <field name='BfxApiSecret' required='N' />
+   <field name='BfxUserID' required='N' />
   </message>
   <message name='News' msgtype='B' msgcat='app'>
    <field name='OrigTime' required='N' />

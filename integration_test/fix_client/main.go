@@ -30,27 +30,28 @@ func listenSignal(sig chan os.Signal, exit chan int) {
 	}
 }
 
-// standalone mock gain FIX endpoint
+// standalone FIX client
 func main() {
-	cfg := flag.String("cfg", "integration_test/conf/mock_fix42_client.cfg", "config path")
+	cfg := flag.String("cfg", "conf/integration_test/client/orders_fix42.cfg", "config path")
+	key := flag.String("key", "U83q9jkML2GVj1fVxFJOAXQeDGaXIzeZ6PwNPQLEXt4", "API key")
+	secret := flag.String("secret", "77SWIRggvw0rCOJUgk9GVcxbldjTxOJP5WLCjWBFIVc", "API Secret")
+	bfxUser := flag.String("user", "connamara", "BFX user ID")
 	flag.Parse()
 
-	//tracker := &spread{}
-
 	// setup mocks
-	mockGainSettings := loadSettings(*cfg)
-	mockGainClient, err := mock.NewTestFixClient(mockGainSettings, quickfix.NewMemoryStoreFactory())
+	settings := loadSettings(*cfg)
+	client, err := mock.NewTestFixClient(settings, quickfix.NewFileStoreFactory(settings))
 	if err != nil {
 		log.Fatal(err)
 	}
-	control := newControl(mockGainClient)
+	control := newControl(client)
 	control.cmds["nos"] = &cmd.Order{}
 	control.cmds["md"] = &cmd.MarketData{}
-	mockGainClient.OmitLogMessages = true
-	mockGainClient.MessageHandler = control
-	//mockGainClient.SendOnLogon(buildFixMdRequests([]string{"BTCUSD"}))
-	mockGainClient.Start()
-	defer mockGainClient.Stop()
+	client.MessageHandler = control
+	client.ApiKey = *key
+	client.ApiSecret = *secret
+	client.BfxUserID = *bfxUser
+	client.Start()
 
 	go control.run()
 
@@ -59,5 +60,7 @@ func main() {
 	signal.Notify(c, syscall.SIGINT, syscall.SIGTERM)
 	go listenSignal(c, exit)
 
-	os.Exit(<-exit)
+	ex := <-exit
+	client.Stop()
+	os.Exit(ex)
 }

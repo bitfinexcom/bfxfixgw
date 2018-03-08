@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"log"
+	"strconv"
 
 	"github.com/quickfixgo/enum"
 	"github.com/quickfixgo/field"
@@ -22,11 +23,11 @@ func newMdRequest(reqID, symbol string, depth int) *mdr.MarketDataRequest {
 	return &mdreq
 }
 
-func buildFixMdRequests(symbols []string) []fix.Messagable {
+func buildFixMdRequests(symbols []string, depth int) []fix.Messagable {
 	reqs := make([]fix.Messagable, 0, len(symbols))
 	for _, sym := range symbols {
 		reqID := fmt.Sprintf("req-%s", sym)
-		req := newMdRequest(reqID, sym, 1)
+		req := newMdRequest(reqID, sym, depth)
 		reqs = append(reqs, req)
 	}
 	return reqs
@@ -37,8 +38,16 @@ type MarketData struct {
 
 func (m *MarketData) Execute(keyboard <-chan string, publisher FIXPublisher) {
 	log.Print("-> Market Data Request")
-	log.Print("enter symbol: ")
-	reqs := buildFixMdRequests([]string{<-keyboard})
+	log.Print("Enter symbol: ")
+	symbol := <-keyboard
+	log.Print("Enter depth: ")
+	lv := <-keyboard
+	depth, err := strconv.Atoi(lv)
+	if err != nil {
+		log.Printf("depth not int: %s", err.Error())
+		return
+	}
+	reqs := buildFixMdRequests([]string{symbol}, depth)
 	for _, req := range reqs {
 		publisher.SendFIX(req)
 	}

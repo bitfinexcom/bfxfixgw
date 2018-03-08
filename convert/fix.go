@@ -9,22 +9,22 @@ import (
 
 // Generic FIX types.
 
-func OrdStatusFromOrder(o *bitfinex.Order) field.OrdStatusField {
-	switch o.Status {
+func OrdStatusToFIX(status bitfinex.OrderStatus) enum.OrdStatus {
+	switch status {
 	default:
-		return field.NewOrdStatus(enum.OrdStatus_NEW)
+		return enum.OrdStatus_NEW
 	case bitfinex.OrderStatusCanceled:
-		return field.NewOrdStatus(enum.OrdStatus_CANCELED)
+		return enum.OrdStatus_CANCELED
 	case bitfinex.OrderStatusPartiallyFilled:
-		return field.NewOrdStatus(enum.OrdStatus_PARTIALLY_FILLED)
+		return enum.OrdStatus_PARTIALLY_FILLED
 	case bitfinex.OrderStatusExecuted:
-		return field.NewOrdStatus(enum.OrdStatus_FILLED)
+		return enum.OrdStatus_FILLED
 	}
 }
 
 // follows FIX 4.1+ rules on merging ExecTransType + ExecType fields into new ExecType enums.
-func ExecTypeFromOrder(o *bitfinex.Order) field.ExecTypeField {
-	switch o.Status {
+func ExecTypeToFIX(status bitfinex.OrderStatus) field.ExecTypeField {
+	switch status {
 	default:
 		return field.NewExecType(enum.ExecType_ORDER_STATUS)
 	case bitfinex.OrderStatusActive:
@@ -38,29 +38,34 @@ func ExecTypeFromOrder(o *bitfinex.Order) field.ExecTypeField {
 	}
 }
 
-func SideFromOrder(o *bitfinex.Order) field.SideField {
+func SideToFIX(amount float64) field.SideField {
 	switch {
-	case o.Amount > 0.0:
+	case amount > 0.0:
 		return field.NewSide(enum.Side_BUY)
-	case o.Amount < 0.0:
+	case amount < 0.0:
 		return field.NewSide(enum.Side_SELL)
 	default:
 		return field.NewSide(enum.Side_UNDISCLOSED)
 	}
 }
 
-func LeavesQtyFromOrder(o *bitfinex.Order) field.LeavesQtyField {
-	d := decimal.NewFromFloat(o.Amount)
-	return field.NewLeavesQty(d, 2)
+// qty
+func LeavesQtyToFIX(amount float64) field.LeavesQtyField {
+	d := decimal.NewFromFloat(amount)
+	return field.NewLeavesQty(d, 4)
 }
 
-func CumQtyFromOrder(o *bitfinex.Order) field.CumQtyField {
-	a := decimal.NewFromFloat(o.AmountOrig)
-	b := decimal.NewFromFloat(o.Amount)
-	return field.NewCumQty(a.Sub(b.Abs()), 2)
+// qty
+func LastSharesToFIX(qty float64) field.LastSharesField {
+	d := decimal.NewFromFloat(qty)
+	return field.NewLastShares(d, 4)
 }
 
-func AvgPxFromOrder(o *bitfinex.Order) field.AvgPxField {
-	d := decimal.NewFromFloat(o.PriceAvg)
+func CumQtyToFIX(cumQty float64) field.CumQtyField {
+	return field.NewCumQty(decimal.NewFromFloat(cumQty), 2)
+}
+
+func AvgPxToFIX(priceAvg float64) field.AvgPxField {
+	d := decimal.NewFromFloat(priceAvg)
 	return field.NewAvgPx(d, 2)
 }

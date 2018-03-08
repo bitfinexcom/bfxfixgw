@@ -70,7 +70,13 @@ func (w *Websocket) FIX44OrderSnapshotHandler(os *bitfinex.OrderSnapshot, sID qu
 
 	for _, o := range os.Snapshot {
 		ord := bitfinex.Order(*o)
-		er := convert.FIX44ExecutionReportFromOrder(&ord)
+		orderID := strconv.FormatInt(o.ID, 10)
+		clOrdID := strconv.FormatInt(o.CID, 10)
+		cached, err := p.Lookup(orderID)
+		if err == nil {
+			cached = p.AddOrder(orderID, clOrdID, cached.Px, cached.Qty)
+		}
+		er := convert.FIX44ExecutionReportFromOrder(&ord, cached.FilledQty())
 		er.SetAccount(p.BfxUserID())
 		er.SetExecType(enum.ExecType_ORDER_STATUS)
 		quickfix.SendToTarget(er, sID)
@@ -85,7 +91,13 @@ func (w *Websocket) FIX44OrderNewHandler(o *bitfinex.OrderNew, sID quickfix.Sess
 	}
 
 	ord := bitfinex.Order(*o)
-	er := convert.FIX44ExecutionReportFromOrder(&ord)
+	orderID := strconv.FormatInt(o.ID, 10)
+	clOrdID := strconv.FormatInt(o.CID, 10)
+	cached, err := p.Lookup(orderID)
+	if err == nil {
+		cached = p.AddOrder(orderID, clOrdID, cached.Px, cached.Qty)
+	}
+	er := convert.FIX44ExecutionReportFromOrder(&ord, cached.FilledQty())
 	er.SetAccount(p.BfxUserID())
 	quickfix.SendToTarget(er, sID)
 	return
@@ -98,7 +110,13 @@ func (w *Websocket) FIX44OrderCancelHandler(o *bitfinex.OrderCancel, sID quickfi
 	}
 
 	ord := bitfinex.Order(*o)
-	er := convert.FIX44ExecutionReportFromOrder(&ord)
+	orderID := strconv.FormatInt(o.ID, 10)
+	clOrdID := strconv.FormatInt(o.CID, 10)
+	cached, err := p.Lookup(orderID)
+	if err == nil {
+		cached = p.AddOrder(orderID, clOrdID, cached.Px, cached.Qty)
+	}
+	er := convert.FIX44ExecutionReportFromOrder(&ord, cached.FilledQty())
 	er.SetExecType(enum.ExecType_CANCELED)
 	er.SetAccount(p.BfxUserID())
 	quickfix.SendToTarget(er, sID)

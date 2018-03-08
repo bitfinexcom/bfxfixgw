@@ -24,7 +24,8 @@ import (
 var (
 	mdcfg  = flag.String("mdcfg", "demo_fix_marketdata.cfg", "Market data FIX configuration file name")
 	ordcfg = flag.String("ordcfg", "demo_fix_orders.cfg", "Order flow FIX configuration file name")
-	url    = flag.String("api", "wss://api.bitfinex.com/ws/2", "v2 Websocket API URL")
+	ws     = flag.String("ws", "wss://api.bitfinex.com/ws/2", "v2 Websocket API URL")
+	rst    = flag.String("rest", "https://api.bitfinex.com/v2/", "v2 REST API URL")
 	//flag.StringVar(&logfile, "logfile", "logs/debug.log", "path to the log file")
 	//flag.StringVar(&configfile, "configfile", "config/server.cfg", "path to the config file")
 )
@@ -90,6 +91,7 @@ type NonceFactory interface {
 
 type defaultClientFactory struct {
 	*websocket.Parameters
+	RestURL string
 	NonceFactory
 }
 
@@ -101,7 +103,10 @@ func (d *defaultClientFactory) NewWs() *websocket.Client {
 }
 
 func (d *defaultClientFactory) NewRest() *rest.Client {
-	return rest.NewClient()
+	if d.RestURL == "" {
+		return rest.NewClient()
+	}
+	return rest.NewClientWithURL(d.RestURL)
 }
 
 func main() {
@@ -124,9 +129,10 @@ func main() {
 		log.Logger.Fatal("parse FIX order flow settings", zap.Error(err))
 	}
 	params := websocket.NewDefaultParameters()
-	params.URL = *url
+	params.URL = *ws
 	factory := &defaultClientFactory{
 		Parameters: params,
+		RestURL:    *rst,
 	}
 	g, err := New(mds, ords, factory)
 	if err != nil {

@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"log"
 	"os"
+	"strings"
 
 	"github.com/bitfinexcom/bfxfixgw/integration_test/fix_client/cmd"
 
@@ -31,26 +32,35 @@ func (c *control) Handle(msg *fix.Message) {
 	}
 }
 
-func (c *control) run() {
-	c.keyboard = make(chan string)
+func (c *control) read() {
 	reader := bufio.NewReader(os.Stdin)
 	for {
-		log.Print("Enter command: ")
-		ln, _ := reader.ReadString('\n')
-		if ln == "exit" {
-			break
+		ln, err := reader.ReadString('\n')
+		if err != nil {
+			close(c.keyboard)
+			return
 		}
-		c.keyboard <- ln
+		c.keyboard <- strings.Trim(ln, "\n")
 	}
-	close(c.keyboard) // ?
 }
 
-func (c *control) loop() {
-	for ln := range c.keyboard {
-		for name, cmd := range c.cmds {
-			if name == ln {
-				cmd.Execute(c.keyboard, c.publisher)
+func (c *control) run() {
+	c.keyboard = make(chan string)
+	go c.read()
+	for {
+		log.Print("Enter command: ")
+		for ln := range c.keyboard {
+			found := false
+			for name, cmd := range c.cmds {
+				if name == ln {
+					found = true
+					cmd.Execute(c.keyboard, c.publisher)
+				}
 			}
+			if !found {
+				log.Printf("command not recognized: %s", ln)
+			}
+			log.Print("Enter command: ")
 		}
 	}
 }

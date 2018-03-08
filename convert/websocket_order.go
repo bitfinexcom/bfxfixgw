@@ -155,11 +155,15 @@ func OrderNewFromFIX44NewOrderSingle(nos fix44nos.NewOrderSingle) (*bitfinex.Ord
 	q, _ := qd.Float64()
 	on.Amount = q
 
-	pd, err := nos.GetPrice()
-	if err != nil {
-		return nil, err
+	t, _ := nos.GetOrdType()
+	switch t {
+	case enum.OrdType_LIMIT:
+		pd, err := nos.GetPrice()
+		if err != nil {
+			return nil, err
+		}
+		on.Price, _ = pd.Float64()
 	}
-	p, _ := pd.Float64()
 
 	side, err := nos.GetSide()
 	if err != nil {
@@ -167,9 +171,9 @@ func OrderNewFromFIX44NewOrderSingle(nos fix44nos.NewOrderSingle) (*bitfinex.Ord
 	}
 
 	if side == enum.Side_SELL {
-		on.Price = -p
+		on.Amount = -q
 	} else if side == enum.Side_BUY {
-		on.Price = p
+		on.Amount = q
 	}
 
 	return on, nil
@@ -197,20 +201,23 @@ func OrderNewFromFIX42NewOrderSingle(nos fix42nos.NewOrderSingle) (*bitfinex.Ord
 	if err != nil {
 		return nil, err
 	}
-	on.Symbol = s
+	on.Symbol = s //fmt.Sprintf("t%s", s)
 
 	qd, err := nos.GetOrderQty()
 	if err != nil {
 		return nil, err
 	}
 	q, _ := qd.Float64()
-	on.Amount = q
 
-	pd, err := nos.GetPrice()
-	if err != nil {
-		return nil, err
+	t, _ := nos.GetOrdType()
+	switch t {
+	case enum.OrdType_LIMIT:
+		pd, err := nos.GetPrice()
+		if err != nil {
+			return nil, err
+		}
+		on.Price, _ = pd.Float64()
 	}
-	p, _ := pd.Float64()
 
 	side, err := nos.GetSide()
 	if err != nil {
@@ -218,9 +225,9 @@ func OrderNewFromFIX42NewOrderSingle(nos fix42nos.NewOrderSingle) (*bitfinex.Ord
 	}
 
 	if side == enum.Side_SELL {
-		on.Price = -p
+		on.Amount = -q
 	} else if side == enum.Side_BUY {
-		on.Price = p
+		on.Amount = q
 	}
 
 	return on, nil

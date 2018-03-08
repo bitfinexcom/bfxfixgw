@@ -107,19 +107,22 @@ func New(s *quickfix.Settings, peers peer.Peers, serviceType FIXServiceType) (*F
 		f.AddRoute(fix44ocr.Route(f.OnFIX44OrderCancelRequest))
 		f.AddRoute(fix44osr.Route(f.OnFIX44OrderStatusRequest))
 	*/
-	lf := quickfix.NewScreenLogFactory()
-	var factory quickfix.MessageStoreFactory
+	var storeFactory quickfix.MessageStoreFactory
+	logFactory, err := quickfix.NewFileLogFactory(s)
+	if err != nil {
+		return nil, err
+	}
 	if serviceType == OrderRoutingService {
 		f.AddRoute(fix42nos.Route(f.OnFIX42NewOrderSingle))
 		f.AddRoute(fix42ocr.Route(f.OnFIX42OrderCancelRequest))
 		f.AddRoute(fix42osr.Route(f.OnFIX42OrderStatusRequest))
-		factory = quickfix.NewFileStoreFactory(s)
+		storeFactory = quickfix.NewFileStoreFactory(s)
 	} else {
 		f.AddRoute(fix42mdr.Route(f.OnFIX42MarketDataRequest))
-		factory = NewNoStoreFactory()
+		storeFactory = NewNoStoreFactory()
 	}
 
-	a, err := quickfix.NewAcceptor(f, factory, s, lf)
+	a, err := quickfix.NewAcceptor(f, storeFactory, s, logFactory)
 	if err != nil {
 		return nil, err
 	}

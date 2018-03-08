@@ -10,14 +10,24 @@ import (
 	nos "github.com/quickfixgo/fix42/newordersingle"
 	fix "github.com/quickfixgo/quickfix"
 	"github.com/quickfixgo/tag"
+	"github.com/shopspring/decimal"
 )
 
 func buildFixOrder(clordid, symbol string, px, qty float64, side enum.Side, ordType enum.OrdType) fix.Messagable {
-	return nos.New(field.NewClOrdID(clordid),
+	ord := nos.New(field.NewClOrdID(clordid),
 		field.NewHandlInst(enum.HandlInst_MANUAL_ORDER_BEST_EXECUTION),
 		field.NewSymbol(symbol), field.NewSide(side),
 		field.NewTransactTime(time.Now()),
 		field.NewOrdType(ordType))
+	ord.SetOrderQty(decimal.NewFromFloat(qty), 4)
+	ord.SetSide(side)
+	switch ordType {
+	case enum.OrdType_LIMIT:
+		ord.SetPrice(decimal.NewFromFloat(px), 4)
+	case enum.OrdType_STOP:
+		ord.SetStopPx(decimal.NewFromFloat(px), 4)
+	}
+	return ord
 }
 
 type Order struct {
@@ -41,12 +51,18 @@ func (o *Order) Execute(keyboard <-chan string, publisher FIXPublisher) {
 	if str == "stop" {
 		ordtype = enum.OrdType_STOP
 	}
-	log.Print("Enter px: ")
-	str = <-keyboard
-	px, err := strconv.ParseFloat(str, 64)
-	if err != nil {
-		log.Printf("could not read px: %s", err.Error())
-		return
+	var err error
+	var px float64
+	if ordtype == enum.OrdType_MARKET {
+		// no-op
+	} else {
+		log.Print("Enter px: ")
+		str = <-keyboard
+		px, err = strconv.ParseFloat(str, 64)
+		if err != nil {
+			log.Printf("could not read px: %s", err.Error())
+			return
+		}
 	}
 	log.Print("Enter qty: ")
 	str = <-keyboard

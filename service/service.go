@@ -1,7 +1,7 @@
 package service
 
 import (
-	"github.com/bitfinexcom/bfxfixgw/log"
+	lg "github.com/bitfinexcom/bfxfixgw/log"
 	"github.com/bitfinexcom/bfxfixgw/service/fix"
 	"github.com/bitfinexcom/bfxfixgw/service/peer"
 	"github.com/bitfinexcom/bfxfixgw/service/websocket"
@@ -9,6 +9,7 @@ import (
 	wsv2 "github.com/bitfinexcom/bitfinex-api-go/v2/websocket"
 	"github.com/quickfixgo/quickfix"
 	"go.uber.org/zap"
+	"log"
 	"sync"
 )
 
@@ -24,11 +25,11 @@ type Service struct {
 }
 
 func New(factory peer.ClientFactory, settings *quickfix.Settings, srvType fix.FIXServiceType) (*Service, error) {
-	service := &Service{factory: factory, log: log.Logger, peers: make(map[string]*peer.Peer), inbound: make(chan *peer.Message)}
+	service := &Service{factory: factory, log: lg.Logger, peers: make(map[string]*peer.Peer), inbound: make(chan *peer.Message)}
 	var err error
 	service.FIX, err = fix.New(settings, service, srvType)
 	if err != nil {
-		log.Logger.Fatal("create FIX", zap.Error(err))
+		lg.Logger.Fatal("create FIX", zap.Error(err))
 		return nil, err
 	}
 	service.Websocket = websocket.New(service)
@@ -74,6 +75,22 @@ func (s *Service) RemovePeer(fixSessionID string) bool {
 	return false
 }
 
+func (s *Service) processOrderTerminal(o *bitfinex.OrderCancel, sid quickfix.SessionID) {
+	/*
+		peer, ok := s.FindPeer(sid.String())
+		if !ok {
+			s.log.Warn("could not find peer for SessionID", zap.String("SessionID", sid.String()))
+			return
+		}
+		// TODO is this a cancel ack?
+		orderID := strconv.FormatInt(o.ID, 10)
+		clOrdID := strconv.FormatInt(o.CID, 10)
+		peer.AddOrder(orderID, clOrdID, o.Price, o.Amount)
+		// TODO generate "filled" ER or is this triggered by a tu with rem qty = 0?
+	*/
+	// this is handled by the last 'tu' message
+}
+
 func (s *Service) listen() {
 	for msg := range s.inbound {
 		if msg == nil {
@@ -82,12 +99,43 @@ func (s *Service) listen() {
 		switch obj := msg.Data.(type) {
 		case *bitfinex.Notification:
 			s.Websocket.FIX42NotificationHandler(obj, msg.FIXSessionID())
+		case *bitfinex.OrderCancel:
+			//s.processOrderTerminal(obj, msg.FIXSessionID())
 		case *wsv2.InfoEvent:
 			// no-op
 		case *wsv2.AuthEvent:
 			// TODO log off FIX if this errors
+			log.Printf("got auth event: %#v", obj)
+		case *bitfinex.FundingInfo:
+			// no-op
+		case *bitfinex.MarginInfoUpdate:
+			// no-op
+		case *bitfinex.MarginInfoBase:
+			// no-op
+		case *bitfinex.WalletSnapshot:
+			// no-op
+		case *bitfinex.WalletUpdate:
+			// no-op
+		case *bitfinex.BalanceInfo:
+			// no-op
+		case *bitfinex.BalanceUpdate:
+			// no-op
+		case *bitfinex.PositionSnapshot:
+			// no-op
+		case *bitfinex.PositionUpdate:
+			// no-op
+		case *bitfinex.OrderSnapshot:
+			log.Printf("got order snapshot: %#v", obj)
+			// TODO
+		case *bitfinex.TradeExecution:
+			// ignore trade executions in favor of trade execution updates (more data)
+		case *bitfinex.TradeExecutionUpdate:
+			s.Websocket.FIX42TradeExecutionUpdateHandler(obj, msg.FIXSessionID())
+		case error:
+			s.log.Error("processing error", zap.Any("msg", obj))
 		default:
-			s.log.Warn("unhandled message", zap.Any("msg", msg.Data))
+			s.log.Warn("unhandled message", zap.Any("msg", obj))
+			log.Printf("%#v", obj)
 		}
 	}
 }

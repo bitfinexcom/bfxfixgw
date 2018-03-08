@@ -47,20 +47,25 @@ type FIX struct {
 
 func (f *FIX) OnCreate(sID quickfix.SessionID) {
 	log.Logger.Info("FIX.OnCreate", zap.Any("SessionID", sID))
-	f.Peers.AddPeer(sID)
+	//f.Peers.AddPeer(sID)
 }
 
 func (f *FIX) OnLogon(sID quickfix.SessionID) {
 	log.Logger.Info("FIX.OnLogon", zap.Error(nil))
 }
 
-func (f *FIX) OnLogout(sID quickfix.SessionID) { return }
+func (f *FIX) OnLogout(sID quickfix.SessionID) {
+	log.Logger.Info("logging off websocket peer", zap.String("SessionID", sID.String()))
+	f.RemovePeer(sID.String())
+}
 func (f *FIX) ToAdmin(msg *quickfix.Message, sID quickfix.SessionID) {
 	f.logger.Info("FIX.ToAdmin", zap.Any("msg", msg))
 }
 func (f *FIX) ToApp(msg *quickfix.Message, sID quickfix.SessionID) error { return nil }
 func (f *FIX) FromAdmin(msg *quickfix.Message, sID quickfix.SessionID) quickfix.MessageRejectError {
 	f.logger.Info("FIX.FromAdmin", zap.Any("msg", msg))
+
+	f.Peers.AddPeer(sID)
 
 	if msg.IsMsgTypeOf(msgTypeLogon) {
 		apiKey, err := msg.Body.GetString(tagBfxAPIKey)

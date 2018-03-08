@@ -176,17 +176,18 @@ func (f *FIX) OnFIX42OrderCancelRequest(msg ocr.OrderCancelRequest, sID quickfix
 
 	// The spec says that a quantity and side are also required but the bitfinex API does not
 	// care about either of those for cancelling.
-	//txnT, _ := msg.GetTransactTime()
+	txnT, _ := msg.GetTransactTime()
 
 	oc := &bitfinex.OrderCancelRequest{}
 
-	peer, ok := f.FindPeer(sID.String())
+	p, ok := f.FindPeer(sID.String())
 	if !ok {
-		return reject(fmt.Errorf("could not find route for FIX session %s", sID.String()))
+		f.logger.Warn("could not find peer for SessionID", zap.String("SessionID", sID.String()))
+		return quickfix.NewMessageRejectError("could not find established peer for session ID", rejectReasonOther, nil)
 	}
 
 	if id != "" {
-		//idi, err := strconv.ParseInt(id, 10, 64)
+		idi, err := strconv.ParseInt(id, 10, 64)
 		if err != nil { // bitfinex uses int IDs so we can reject right away.
 			r := ocj.New(
 				field.NewOrderID(id),
@@ -196,13 +197,13 @@ func (f *FIX) OnFIX42OrderCancelRequest(msg ocr.OrderCancelRequest, sID quickfix
 				field.NewCxlRejResponseTo(enum.CxlRejResponseTo_ORDER_CANCEL_REQUEST),
 			)
 			r.SetCxlRejReason(enum.CxlRejReason_UNKNOWN_ORDER)
-			r.SetAccount(peer.BfxUserID())
+			r.SetAccount(p.BfxUserID())
 			quickfix.SendToTarget(r, sID)
 			return nil
 		}
-		//oc.ID = &idi
+		oc.ID = idi
 	} else {
-		//ocidi, err := strconv.ParseInt(ocid, 10, 64)
+		ocidi, err := strconv.ParseInt(ocid, 10, 64)
 		if err != nil {
 			r := ocj.New(
 				field.NewOrderID(id),
@@ -212,15 +213,21 @@ func (f *FIX) OnFIX42OrderCancelRequest(msg ocr.OrderCancelRequest, sID quickfix
 				field.NewCxlRejResponseTo(enum.CxlRejResponseTo_ORDER_CANCEL_REQUEST),
 			)
 			r.SetCxlRejReason(enum.CxlRejReason_UNKNOWN_ORDER)
-			r.SetAccount(peer.BfxUserID())
+			r.SetAccount(p.BfxUserID())
 			quickfix.SendToTarget(r, sID)
 			return nil
 		}
-		//oc.CID = &ocidi
-		//d := txnT.Format("2006-01-02")
-		//oc.CIDDate = &d
+		oc.CID = ocidi
+		d := txnT.Format("2006-01-02")
+		oc.CIDDate = d
 	}
-	peer.Ws.Send(context.Background(), oc)
+	if p.Ws.IsConnected() {
+		p.Ws.Send(context.Background(), oc)
+	} else {
+		// TODO still getting heartbeats, where is this connection??
+		// ord vs. market data host?
+		f.logger.Error("not logged onto websocket", zap.String("SessionID", sID.String()))
+	}
 
 	return nil
 }

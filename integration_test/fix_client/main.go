@@ -55,6 +55,7 @@ func main() {
 	control := newControl(client)
 	control.cmds["nos"] = &cmd.Order{}
 	control.cmds["md"] = &cmd.MarketData{}
+	control.cmds["cxl"] = &cmd.Cancel{}
 	client.MessageHandler = control
 	client.ApiKey = *key
 	client.ApiSecret = *secret

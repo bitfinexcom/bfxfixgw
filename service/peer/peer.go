@@ -1,13 +1,11 @@
-package service
+package peer
 
 import (
 	bfxlog "github.com/bitfinexcom/bfxfixgw/log"
-	"github.com/bitfinexcom/bitfinex-api-go/v2"
 	"github.com/bitfinexcom/bitfinex-api-go/v2/rest"
 	"github.com/bitfinexcom/bitfinex-api-go/v2/websocket"
 	"github.com/quickfixgo/quickfix"
 	"go.uber.org/zap"
-	"log"
 )
 
 type ClientFactory interface {
@@ -22,10 +20,17 @@ type Peers interface {
 	AddPeer(id quickfix.SessionID)
 }
 
+type Message struct {
+	Data interface{}
+	*Peer
+}
+
 // Peer represents a FIX-websocket peer user
 type Peer struct {
-	Ws   *websocket.Client
-	Rest *rest.Client
+	Ws       *websocket.Client
+	Rest     *rest.Client
+	toParent chan<- *Message
+	exit     chan struct{}
 
 	logger *zap.Logger
 
@@ -39,13 +44,15 @@ type subscription struct {
 	SubscriptionID string
 }
 
-// NewPeer creates a peer, but does not establish a websocket connection yet
-func newPeer(factory ClientFactory, fixSessionID quickfix.SessionID) *Peer {
+// New creates a peer, but does not establish a websocket connection yet
+func New(factory ClientFactory, fixSessionID quickfix.SessionID, toParent chan<- *Message) *Peer {
 	return &Peer{
 		Ws:        factory.NewWs(),
 		Rest:      factory.NewRest(),
 		logger:    bfxlog.Logger,
 		sessionID: fixSessionID,
+		toParent:  toParent,
+		exit:      make(chan struct{}),
 	}
 }
 
@@ -63,24 +70,9 @@ func (p *Peer) Logon(apiKey, apiSecret, bfxUserID string) error {
 
 func (p *Peer) listen() {
 	for msg := range p.Ws.Listen() {
-		log.Printf("peer got msg: %#v", msg)
-		if msg == nil {
-			p.logger.Info("upstream disconnect")
-			// TODO log out peer
-			return
-		}
-		switch m := msg.(type) {
-		case *websocket.InfoEvent:
-			// TODO logon? no logon--client has not yet set credentials
-		case *websocket.AuthEvent:
-			// TODO log off FIX session if auth error
-			log.Printf("auth: %#v", m)
-		case *bitfinex.BookUpdate:
-			// TODO
-		default:
-			p.logger.Error("unhandled event: %#v", zap.Any("msg", msg))
-		}
+		p.toParent <- &Message{Data: msg, Peer: p}
 	}
+	close(p.exit)
 }
 
 // BfxUserID is an immutable accessor to the bitfinex user ID
@@ -95,5 +87,6 @@ func (p *Peer) FIXSessionID() quickfix.SessionID {
 func (p *Peer) Close() {
 	if p.Ws.IsConnected() {
 		p.Ws.Close()
+		<-p.exit
 	}
 }

@@ -2747,6 +2747,6 @@
   <field number='446' name='EncodedListStatusText' type='DATA' />
   <field number='20000' name='BfxApiKey' type='STRING' />
   <field number='20001' name='BfxApiSecret' type='STRING' />
-  <field number='20002' name='BfxUserID' type='STRING'>
+  <field number='20002' name='BfxUserID' type='STRING' />
  </fields>
 </fix>

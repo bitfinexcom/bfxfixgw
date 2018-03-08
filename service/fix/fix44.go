@@ -1,4 +1,4 @@
-package service
+package fix
 
 import (
 	"github.com/quickfixgo/quickfix"

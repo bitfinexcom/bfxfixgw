@@ -136,6 +136,7 @@ func (m *TestFixClient) WaitForMessage(sessionID string, seqnum int) (string, er
 }
 
 func (m *TestFixClient) DumpRcvFIX(sid string) {
+	log.Printf("Messages for %s:\n", sid)
 	if s, ok := m.Sessions[sid]; ok {
 		for i, m := range s.Received {
 			log.Printf("%2d: %s", i, m)
@@ -153,8 +154,6 @@ func (m *TestFixClient) Stop() {
 		err := fix.UnregisterSession(s.ID)
 		if err != nil {
 			log.Printf("[TEST] could not remove session %s: %s", s.ID.String(), err.Error())
-		} else {
-			log.Printf("[TEST] removed session: %s", s.ID.String())
 		}
 		counterparty := fix.SessionID{
 			BeginString:      s.ID.BeginString,
@@ -169,8 +168,6 @@ func (m *TestFixClient) Stop() {
 		err = fix.UnregisterSession(counterparty)
 		if err != nil {
 			log.Printf("[TEST] could not remove session %s: %s", counterparty.String(), err.Error())
-		} else {
-			log.Printf("[TEST] removed session: %s", counterparty.String())
 		}
 	}
 }
@@ -225,6 +222,14 @@ func (m *TestFixClient) ToAdmin(msg *fix.Message, sessionID fix.SessionID) {
 // incoming admin
 func (m *TestFixClient) FromAdmin(msg *fix.Message, sID fix.SessionID) fix.MessageRejectError {
 	log.Print("MockFix.FromAdmin (incoming)", fixString(msg))
+	s := m.Sessions[sID.String()]
+	s.m.Lock()
+	defer s.m.Unlock()
+	seq, err := msg.Header.GetInt(34)
+	if err != nil {
+		return err
+	}
+	s.Received[seq] = strings.Replace(msg.String(), string(0x1), "|", -1)
 	return nil
 }
 

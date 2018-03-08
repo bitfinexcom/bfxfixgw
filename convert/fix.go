@@ -22,11 +22,27 @@ func OrdStatusFromOrder(o *bitfinex.Order) field.OrdStatusField {
 	}
 }
 
+// follows FIX 4.1+ rules on merging ExecTransType + ExecType fields into new ExecType enums.
+func ExecTypeFromOrder(o *bitfinex.Order) field.ExecTypeField {
+	switch o.Status {
+	default:
+		return field.NewExecType(enum.ExecType_ORDER_STATUS)
+	case bitfinex.OrderStatusActive:
+		return field.NewExecType(enum.ExecType_NEW)
+	case bitfinex.OrderStatusCanceled:
+		return field.NewExecType(enum.ExecType_TRADE_CANCEL)
+	case bitfinex.OrderStatusPartiallyFilled:
+		return field.NewExecType(enum.ExecType_TRADE)
+	case bitfinex.OrderStatusExecuted:
+		return field.NewExecType(enum.ExecType_TRADE)
+	}
+}
+
 func SideFromOrder(o *bitfinex.Order) field.SideField {
 	switch {
-	case o.Amount < 0.0:
-		return field.NewSide(enum.Side_BUY)
 	case o.Amount > 0.0:
+		return field.NewSide(enum.Side_BUY)
+	case o.Amount < 0.0:
 		return field.NewSide(enum.Side_SELL)
 	default:
 		return field.NewSide(enum.Side_UNDISCLOSED)

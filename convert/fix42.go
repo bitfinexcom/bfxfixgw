@@ -18,6 +18,8 @@ import (
 	fix42mdsfr "github.com/quickfixgo/fix42/marketdatasnapshotfullrefresh"
 	ocj "github.com/quickfixgo/fix42/ordercancelreject"
 	//fix42nos "github.com/quickfixgo/quickfix/fix42/newordersingle"
+	"github.com/bitfinexcom/bfxfixgw/log"
+	"go.uber.org/zap"
 )
 
 func FIX42MarketDataFullRefreshFromBookSnapshot(mdReqID string, snapshot *bitfinex.BookUpdateSnapshot) *fix42mdsfr.MarketDataSnapshotFullRefresh {
@@ -75,11 +77,11 @@ func FIX42ExecutionReportFromOrder(o *bitfinex.Order, account string, execType e
 	if err != nil {
 		execID = uid.String()
 	}
+	orderID := strconv.FormatInt(o.ID, 10)
+	log.Logger.Info("creating execution report mapping", zap.String("orderID", orderID), zap.String("execType", string(execType)), zap.String("execID", execID))
 	e := fix42er.New(
-		field.NewOrderID(strconv.FormatInt(o.ID, 10)),
-		field.NewExecID(execID), // XXX: Can we just take a random ID here?
-		// XXX: this method is only used to status at the moment but these should
-		// probably not be hardcoded.
+		field.NewOrderID(orderID),
+		field.NewExecID(execID),
 		field.NewExecTransType(enum.ExecTransType_STATUS),
 		field.NewExecType(execType),
 
@@ -96,6 +98,7 @@ func FIX42ExecutionReportFromOrder(o *bitfinex.Order, account string, execType e
 }
 
 func FIX42OrderCancelRejectFromCancel(o *bitfinex.OrderCancel, account string) ocj.OrderCancelReject {
+	// TODO add cache to attempt lookup order IDs
 	r := ocj.New(
 		field.NewOrderID("NONE"),
 		field.NewClOrdID("NONE"), // XXX: This should be the actual ClOrdID which we don't have in this context.

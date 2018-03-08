@@ -14,6 +14,8 @@ import (
 
 	"github.com/bitfinexcom/bfxfixgw/log"
 	"github.com/bitfinexcom/bfxfixgw/service"
+	"github.com/bitfinexcom/bfxfixgw/service/fix"
+	"github.com/bitfinexcom/bfxfixgw/service/peer"
 
 	"github.com/quickfixgo/quickfix"
 	"go.uber.org/zap"
@@ -22,6 +24,7 @@ import (
 var (
 	mdcfg  = flag.String("mdcfg", "demo_fix_marketdata.cfg", "Market data FIX configuration file name")
 	ordcfg = flag.String("ordcfg", "demo_fix_orders.cfg", "Order flow FIX configuration file name")
+	url    = flag.String("api", "wss://api.bitfinex.com/ws/2", "v2 Websocket API URL")
 	//flag.StringVar(&logfile, "logfile", "logs/debug.log", "path to the log file")
 	//flag.StringVar(&configfile, "configfile", "config/server.cfg", "path to the config file")
 )
@@ -46,7 +49,7 @@ type Gateway struct {
 	MarketData   *service.Service
 	OrderRouting *service.Service
 
-	factory service.ClientFactory
+	factory peer.ClientFactory
 }
 
 func (g *Gateway) Start() error {
@@ -62,18 +65,18 @@ func (g *Gateway) Stop() {
 	g.MarketData.Stop()
 }
 
-func New(mdSettings, orderSettings *quickfix.Settings, factory service.ClientFactory) (*Gateway, error) {
+func New(mdSettings, orderSettings *quickfix.Settings, factory peer.ClientFactory) (*Gateway, error) {
 	g := &Gateway{
 		logger:  log.Logger,
 		factory: factory,
 	}
 	var err error
-	g.MarketData, err = service.New(factory, mdSettings, service.MarketDataService)
+	g.MarketData, err = service.New(factory, mdSettings, fix.MarketDataService)
 	if err != nil {
 		log.Logger.Fatal("create market data FIX", zap.Error(err))
 		return nil, err
 	}
-	g.OrderRouting, err = service.New(factory, orderSettings, service.OrderRoutingService)
+	g.OrderRouting, err = service.New(factory, orderSettings, fix.OrderRoutingService)
 	if err != nil {
 		log.Logger.Fatal("create order routing FIX", zap.Error(err))
 		return nil, err
@@ -81,8 +84,13 @@ func New(mdSettings, orderSettings *quickfix.Settings, factory service.ClientFac
 	return g, nil
 }
 
+type NonceFactory interface {
+	Create()
+}
+
 type defaultClientFactory struct {
 	*websocket.Parameters
+	NonceFactory
 }
 
 func (d *defaultClientFactory) NewWs() *websocket.Client {
@@ -115,7 +123,11 @@ func main() {
 	if err != nil {
 		log.Logger.Fatal("parse FIX order flow settings", zap.Error(err))
 	}
-	factory := &defaultClientFactory{}
+	params := websocket.NewDefaultParameters()
+	params.URL = *url
+	factory := &defaultClientFactory{
+		Parameters: params,
+	}
 	g, err := New(mds, ords, factory)
 	if err != nil {
 		log.Logger.Fatal("could not create gateway", zap.Error(err))

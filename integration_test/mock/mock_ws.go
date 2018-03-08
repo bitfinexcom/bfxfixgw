@@ -17,6 +17,7 @@ var upgrader = websocket.Upgrader{
 }
 
 type client struct {
+	ID     int
 	parent *MockWs
 	*websocket.Conn
 	send     chan []byte
@@ -60,6 +61,11 @@ func (c *client) readPump() {
 	}
 }
 
+type tx struct {
+	Msg      []byte
+	ClientID int
+}
+
 type MockWs struct {
 	clients  map[*client]bool
 	listener net.Listener
@@ -68,6 +74,7 @@ type MockWs struct {
 	register     chan *client
 	unregister   chan *client
 	broadcast    chan []byte
+	send         chan *tx
 	totalClients int
 }
 
@@ -94,12 +101,17 @@ func NewMockWs(port int) *MockWs {
 		register:   make(chan *client),
 		unregister: make(chan *client),
 		broadcast:  make(chan []byte),
+		send:       make(chan *tx),
 	}
 }
 
 // Broadcast sends a message to all connected clients.
 func (s *MockWs) Broadcast(msg string) {
 	s.broadcast <- []byte(msg)
+}
+
+func (s *MockWs) Send(clientID int, msg string) {
+	s.send <- &tx{ClientID: clientID, Msg: []byte(msg)}
 }
 
 // ReceivedCount starts indexing clients at position 0.
@@ -120,8 +132,9 @@ func (s *MockWs) ReceivedCount(clientNum int) int {
 func (s *MockWs) Received(clientNum int, msgNum int) (string, error) {
 	var client *client
 	i := 0
-	for client = range s.clients {
+	for c := range s.clients {
 		if i == clientNum {
+			client = c
 			break
 		}
 		i++
@@ -137,6 +150,17 @@ func (s *MockWs) Received(clientNum int, msgNum int) (string, error) {
 	return "", fmt.Errorf("could not find client %d", clientNum)
 }
 
+func (s *MockWs) DumpRecv() {
+	i := 0
+	for c := range s.clients {
+		log.Printf("received for client %d:\n", i, c.ID)
+		for j, m := range c.received {
+			log.Printf("%2d: %s", j, m)
+		}
+		i++
+	}
+}
+
 func (s *MockWs) WaitForMessage(clientNum int, msgNum int) (string, error) {
 	loops := 16
 	delay := time.Millisecond * 250
@@ -150,6 +174,7 @@ func (s *MockWs) WaitForMessage(clientNum int, msgNum int) (string, error) {
 			return msg, nil
 		}
 	}
+	s.DumpRecv()
 	return "", err
 }
 
@@ -178,8 +203,8 @@ func (s *MockWs) serveWs(w http.ResponseWriter, r *http.Request) {
 		log.Print(err)
 		return
 	}
+	client := &client{ID: s.totalClients, parent: s, Conn: conn, send: make(chan []byte, 256), received: make([]string, 0)}
 	s.totalClients++
-	client := &client{parent: s, Conn: conn, send: make(chan []byte, 256), received: make([]string, 0)}
 	go client.writePump()
 	go client.readPump()
 	s.clients[client] = true
@@ -200,6 +225,20 @@ func (s *MockWs) loop() {
 				select {
 				case client.send <- msg:
 				default: // send failure
+					log.Printf("failed to send message to client %d", client.ID)
+					close(client.send)
+					delete(s.clients, client)
+				}
+			}
+		case tx := <-s.send:
+			for client := range s.clients {
+				if client.ID != tx.ClientID {
+					continue
+				}
+				select {
+				case client.send <- tx.Msg:
+				default:
+					log.Printf("failed to send message to client %d", client.ID)
 					close(client.send)
 					delete(s.clients, client)
 				}

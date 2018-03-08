@@ -2,18 +2,18 @@ package websocket
 
 import (
 	"github.com/bitfinexcom/bfxfixgw/log"
-	"github.com/bitfinexcom/bfxfixgw/service"
+	"github.com/bitfinexcom/bfxfixgw/service/peer"
 	"go.uber.org/zap"
 )
 
 type Websocket struct {
-	service.Peers
+	peer.Peers
 	logger *zap.Logger
 }
 
-func NewWebsocket(lookup service.Peers) *Websocket {
+func New(peers peer.Peers) *Websocket {
 	return &Websocket{
-		Peers:  lookup,
+		Peers:  peers,
 		logger: log.Logger,
 	}
 }

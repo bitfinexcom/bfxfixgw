@@ -28,6 +28,16 @@ func (w *Websocket) FIX42Handler(o interface{}, sID quickfix.SessionID) {
 	}
 }
 
+// 6 = AvgPx
+// 14 = CumQty
+// 17 = ExecID
+// 20 = ExecTransType
+// 37 = OrderID
+// 39 = OrdStatus
+// 54 = Side
+// 55 = Symbol
+// 150 = ExecType
+// 151 = LeavesQty
 func (w *Websocket) FIX42NotificationHandler(d *bitfinex.Notification, sID quickfix.SessionID) {
 	p, ok := w.FindPeer(sID.String())
 	if !ok {
@@ -44,8 +54,10 @@ func (w *Websocket) FIX42NotificationHandler(d *bitfinex.Notification, sID quick
 		}
 		return
 	case *bitfinex.OrderNew:
-		// XXX: Handle this at some point.
+		order := bitfinex.Order(*o)
+		quickfix.SendToTarget(convert.FIX42ExecutionReportFromOrder(&order, "acct", enum.ExecType_NEW), sID)
 		return
+		// TODO other types
 	default:
 		w.logger.Warn("unhandled notify info object", zap.Any("msg", d.NotifyInfo))
 		return
@@ -53,14 +65,17 @@ func (w *Websocket) FIX42NotificationHandler(d *bitfinex.Notification, sID quick
 }
 
 func (w *Websocket) FIX42OrderSnapshotHandler(os *bitfinex.OrderSnapshot, sID quickfix.SessionID) {
-	p, ok := w.FindPeer(sID.String())
+	_, ok := w.FindPeer(sID.String())
 	if !ok {
 		w.logger.Warn("could not find peer for SessionID", zap.String("SessionID", sID.String()))
 		return
 	}
-	for _, o := range os.Snapshot {
-		quickfix.SendToTarget(convert.FIX42ExecutionReportFromOrder(o, p.BfxUserID(), enum.ExecType_ORDER_STATUS), sID)
-	}
+	/*
+		TODO
+		for _, o := range os.Snapshot {
+			quickfix.SendToTarget(convert.FIX42ExecutionReportFromOrder(o, p.BfxUserID(), enum.ExecType_ORDER_STATUS), sID)
+		}
+	*/
 	return
 }
 

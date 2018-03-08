@@ -1,7 +1,8 @@
-package service
+package fix
 
 import (
 	"github.com/bitfinexcom/bfxfixgw/log"
+	"github.com/bitfinexcom/bfxfixgw/service/peer"
 
 	"go.uber.org/zap"
 
@@ -38,7 +39,7 @@ const (
 type FIX struct {
 	*quickfix.MessageRouter
 
-	Peers
+	peer.Peers
 
 	acc    *quickfix.Acceptor
 	logger *zap.Logger
@@ -91,8 +92,8 @@ func (f *FIX) FromApp(msg *quickfix.Message, sID quickfix.SessionID) quickfix.Me
 	return f.Route(msg, sID)
 }
 
-// NewFIX creates a new FIX acceptor & associated services
-func NewFIX(s *quickfix.Settings, peers Peers, serviceType FIXServiceType) (*FIX, error) {
+// New creates a new FIX acceptor & associated services
+func New(s *quickfix.Settings, peers peer.Peers, serviceType FIXServiceType) (*FIX, error) {
 	f := &FIX{
 		MessageRouter: quickfix.NewMessageRouter(),
 		logger:        log.Logger,

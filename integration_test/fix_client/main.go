@@ -2,9 +2,11 @@ package main
 
 import (
 	"flag"
+	"github.com/bitfinexcom/bfxfixgw/service/fix"
 	"log"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"github.com/quickfixgo/quickfix"
@@ -40,7 +42,13 @@ func main() {
 
 	// setup mocks
 	settings := loadSettings(*cfg)
-	client, err := mock.NewTestFixClient(settings, quickfix.NewFileStoreFactory(settings))
+	var storeFactory quickfix.MessageStoreFactory
+	if strings.Contains(*cfg, "orders") {
+		storeFactory = quickfix.NewFileStoreFactory(settings)
+	} else {
+		storeFactory = fix.NewNoStoreFactory()
+	}
+	client, err := mock.NewTestFixClient(settings, storeFactory)
 	if err != nil {
 		log.Fatal(err)
 	}

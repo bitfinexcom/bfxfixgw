@@ -68,16 +68,33 @@ func (o *Order) Stats() (string, float64, float64, float64) {
 }
 
 type cache struct {
-	orders map[string]*Order
-	lock   sync.Mutex
-	log    *zap.Logger
+	orders   map[string]*Order
+	mdReqIDs map[string]string // symbol -> req ID
+	lock     sync.Mutex
+	log      *zap.Logger
 }
 
 func newCache(log *zap.Logger) *cache {
 	return &cache{
-		orders: make(map[string]*Order),
-		log:    log,
+		orders:   make(map[string]*Order),
+		log:      log,
+		mdReqIDs: make(map[string]string),
 	}
+}
+
+func (c *cache) StoreMDReqID(symbol, mdReqID string) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	c.mdReqIDs[symbol] = mdReqID
+}
+
+func (c *cache) LookupMDReqID(symbol string) string {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	if mdReqID, ok := c.mdReqIDs[symbol]; ok {
+		return mdReqID
+	}
+	return ""
 }
 
 func (c *cache) AddOrder(orderid, clordid string, px, qty float64) *Order {

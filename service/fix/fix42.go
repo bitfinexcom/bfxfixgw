@@ -131,6 +131,7 @@ func (f *FIX) OnFIX42MarketDataRequest(msg mdr.MarketDataRequest, sID quickfix.S
 		if err != nil {
 			return err
 		}
+		p.StoreMDReqID(symbol, mdReqID)
 
 		// XXX: The following could most likely be abtracted to work both for 4.2 and 4.4.
 		switch subType {

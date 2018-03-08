@@ -127,6 +127,12 @@ func (s *Service) listen() {
 		case *bitfinex.OrderSnapshot:
 			log.Printf("got order snapshot: %#v", obj)
 			// TODO
+		case *wsv2.SubscribeEvent:
+			// TODO handle these or no?
+		case *bitfinex.BookUpdateSnapshot:
+			s.Websocket.FIX42BookSnapshot(obj, msg.FIXSessionID())
+		case *bitfinex.BookUpdate:
+			s.Websocket.FIX42BookUpdate(obj, msg.FIXSessionID())
 		case *bitfinex.TradeExecution:
 			// ignore trade executions in favor of trade execution updates (more data)
 		case *bitfinex.TradeExecutionUpdate:

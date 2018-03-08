@@ -59,6 +59,29 @@ func (w *Websocket) FIX42TradeExecutionUpdateHandler(t *bitfinex.TradeExecutionU
 	quickfix.SendToTarget(convert.FIX42ExecutionReportFromTradeExecutionUpdate(t, p.BfxUserID(), cached.ClOrdID, cached.Qty, totalFillQty, avgFillPx), sID)
 }
 
+func (w *Websocket) FIX42BookSnapshot(s *bitfinex.BookUpdateSnapshot, sID quickfix.SessionID) {
+	p, ok := w.FindPeer(sID.String())
+	if !ok {
+		w.logger.Warn("could not find peer for SessionID", zap.String("SessionID", sID.String()))
+		return
+	}
+	var mdReqID string
+	if len(s.Snapshot) > 0 {
+		mdReqID = p.LookupMDReqID(s.Snapshot[0].Symbol)
+	}
+	quickfix.SendToTarget(convert.FIX42MarketDataFullRefreshFromBookSnapshot(mdReqID, s), sID)
+}
+
+func (w *Websocket) FIX42BookUpdate(u *bitfinex.BookUpdate, sID quickfix.SessionID) {
+	p, ok := w.FindPeer(sID.String())
+	if !ok {
+		w.logger.Warn("could not find peer for SessionID", zap.String("SessionID", sID.String()))
+		return
+	}
+	mdReqID := p.LookupMDReqID(u.Symbol)
+	quickfix.SendToTarget(convert.FIX42MarketDataIncrementalRefreshFromBookUpdate(mdReqID, u), sID)
+}
+
 func (w *Websocket) FIX42NotificationHandler(d *bitfinex.Notification, sID quickfix.SessionID) {
 	p, ok := w.FindPeer(sID.String())
 	if !ok {

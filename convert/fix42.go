@@ -18,8 +18,6 @@ import (
 	fix42mdsfr "github.com/quickfixgo/fix42/marketdatasnapshotfullrefresh"
 	ocj "github.com/quickfixgo/fix42/ordercancelreject"
 	//fix42nos "github.com/quickfixgo/quickfix/fix42/newordersingle"
-	"github.com/bitfinexcom/bfxfixgw/log"
-	"go.uber.org/zap"
 )
 
 func FIX42MarketDataFullRefreshFromBookSnapshot(mdReqID string, snapshot *bitfinex.BookUpdateSnapshot) *fix42mdsfr.MarketDataSnapshotFullRefresh {
@@ -79,21 +77,14 @@ func defixifySymbol(sym string) string {
 	return sym
 }
 
-func FIX42ExecutionReportFromOrder(o *bitfinex.Order, account string, execType enum.ExecType, cumQty float64, ordStatus enum.OrdStatus, text string) fix42er.ExecutionReport {
+func FIX42ExecutionReport(symbol, orderID, account string, execType enum.ExecType, side enum.Side, qty, cumQty, avgPx float64, ordStatus enum.OrdStatus, text string) fix42er.ExecutionReport {
 	uid, err := uuid.NewV4()
 	execID := ""
 	if err == nil {
 		execID = uid.String()
 	}
-	orderID := strconv.FormatInt(o.ID, 10)
-	log.Logger.Info("creating execution report mapping", zap.String("orderID", orderID), zap.String("execType", string(execType)), zap.String("execID", execID))
-
 	// total order qty
-	fAmt := o.Amount
-	if fAmt < 0 {
-		fAmt = -fAmt
-	}
-	amt := decimal.NewFromFloat(fAmt)
+	amt := decimal.NewFromFloat(qty)
 
 	// total executed so far
 	cumAmt := decimal.NewFromFloat(cumQty)
@@ -107,13 +98,34 @@ func FIX42ExecutionReportFromOrder(o *bitfinex.Order, account string, execType e
 		field.NewExecTransType(enum.ExecTransType_STATUS),
 		field.NewExecType(execType),
 		field.NewOrdStatus(ordStatus),
-		field.NewSymbol(defixifySymbol(o.Symbol)),
-		SideToFIX(o.Amount),
+		field.NewSymbol(defixifySymbol(symbol)),
+		field.NewSide(side),
 		field.NewLeavesQty(remaining, 4), // qty
 		field.NewCumQty(cumAmt, 4),
-		AvgPxToFIX(o.PriceAvg),
+		AvgPxToFIX(avgPx),
 	)
 	e.SetAccount(account)
+	if text != "" {
+		e.SetText(text)
+	}
+	return e
+}
+
+// used for oc-req notifications where only a cancel's CID is provided
+func FIX42ExecutionReportFromCancelWithDetails(c *bitfinex.OrderCancel, account string, execType enum.ExecType, cumQty float64, ordStatus enum.OrdStatus, text, symbol, orderID string, side enum.Side, qty, avgPx float64) fix42er.ExecutionReport {
+	e := FIX42ExecutionReport(symbol, orderID, account, execType, side, qty, cumQty, avgPx, ordStatus, text)
+	// TODO cxl details?
+	return e
+}
+
+func FIX42ExecutionReportFromOrder(o *bitfinex.Order, account string, execType enum.ExecType, cumQty float64, ordStatus enum.OrdStatus, text string) fix42er.ExecutionReport {
+	orderID := strconv.FormatInt(o.ID, 10)
+	// total order qty
+	fAmt := o.Amount
+	if fAmt < 0 {
+		fAmt = -fAmt
+	}
+	e := FIX42ExecutionReport(o.Symbol, orderID, account, execType, SideToFIX(o.Amount), fAmt, cumQty, o.PriceAvg, ordStatus, text)
 	switch o.Type {
 	case bitfinex.OrderTypeLimit:
 		e.SetPrice(decimal.NewFromFloat(o.Price), 4)
@@ -125,16 +137,10 @@ func FIX42ExecutionReportFromOrder(o *bitfinex.Order, account string, execType e
 		e.SetText(text)
 	}
 	e.SetLastShares(decimal.Zero, 4) // qty
-
 	return e
 }
 
 func FIX42ExecutionReportFromTradeExecutionUpdate(t *bitfinex.TradeExecutionUpdate, account, clOrdID string, origQty, totalFillQty, avgFillPx float64) fix42er.ExecutionReport {
-	uid, err := uuid.NewV4()
-	execID := ""
-	if err != nil {
-		execID = uid.String()
-	}
 	orderID := strconv.FormatInt(t.OrderID, 10)
 	//execID := strconv.FormatInt(t.ID, 10)
 	var execType enum.ExecType
@@ -146,28 +152,13 @@ func FIX42ExecutionReportFromTradeExecutionUpdate(t *bitfinex.TradeExecutionUpda
 		execType = enum.ExecType_PARTIAL_FILL
 		ordStatus = enum.OrdStatus_PARTIALLY_FILLED
 	}
-
-	filledQty := decimal.NewFromFloat(totalFillQty) // includes execAmt
 	execAmt := t.ExecAmount
 	if execAmt < 0 {
 		execAmt = -execAmt
 	}
 	totalQty := decimal.NewFromFloat(origQty)
 	thisQty := decimal.NewFromFloat(execAmt)
-	remaining := totalQty.Sub(filledQty)
-	e := fix42er.New(
-		field.NewOrderID(orderID),
-		field.NewExecID(execID),
-		field.NewExecTransType(enum.ExecTransType_NEW),
-		field.NewExecType(execType),
-		field.NewOrdStatus(ordStatus),
-		field.NewSymbol(defixifySymbol(t.Pair)),
-		SideToFIX(t.ExecAmount),
-		field.NewLeavesQty(remaining, 4), // qty
-		field.NewCumQty(filledQty, 4),    // qty
-		AvgPxToFIX(avgFillPx),
-	)
-	e.SetAccount(account)
+	e := FIX42ExecutionReport(t.Pair, orderID, account, execType, SideToFIX(t.ExecAmount), execAmt, totalFillQty, avgFillPx, ordStatus, "")
 	e.SetOrderQty(totalQty, 4)  // qty
 	e.SetLastShares(thisQty, 4) // qty
 

@@ -38,14 +38,14 @@ func ExecTypeToFIX(status bitfinex.OrderStatus) field.ExecTypeField {
 	}
 }
 
-func SideToFIX(amount float64) field.SideField {
+func SideToFIX(amount float64) enum.Side {
 	switch {
 	case amount > 0.0:
-		return field.NewSide(enum.Side_BUY)
+		return enum.Side_BUY
 	case amount < 0.0:
-		return field.NewSide(enum.Side_SELL)
+		return enum.Side_SELL
 	default:
-		return field.NewSide(enum.Side_UNDISCLOSED)
+		return enum.Side_UNDISCLOSED
 	}
 }
 

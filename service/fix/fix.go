@@ -65,9 +65,9 @@ func (f *FIX) ToApp(msg *quickfix.Message, sID quickfix.SessionID) error { retur
 func (f *FIX) FromAdmin(msg *quickfix.Message, sID quickfix.SessionID) quickfix.MessageRejectError {
 	f.logger.Info("FIX.FromAdmin", zap.Any("msg", msg))
 
-	f.Peers.AddPeer(sID)
-
 	if msg.IsMsgTypeOf(msgTypeLogon) {
+		f.Peers.AddPeer(sID)
+
 		apiKey, err := msg.Body.GetString(tagBfxAPIKey)
 		if err != nil || apiKey == "" {
 			f.logger.Warn("received Logon without BfxApiKey (20000)", zap.Error(err))

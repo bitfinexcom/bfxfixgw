@@ -72,9 +72,10 @@ func (w *Websocket) FIX44OrderSnapshotHandler(os *bitfinex.OrderSnapshot, sID qu
 		ord := bitfinex.Order(*o)
 		orderID := strconv.FormatInt(o.ID, 10)
 		clOrdID := strconv.FormatInt(o.CID, 10)
-		cached, err := p.Lookup(orderID)
-		if err == nil {
-			cached = p.AddOrder(orderID, clOrdID, cached.Px, cached.Qty)
+		// TODO resolve existing fills wrt. filled qty calculation?
+		cached, err := p.LookupByOrderID(orderID)
+		if err != nil {
+			cached = p.AddOrder(clOrdID, ord.Price, ord.Amount, ord.Symbol, p.BfxUserID(), convert.SideToFIX(ord.Amount))
 		}
 		er := convert.FIX44ExecutionReportFromOrder(&ord, cached.FilledQty())
 		er.SetAccount(p.BfxUserID())
@@ -91,13 +92,7 @@ func (w *Websocket) FIX44OrderNewHandler(o *bitfinex.OrderNew, sID quickfix.Sess
 	}
 
 	ord := bitfinex.Order(*o)
-	orderID := strconv.FormatInt(o.ID, 10)
-	clOrdID := strconv.FormatInt(o.CID, 10)
-	cached, err := p.Lookup(orderID)
-	if err == nil {
-		cached = p.AddOrder(orderID, clOrdID, cached.Px, cached.Qty)
-	}
-	er := convert.FIX44ExecutionReportFromOrder(&ord, cached.FilledQty())
+	er := convert.FIX44ExecutionReportFromOrder(&ord, 0.0)
 	er.SetAccount(p.BfxUserID())
 	quickfix.SendToTarget(er, sID)
 	return
@@ -111,10 +106,11 @@ func (w *Websocket) FIX44OrderCancelHandler(o *bitfinex.OrderCancel, sID quickfi
 
 	ord := bitfinex.Order(*o)
 	orderID := strconv.FormatInt(o.ID, 10)
-	clOrdID := strconv.FormatInt(o.CID, 10)
-	cached, err := p.Lookup(orderID)
-	if err == nil {
-		cached = p.AddOrder(orderID, clOrdID, cached.Px, cached.Qty)
+	cached, err := p.LookupByOrderID(orderID)
+	// add cancel related to this order
+	if err != nil {
+		w.logger.Error("could not reference original order to publish cancel ack execution report", zap.Error(err))
+		return
 	}
 	er := convert.FIX44ExecutionReportFromOrder(&ord, cached.FilledQty())
 	er.SetExecType(enum.ExecType_CANCELED)

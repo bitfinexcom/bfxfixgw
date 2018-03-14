@@ -29,7 +29,7 @@ func FIX44ExecutionReportFromOrder(o *bitfinex.Order, cumQty float64) fix44er.Ex
 		field.NewExecID(execID), // XXX: Can we just take a random ID here?
 		field.NewExecType(enum.ExecType_ORDER_STATUS),
 		field.NewOrdStatus(OrdStatusToFIX(o.Status)),
-		SideToFIX(o.Amount),
+		field.NewSide(SideToFIX(o.Amount)),
 		LeavesQtyToFIX(o.Amount),
 		field.NewCumQty(amt, 2),
 		AvgPxToFIX(o.PriceAvg),

@@ -72,7 +72,7 @@ type mockFixSettings struct {
 }
 
 func attemptRemove() error {
-	tries := 20
+	tries := 40
 	var err error
 	for i := 0; i < tries; i++ {
 		err = os.RemoveAll("tmp/")
@@ -94,7 +94,6 @@ func checkFixTags(fix string, tags ...string) error {
 }
 
 func setupWithClientCheck(t *testing.T, port int, settings mockFixSettings, checkClient bool) (*mock.TestFixClient, *mock.TestFixClient, *mock.MockWs, *Gateway) {
-	log.Print("\n\n\n")
 	err := attemptRemove()
 	if err != nil {
 		t.Fatal(err)

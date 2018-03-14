@@ -101,11 +101,12 @@ func NewTestFixClient(settings *fix.Settings, msgStore fix.MessageStoreFactory) 
 		Sessions: make(map[string]*Session),
 	}
 	f.MessageHandler = f
-	logFactory, err := fix.NewFileLogFactory(settings)
+	/*logFactory, err := fix.NewFileLogFactory(settings)
 	if err != nil {
 		log.Print("could not create file log factory")
 		return nil, err
-	}
+	}*/
+	logFactory := fix.NewScreenLogFactory()
 	initiator, err := fix.NewInitiator(f, msgStore, settings, logFactory)
 	if err != nil {
 		log.Printf("could not create acceptor: %s", err.Error())

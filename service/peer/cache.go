@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"github.com/quickfixgo/enum"
 	"go.uber.org/zap"
-	"log"
 	"sync"
 )
 

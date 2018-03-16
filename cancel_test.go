@@ -267,7 +267,7 @@ func TestOrderCancelInFlightFillOK(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = checkFixTags(fix, "35=8", "49=BFXFIX", "56=EXORG_ORD", "1=user123", "20=3", "32=0.2168", "39=1", "54=1", "55=tBTCUSD", "150=1", "151=0.000", "6=12000.00", "14=0.2168")
+	err = checkFixTags(fix, "35=8", "49=BFXFIX", "56=EXORG_ORD", "1=user123", "20=3", "32=0.2168", "39=1", "54=1", "55=tBTCUSD", "150=1", "151=0.7832", "6=12000.00", "14=0.2168")
 	if err != nil {
 		t.Fatal(err)
 	}

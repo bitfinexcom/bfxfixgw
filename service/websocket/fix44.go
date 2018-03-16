@@ -75,7 +75,7 @@ func (w *Websocket) FIX44OrderSnapshotHandler(os *bitfinex.OrderSnapshot, sID qu
 		// TODO resolve existing fills wrt. filled qty calculation?
 		cached, err := p.LookupByOrderID(orderID)
 		if err != nil {
-			cached = p.AddOrder(clOrdID, ord.Price, ord.Amount, ord.Symbol, p.BfxUserID(), convert.SideToFIX(ord.Amount))
+			cached = p.AddOrder(clOrdID, ord.Price, ord.Amount, ord.Symbol, p.BfxUserID(), convert.SideToFIX(ord.Amount), convert.OrdTypeToFIX(o.Type))
 		}
 		er := convert.FIX44ExecutionReportFromOrder(&ord, cached.FilledQty())
 		er.SetAccount(p.BfxUserID())

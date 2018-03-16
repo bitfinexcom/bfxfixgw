@@ -54,7 +54,7 @@ func (w *Websocket) FIX42TradeExecutionUpdateHandler(t *bitfinex.TradeExecutionU
 		orderID := strconv.FormatInt(os.ID, 10)
 		clOrdID := strconv.FormatInt(os.CID, 10)
 		// update everything at the same time
-		p.AddOrder(clOrdID, os.Price, os.Amount, os.Symbol, p.BfxUserID(), convert.SideToFIX(t.ExecAmount))
+		p.AddOrder(clOrdID, os.Price, os.Amount, os.Symbol, p.BfxUserID(), convert.SideToFIX(t.ExecAmount), convert.OrdTypeToFIX(os.Type))
 		cached, err = p.UpdateOrder(clOrdID, orderID)
 		if err != nil {
 			w.logger.Warn("could not update order", zap.Error(err))
@@ -96,15 +96,18 @@ func (w *Websocket) FIX42NotificationHandler(d *bitfinex.Notification, sID quick
 	switch o := d.NotifyInfo.(type) {
 	case *bitfinex.OrderCancel:
 		// Only handling error currently.
-		if d.Status == "ERROR" && d.Text == "Order not found." {
+		if d.Status == "ERROR" {
 			// Send out an OrderCancelReject
+			// BFX API returns only the original ClOrdID, not the cancel ClOrdID in acknowledgements.
+			// Must reference cache mapping to obtain cancel's ClOrdID
 			orderID := strconv.FormatInt(o.ID, 10)
-			clOrdID := ""
-			ord, err := p.LookupByOrderID(orderID)
+			origClOrdID := strconv.FormatInt(o.CID, 10)
+			cxlClOrdID := origClOrdID // error case :(
+			cache, err := p.LookupCancelByOrigClOrdID(origClOrdID)
 			if err == nil {
-				clOrdID = ord.ClOrdID
+				cxlClOrdID = cache.ClOrdID
 			}
-			quickfix.SendToTarget(convert.FIX42OrderCancelRejectFromCancel(o, p.BfxUserID(), orderID, clOrdID), sID)
+			quickfix.SendToTarget(convert.FIX42OrderCancelRejectFromCancel(o, p.BfxUserID(), orderID, origClOrdID, cxlClOrdID, d.Text), sID)
 			return
 		} else if d.Status == "SUCCESS" {
 			clOrdID := strconv.FormatInt(o.CID, 10)
@@ -113,16 +116,18 @@ func (w *Websocket) FIX42NotificationHandler(d *bitfinex.Notification, sID quick
 				w.logger.Error("could not reference original order to publish pending cancel execution report", zap.Error(err))
 				return
 			}
-			quickfix.SendToTarget(convert.FIX42ExecutionReportFromCancelWithDetails(o, orig.Account, enum.ExecType_PENDING_CANCEL, orig.FilledQty(), enum.OrdStatus_PENDING_CANCEL, d.Text, orig.Symbol, orig.OrderID, orig.Side, orig.Qty, orig.AvgFillPx()), sID)
+			quickfix.SendToTarget(convert.FIX42ExecutionReportFromCancelWithDetails(o, orig.Account, enum.ExecType_PENDING_CANCEL, orig.FilledQty(), enum.OrdStatus_PENDING_CANCEL, orig.OrderType, d.Text, orig.Symbol, orig.OrderID, orig.Side, orig.Qty, orig.AvgFillPx()), sID)
 		}
 		return
 	case *bitfinex.OrderNew:
 
 		order := bitfinex.Order(*o)
 		var ordStatus enum.OrdStatus
+		var execType enum.ExecType
 		text := ""
 		if d.Status == "ERROR" {
 			ordStatus = enum.OrdStatus_REJECTED
+			execType = enum.ExecType_REJECTED
 			text = d.Text
 		} else {
 			orderID := strconv.FormatInt(o.ID, 10)
@@ -133,9 +138,10 @@ func (w *Websocket) FIX42NotificationHandler(d *bitfinex.Notification, sID quick
 				w.logger.Warn("could not update order", zap.Error(err))
 			}
 			ordStatus = convert.OrdStatusToFIX(o.Status)
+			execType = enum.ExecType_PENDING_NEW
 		}
 
-		quickfix.SendToTarget(convert.FIX42ExecutionReportFromOrder(&order, p.BfxUserID(), enum.ExecType_PENDING_NEW, 0, ordStatus, text), sID)
+		quickfix.SendToTarget(convert.FIX42ExecutionReportFromOrder(&order, p.BfxUserID(), execType, 0, ordStatus, text), sID)
 		return
 		// TODO other types
 	default:

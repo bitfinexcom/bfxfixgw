@@ -265,4 +265,10 @@ func TestLogonNoCredentials(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	// TODO assert reject?
+}
+
+func TestLogonInvalidCredentials(t *testing.T) {
+	// TODO assert reject?
 }

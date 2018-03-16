@@ -69,3 +69,16 @@ func AvgPxToFIX(priceAvg float64) field.AvgPxField {
 	d := decimal.NewFromFloat(priceAvg)
 	return field.NewAvgPx(d, 2)
 }
+
+func OrdTypeToFIX(ordtype string) enum.OrdType {
+	switch ordtype {
+	case "EXCHANGE LIMIT":
+		fallthrough
+	case "LIMIT":
+		return enum.OrdType_LIMIT
+	case "EXCHANGE MARKET":
+	case "MARKET":
+		return enum.OrdType_MARKET
+	}
+	return enum.OrdType_MARKET
+}

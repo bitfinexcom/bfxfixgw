@@ -4,6 +4,7 @@ package convert
 
 import (
 	//"errors"
+	lg "log"
 	"strconv"
 
 	"github.com/bitfinexcom/bitfinex-api-go/v2"
@@ -77,20 +78,23 @@ func defixifySymbol(sym string) string {
 	return sym
 }
 
-func FIX42ExecutionReport(symbol, orderID, account string, execType enum.ExecType, side enum.Side, qty, cumQty, avgPx float64, ordStatus enum.OrdStatus, text string) fix42er.ExecutionReport {
+func FIX42ExecutionReport(symbol, orderID, account string, execType enum.ExecType, side enum.Side, origQty, thisQty, cumQty, avgPx float64, ordStatus enum.OrdStatus, ordType enum.OrdType, text string) fix42er.ExecutionReport {
 	uid, err := uuid.NewV4()
 	execID := ""
 	if err == nil {
 		execID = uid.String()
 	}
 	// total order qty
-	amt := decimal.NewFromFloat(qty)
+	amt := decimal.NewFromFloat(origQty)
 
 	// total executed so far
 	cumAmt := decimal.NewFromFloat(cumQty)
 
 	// remaining to be executed
 	remaining := amt.Sub(cumAmt)
+
+	// this execution
+	lastShares := decimal.NewFromFloat(thisQty)
 
 	e := fix42er.New(
 		field.NewOrderID(orderID),
@@ -105,15 +109,20 @@ func FIX42ExecutionReport(symbol, orderID, account string, execType enum.ExecTyp
 		AvgPxToFIX(avgPx),
 	)
 	e.SetAccount(account)
+	if lastShares.Cmp(decimal.Zero) != 0 {
+		e.SetLastShares(lastShares, 4)
+	}
+	e.SetOrderQty(amt, 4)
 	if text != "" {
 		e.SetText(text)
 	}
+	e.SetOrdType(ordType)
 	return e
 }
 
 // used for oc-req notifications where only a cancel's CID is provided
-func FIX42ExecutionReportFromCancelWithDetails(c *bitfinex.OrderCancel, account string, execType enum.ExecType, cumQty float64, ordStatus enum.OrdStatus, text, symbol, orderID string, side enum.Side, qty, avgPx float64) fix42er.ExecutionReport {
-	e := FIX42ExecutionReport(symbol, orderID, account, execType, side, qty, cumQty, avgPx, ordStatus, text)
+func FIX42ExecutionReportFromCancelWithDetails(c *bitfinex.OrderCancel, account string, execType enum.ExecType, cumQty float64, ordStatus enum.OrdStatus, ordType enum.OrdType, text, symbol, orderID string, side enum.Side, qty, avgPx float64) fix42er.ExecutionReport {
+	e := FIX42ExecutionReport(symbol, orderID, account, execType, side, qty, 0.0, cumQty, avgPx, ordStatus, ordType, text)
 	// TODO cxl details?
 	return e
 }
@@ -125,7 +134,7 @@ func FIX42ExecutionReportFromOrder(o *bitfinex.Order, account string, execType e
 	if fAmt < 0 {
 		fAmt = -fAmt
 	}
-	e := FIX42ExecutionReport(o.Symbol, orderID, account, execType, SideToFIX(o.Amount), fAmt, cumQty, o.PriceAvg, ordStatus, text)
+	e := FIX42ExecutionReport(o.Symbol, orderID, account, execType, SideToFIX(o.Amount), fAmt, 0.0, cumQty, o.PriceAvg, ordStatus, OrdTypeToFIX(o.Type), text)
 	switch o.Type {
 	case bitfinex.OrderTypeLimit:
 		e.SetPrice(decimal.NewFromFloat(o.Price), 4)
@@ -141,6 +150,7 @@ func FIX42ExecutionReportFromOrder(o *bitfinex.Order, account string, execType e
 }
 
 func FIX42ExecutionReportFromTradeExecutionUpdate(t *bitfinex.TradeExecutionUpdate, account, clOrdID string, origQty, totalFillQty, avgFillPx float64) fix42er.ExecutionReport {
+	lg.Printf("trade: %#v", t)
 	orderID := strconv.FormatInt(t.OrderID, 10)
 	//execID := strconv.FormatInt(t.ID, 10)
 	var execType enum.ExecType
@@ -156,24 +166,26 @@ func FIX42ExecutionReportFromTradeExecutionUpdate(t *bitfinex.TradeExecutionUpda
 	if execAmt < 0 {
 		execAmt = -execAmt
 	}
-	totalQty := decimal.NewFromFloat(origQty)
-	thisQty := decimal.NewFromFloat(execAmt)
-	e := FIX42ExecutionReport(t.Pair, orderID, account, execType, SideToFIX(t.ExecAmount), execAmt, totalFillQty, avgFillPx, ordStatus, "")
-	e.SetOrderQty(totalQty, 4)  // qty
-	e.SetLastShares(thisQty, 4) // qty
-
-	return e
+	return FIX42ExecutionReport(t.Pair, orderID, account, execType, SideToFIX(t.ExecAmount), origQty, execAmt, totalFillQty, avgFillPx, ordStatus, OrdTypeToFIX(t.OrderType), "")
 }
 
-func FIX42OrderCancelRejectFromCancel(o *bitfinex.OrderCancel, account, orderID, clOrdID string) ocj.OrderCancelReject {
+func rejectReasonFromText(text string) enum.CxlRejReason {
+	switch text {
+	case "Order not found.":
+		return enum.CxlRejReason_UNKNOWN_ORDER
+	}
+	return enum.CxlRejReason_OTHER
+}
+
+func FIX42OrderCancelRejectFromCancel(o *bitfinex.OrderCancel, account, orderID, origClOrdID, cxlClOrdID, text string) ocj.OrderCancelReject {
 	r := ocj.New(
 		field.NewOrderID(orderID),
-		field.NewClOrdID(clOrdID),
-		field.NewOrigClOrdID(strconv.FormatInt(o.CID, 10)),
+		field.NewClOrdID(cxlClOrdID),
+		field.NewOrigClOrdID(origClOrdID),
 		field.NewOrdStatus(enum.OrdStatus_REJECTED),
 		field.NewCxlRejResponseTo(enum.CxlRejResponseTo_ORDER_CANCEL_REQUEST),
 	)
-	r.SetCxlRejReason(enum.CxlRejReason_UNKNOWN_ORDER)
+	r.SetCxlRejReason(rejectReasonFromText(text))
 	r.SetAccount(account)
 	return r
 }

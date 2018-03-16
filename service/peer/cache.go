@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/quickfixgo/enum"
 	"go.uber.org/zap"
+	"log"
 	"sync"
 )
 
@@ -17,6 +18,7 @@ type CachedCancel struct {
 	Side                                      enum.Side
 }
 
+// details BFX might not return back to us, which we need to populate in execution reports.
 type CachedOrder struct {
 	Symbol, Account  string
 	ClOrdID, OrderID string
@@ -24,9 +26,10 @@ type CachedOrder struct {
 	Executions       []execution
 	lock             sync.Mutex
 	Side             enum.Side
+	OrderType        enum.OrdType
 }
 
-func newOrder(clordid string, px, qty float64, symbol, account string, side enum.Side) *CachedOrder {
+func newOrder(clordid string, px, qty float64, symbol, account string, side enum.Side, ordType enum.OrdType) *CachedOrder {
 	return &CachedOrder{
 		ClOrdID:    clordid,
 		Px:         px,
@@ -35,6 +38,7 @@ func newOrder(clordid string, px, qty float64, symbol, account string, side enum
 		Symbol:     symbol,
 		Account:    account,
 		Side:       side,
+		OrderType:  ordType,
 	}
 }
 
@@ -119,13 +123,13 @@ func (c *cache) LookupMDReqID(symbol string) string {
 }
 
 // add when receiving a NewOrderSingle over FIX
-func (c *cache) AddOrder(clordid string, px, qty float64, symbol, account string, side enum.Side) *CachedOrder {
+func (c *cache) AddOrder(clordid string, px, qty float64, symbol, account string, side enum.Side, ordType enum.OrdType) *CachedOrder {
 	if qty < 0 {
 		qty = -qty
 	}
 	c.lock.Lock()
 	c.log.Info("added order to cache", zap.String("ClOrdID", clordid), zap.Float64("Px", px), zap.Float64("Qty", qty))
-	order := newOrder(clordid, px, qty, symbol, account, side)
+	order := newOrder(clordid, px, qty, symbol, account, side, ordType)
 	c.orders[clordid] = order
 	c.lock.Unlock()
 	return order

@@ -131,7 +131,7 @@ func setupWithClientCheck(t *testing.T, port int, settings mockFixSettings, chec
 
 	// mock FIX client
 	clientMDSettings := loadSettings(fmt.Sprintf("conf/integration_test/client/marketdata_%s.cfg", settings.FixVersion))
-	clientMDFix, err := mock.NewTestFixClient(clientMDSettings, fix.NewNoStoreFactory())
+	clientMDFix, err := mock.NewTestFixClient(clientMDSettings, fix.NewNoStoreFactory(), "MarketData")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -150,7 +150,7 @@ func setupWithClientCheck(t *testing.T, port int, settings mockFixSettings, chec
 	}
 
 	clientOrdSettings := loadSettings(fmt.Sprintf("conf/integration_test/client/orders_%s.cfg", settings.FixVersion))
-	clientOrdFix, err := mock.NewTestFixClient(clientOrdSettings, quickfix.NewFileStoreFactory(clientOrdSettings))
+	clientOrdFix, err := mock.NewTestFixClient(clientOrdSettings, quickfix.NewFileStoreFactory(clientOrdSettings), "Orders")
 	clientOrdFix.ApiKey = settings.ApiKey
 	clientOrdFix.ApiSecret = settings.ApiSecret
 	clientOrdFix.BfxUserID = settings.BfxUserID

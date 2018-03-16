@@ -160,6 +160,17 @@ func (c *cache) LookupCancel(clordid string) (*CachedCancel, error) {
 	return nil, fmt.Errorf("could not find cancel with ClOrdID %s", clordid)
 }
 
+func (c *cache) LookupCancelByOrigClOrdID(origclordid string) (*CachedCancel, error) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	for _, cxl := range c.cancels {
+		if cxl.OriginalOrderID == origclordid {
+			return cxl, nil
+		}
+	}
+	return nil, fmt.Errorf("could not find cancel with OrigClOrdID %s", origclordid)
+}
+
 // UpdateExecutionFill receives an execution update with an ID, price, qty and returns the total filled qty & average fill price.
 func (c *cache) AddExecution(orderid, execid string, px, qty float64) (float64, float64, error) {
 	if qty < 0 {

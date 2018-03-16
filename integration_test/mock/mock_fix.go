@@ -37,7 +37,7 @@ type TestFixClient struct {
 	OmitLogMessages bool
 	MessageHandler
 
-	ApiKey, ApiSecret, BfxUserID string
+	ApiKey, ApiSecret, BfxUserID, name string
 }
 
 func (t *TestFixClient) Handle(msg *fix.Message) {
@@ -94,11 +94,12 @@ func (t *TestFixClient) SendFIX(msg fix.Messagable) {
 	}
 }
 
-func NewTestFixClient(settings *fix.Settings, msgStore fix.MessageStoreFactory) (*TestFixClient, error) {
+func NewTestFixClient(settings *fix.Settings, msgStore fix.MessageStoreFactory, name string) (*TestFixClient, error) {
 	f := &TestFixClient{
 		router:   fix.NewMessageRouter(),
 		settings: settings,
 		Sessions: make(map[string]*Session),
+		name:     name,
 	}
 	f.MessageHandler = f
 	/*logFactory, err := fix.NewFileLogFactory(settings)
@@ -163,7 +164,7 @@ func (m *TestFixClient) Stop() {
 	for _, s := range m.Sessions {
 		err := fix.UnregisterSession(s.ID)
 		if err != nil {
-			log.Printf("[TEST] could not remove session %s: %s", s.ID.String(), err.Error())
+			log.Printf("[FIX %s] MockFix.Stop: could not remove session %s: %s", m.name, s.ID.String(), err.Error())
 		}
 		counterparty := fix.SessionID{
 			BeginString:      s.ID.BeginString,
@@ -177,13 +178,13 @@ func (m *TestFixClient) Stop() {
 		}
 		err = fix.UnregisterSession(counterparty)
 		if err != nil {
-			log.Printf("[TEST] could not remove session %s: %s", counterparty.String(), err.Error())
+			log.Printf("[FIX %s] MockFix.Stop: could not remove session %s: %s", m.name, counterparty.String(), err.Error())
 		}
 	}
 }
 
 func (m *TestFixClient) OnLogout(sessionID fix.SessionID) {
-	log.Print("[FIX] MockFix.OnLogout: ", sessionID)
+	log.Printf("[FIX %s] MockFix.OnLogout: %s", m.name, sessionID)
 	m.Sessions[sessionID.String()].LoggedOn = false
 	return
 }
@@ -204,7 +205,7 @@ func (m *TestFixClient) onLogon(sessionID fix.SessionID) {
 }
 
 func (m *TestFixClient) OnLogon(sessionID fix.SessionID) {
-	log.Print("[FIX] MockFix.OnLogon", sessionID)
+	log.Printf("[FIX %s] MockFix.OnLogon: %s", m.name, sessionID)
 	m.Sessions[sessionID.String()].LoggedOn = true
 	m.onLogon(sessionID)
 	return
@@ -225,13 +226,13 @@ func (m *TestFixClient) ToAdmin(msg *fix.Message, sessionID fix.SessionID) {
 		msg.Header.SetString(fix.Tag(20001), m.ApiSecret)
 		msg.Header.SetString(fix.Tag(20002), m.BfxUserID)
 	}
-	log.Print("[FIX] MockFix.ToAdmin (outgoing): ", fixString(msg))
+	log.Printf("[FIX %s] MockFix.ToAdmin (outgoing): %s", m.name, fixString(msg))
 	return
 }
 
 // incoming admin
 func (m *TestFixClient) FromAdmin(msg *fix.Message, sID fix.SessionID) fix.MessageRejectError {
-	log.Print("[FIX] MockFix.FromAdmin (incoming): ", fixString(msg))
+	log.Printf("[FIX %s] MockFix.FromAdmin (incoming): %s", m.name, fixString(msg))
 	s := m.Sessions[sID.String()]
 	s.m.Lock()
 	defer s.m.Unlock()
@@ -246,7 +247,7 @@ func (m *TestFixClient) FromAdmin(msg *fix.Message, sID fix.SessionID) fix.Messa
 // outgoing app
 func (m *TestFixClient) ToApp(msg *fix.Message, sID fix.SessionID) error {
 	if !m.OmitLogMessages {
-		log.Print("[FIX] MockFix.ToApp (outgoing): ", fixString(msg))
+		log.Printf("[FIX %s] MockFix.ToApp (outgoing): %s", m.name, fixString(msg))
 	}
 	s := m.Sessions[sID.String()]
 	seq, err := msg.Header.GetInt(34)
@@ -260,7 +261,7 @@ func (m *TestFixClient) ToApp(msg *fix.Message, sID fix.SessionID) error {
 // incoming app
 func (m *TestFixClient) FromApp(msg *fix.Message, sID fix.SessionID) fix.MessageRejectError {
 	if !m.OmitLogMessages {
-		log.Print("[FIX] MockFix.FromApp (incoming): ", fixString(msg))
+		log.Printf("[FIX %s] MockFix.FromApp (incoming): %s", m.name, fixString(msg))
 	}
 	s := m.Sessions[sID.String()]
 	s.m.Lock()
@@ -275,7 +276,7 @@ func (m *TestFixClient) FromApp(msg *fix.Message, sID fix.SessionID) fix.Message
 }
 
 func (m *TestFixClient) OnCreate(sessionID fix.SessionID) {
-	log.Print("[FIX] MockFix.OnCreate ", sessionID)
+	log.Printf("[FIX %s] MockFix.OnCreate: %s", m.name, sessionID)
 	s := &Session{
 		ID:       sessionID,
 		LoggedOn: false,

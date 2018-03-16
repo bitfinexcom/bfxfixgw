@@ -256,12 +256,22 @@ func TestOrderCancelSimple(t *testing.T) {
 	}
 
 	// publish cancel ack
-	srvWs.Send(OrdersClient, `[0,"n",[555,"oc-req",null,null,[null,null,556,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,null,null,null,null,null,null,null,null],null,"SUCCESS","Submitted for cancellation; waiting for confirmation (ID: 555)."]]`)
-	// TODO assert?
+	srvWs.Send(OrdersClient, `[0,"n",[1521153051035,"oc-req",null,null,[null,null,555,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,null,null,null,null,null,null,null,null],null,"SUCCESS","Submitted for cancellation; waiting for confirmation (ID: 1234567)."]]`)
+	// assert FIX PENDING CANCEL
+	fix, err = fixOrd.WaitForMessage(OrderSessionID, 4)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = checkFixTags(fix, "35=8", "49=BFXFIX", "56=EXORG_ORD", "1=user123", "14=0.0000", "20=3", "32=0.0000", "37=1234567", "39=6", "54=1", "55=tBTCUSD", "150=0", "151=1.0000")
 
 	// publish cancel success
-	srvWs.Send(OrdersClient, `[0,"oc",[555,0,556,"tBTCUSD",1521062529896,1521062593974,-1,-1,"EXCHANGE LIMIT",null,null,null,0,"CANCELED",null,null,15000,0,null,null,null,null,null,0,0,0,null,null,"API>BFX",null,null,null]]`)
-	// TODO assert?
+	srvWs.Send(OrdersClient, `[0,"oc",[1234567,0,555,"tBTCUSD",1521062529896,1521062593974,1,1,"EXCHANGE LIMIT",null,null,null,0,"CANCELED",null,null,12000,0,null,null,null,null,null,0,0,0,null,null,"API>BFX",null,null,null]]`)
+	// assert FIX CANCEL ack
+	fix, err = fixOrd.WaitForMessage(OrderSessionID, 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = checkFixTags(fix, "35=8", "49=BFXFIX", "56=EXORG_ORD", "1=user123", "14=0.0000", "20=3", "32=0.0000", "37=1234567", "39=4", "54=1", "55=tBTCUSD", "150=4", "151=1.0000")
 }
 
 func TestOrderCancelInFlightFill(t *testing.T) {

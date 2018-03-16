@@ -107,7 +107,7 @@ func (s *Service) listen() {
 			// no-op
 		case *wsv2.AuthEvent:
 			// TODO log off FIX if this errors
-			log.Printf("got auth event: %#v", obj)
+			s.Websocket.FIX42HandleAuth(obj, msg.FIXSessionID())
 		case *bitfinex.FundingInfo:
 			// no-op
 		case *bitfinex.MarginInfoUpdate:

@@ -3,7 +3,9 @@ package websocket
 import (
 	"github.com/bitfinexcom/bfxfixgw/convert"
 	"github.com/bitfinexcom/bitfinex-api-go/v2"
+	"github.com/bitfinexcom/bitfinex-api-go/v2/websocket"
 	"github.com/quickfixgo/enum"
+	"github.com/quickfixgo/fix42/logout"
 	"github.com/quickfixgo/quickfix"
 	"go.uber.org/zap"
 	"strconv"
@@ -30,6 +32,14 @@ func (w *Websocket) FIX42Handler(o interface{}, sID quickfix.SessionID) {
 	}
 }
 */
+
+func (w *Websocket) FIX42HandleAuth(auth *websocket.AuthEvent, sID quickfix.SessionID) {
+	if auth.Status == "FAILED" {
+		logout := logout.New()
+		logout.SetText(auth.Message)
+		quickfix.SendToTarget(logout, sID)
+	}
+}
 
 func (w *Websocket) FIX42TradeExecutionUpdateHandler(t *bitfinex.TradeExecutionUpdate, sID quickfix.SessionID) {
 	p, ok := w.FindPeer(sID.String())

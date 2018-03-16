@@ -99,13 +99,15 @@ func (s *Service) listen() {
 		switch obj := msg.Data.(type) {
 		case *bitfinex.Notification:
 			s.Websocket.FIX42NotificationHandler(obj, msg.FIXSessionID())
+		case *bitfinex.OrderNew:
+			s.Websocket.FIX42OrderNewHandler(obj, msg.FIXSessionID())
 		case *bitfinex.OrderCancel:
-			//s.processOrderTerminal(obj, msg.FIXSessionID())
+			s.Websocket.FIX42OrderCancelHandler(obj, msg.FIXSessionID())
 		case *wsv2.InfoEvent:
 			// no-op
 		case *wsv2.AuthEvent:
 			// TODO log off FIX if this errors
-			log.Printf("got auth event: %#v", obj)
+			s.Websocket.FIX42HandleAuth(obj, msg.FIXSessionID())
 		case *bitfinex.FundingInfo:
 			// no-op
 		case *bitfinex.MarginInfoUpdate:

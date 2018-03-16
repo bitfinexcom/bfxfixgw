@@ -2,6 +2,7 @@ package peer
 
 import (
 	"fmt"
+	"github.com/quickfixgo/enum"
 	"go.uber.org/zap"
 	"sync"
 )
@@ -11,30 +12,51 @@ type execution struct {
 	Px, Qty        float64
 }
 
-type Order struct {
+type CachedCancel struct {
+	OriginalOrderID, Symbol, Account, ClOrdID string
+	Side                                      enum.Side
+}
+
+// details BFX might not return back to us, which we need to populate in execution reports.
+type CachedOrder struct {
+	Symbol, Account  string
 	ClOrdID, OrderID string
 	Px, Qty          float64 // original px & qty
 	Executions       []execution
 	lock             sync.Mutex
+	Side             enum.Side
+	OrderType        enum.OrdType
 }
 
-func newOrder(orderid, clordid string, px, qty float64) *Order {
-	return &Order{
+func newOrder(clordid string, px, qty float64, symbol, account string, side enum.Side, ordType enum.OrdType) *CachedOrder {
+	return &CachedOrder{
 		ClOrdID:    clordid,
-		OrderID:    orderid,
 		Px:         px,
 		Qty:        qty,
 		Executions: make([]execution, 0),
+		Symbol:     symbol,
+		Account:    account,
+		Side:       side,
+		OrderType:  ordType,
 	}
 }
 
-func (o *Order) AvgFillPx() float64 {
+func newCancel(origclordid, symbol, account, clordid string) *CachedCancel {
+	return &CachedCancel{
+		OriginalOrderID: origclordid,
+		Symbol:          symbol,
+		Account:         account,
+		ClOrdID:         clordid,
+	}
+}
+
+func (o *CachedOrder) AvgFillPx() float64 {
 	o.lock.Lock()
 	defer o.lock.Unlock()
 	return o.avgFillPx()
 }
 
-func (o *Order) avgFillPx() float64 {
+func (o *CachedOrder) avgFillPx() float64 {
 	tot := 0.0
 	n := len(o.Executions)
 	for _, e := range o.Executions {
@@ -46,13 +68,13 @@ func (o *Order) avgFillPx() float64 {
 	return 0
 }
 
-func (o *Order) FilledQty() float64 {
+func (o *CachedOrder) FilledQty() float64 {
 	o.lock.Lock()
 	defer o.lock.Unlock()
 	return o.filledQty()
 }
 
-func (o *Order) filledQty() float64 {
+func (o *CachedOrder) filledQty() float64 {
 	qty := 0.0
 	for _, e := range o.Executions {
 		qty = qty + e.Qty
@@ -61,14 +83,15 @@ func (o *Order) filledQty() float64 {
 }
 
 // Stats provides clordid, qty, filled qty, avg px
-func (o *Order) Stats() (string, float64, float64, float64) {
+func (o *CachedOrder) Stats() (string, float64, float64, float64) {
 	o.lock.Lock()
 	defer o.lock.Unlock()
 	return o.ClOrdID, o.Qty, o.filledQty(), o.avgFillPx()
 }
 
 type cache struct {
-	orders   map[string]*Order
+	orders   map[string]*CachedOrder
+	cancels  map[string]*CachedCancel
 	mdReqIDs map[string]string // symbol -> req ID
 	lock     sync.Mutex
 	log      *zap.Logger
@@ -76,7 +99,8 @@ type cache struct {
 
 func newCache(log *zap.Logger) *cache {
 	return &cache{
-		orders:   make(map[string]*Order),
+		orders:   make(map[string]*CachedOrder),
+		cancels:  make(map[string]*CachedCancel),
 		log:      log,
 		mdReqIDs: make(map[string]string),
 	}
@@ -97,16 +121,57 @@ func (c *cache) LookupMDReqID(symbol string) string {
 	return ""
 }
 
-func (c *cache) AddOrder(orderid, clordid string, px, qty float64) *Order {
+// add when receiving a NewOrderSingle over FIX
+func (c *cache) AddOrder(clordid string, px, qty float64, symbol, account string, side enum.Side, ordType enum.OrdType) *CachedOrder {
 	if qty < 0 {
 		qty = -qty
 	}
 	c.lock.Lock()
-	c.log.Info("added order to cache", zap.String("OrderID", orderid), zap.String("ClOrdID", clordid), zap.Float64("Px", px), zap.Float64("Qty", qty))
-	order := newOrder(orderid, clordid, px, qty)
-	c.orders[orderid] = order
+	c.log.Info("added order to cache", zap.String("ClOrdID", clordid), zap.Float64("Px", px), zap.Float64("Qty", qty))
+	order := newOrder(clordid, px, qty, symbol, account, side, ordType)
+	c.orders[clordid] = order
 	c.lock.Unlock()
 	return order
+}
+
+// update when receiving a on-req with a server-assigned order ID
+func (c *cache) UpdateOrder(clordid, orderid string) (*CachedOrder, error) {
+	c.log.Info("updated order cache", zap.String("ClOrdID", clordid), zap.String("OrderID", orderid))
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	if order, ok := c.orders[clordid]; ok {
+		order.OrderID = orderid
+		return order, nil
+	}
+	return nil, fmt.Errorf("could not find order to update with ClOrdID %s", clordid)
+}
+
+func (c *cache) AddCancel(origclordid, symbol, account, clordid string) *CachedCancel {
+	c.lock.Lock()
+	cancel := newCancel(origclordid, symbol, account, clordid)
+	c.cancels[clordid] = cancel
+	c.lock.Unlock()
+	return cancel
+}
+
+func (c *cache) LookupCancel(clordid string) (*CachedCancel, error) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	if cxl, ok := c.cancels[clordid]; ok {
+		return cxl, nil
+	}
+	return nil, fmt.Errorf("could not find cancel with ClOrdID %s", clordid)
+}
+
+func (c *cache) LookupCancelByOrigClOrdID(origclordid string) (*CachedCancel, error) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	for _, cxl := range c.cancels {
+		if cxl.OriginalOrderID == origclordid {
+			return cxl, nil
+		}
+	}
+	return nil, fmt.Errorf("could not find cancel with OrigClOrdID %s", origclordid)
 }
 
 // UpdateExecutionFill receives an execution update with an ID, price, qty and returns the total filled qty & average fill price.
@@ -116,7 +181,10 @@ func (c *cache) AddExecution(orderid, execid string, px, qty float64) (float64, 
 	}
 	c.lock.Lock()
 	defer c.lock.Unlock()
-	if o, ok := c.orders[orderid]; ok {
+	for _, o := range c.orders {
+		if o.OrderID != orderid {
+			continue
+		}
 		o.lock.Lock()
 		defer o.lock.Unlock()
 		c.log.Info("added execution to cache", zap.String("OrderID", orderid), zap.String("BfxExecutionID", execid), zap.Float64("Px", px), zap.Float64("Qty", qty))
@@ -130,11 +198,22 @@ func (c *cache) AddExecution(orderid, execid string, px, qty float64) (float64, 
 	return 0, 0, fmt.Errorf("could not find OrderID %s in cache", orderid)
 }
 
-func (c *cache) Lookup(orderid string) (*Order, error) {
+func (c *cache) LookupByClOrdID(clordid string) (*CachedOrder, error) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
-	if o, ok := c.orders[orderid]; ok {
-		return o, nil
+	if order, ok := c.orders[clordid]; ok {
+		return order, nil
+	}
+	return nil, fmt.Errorf("could not find an order with ClOrdID %s", clordid)
+}
+
+func (c *cache) LookupByOrderID(orderid string) (*CachedOrder, error) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	for _, order := range c.orders {
+		if order.OrderID == orderid {
+			return order, nil
+		}
 	}
 	return nil, fmt.Errorf("could not find OrderID %s", orderid)
 }
@@ -142,8 +221,10 @@ func (c *cache) Lookup(orderid string) (*Order, error) {
 func (c *cache) LookupClOrdID(orderid string) (string, error) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
-	if o, ok := c.orders[orderid]; ok {
-		return o.ClOrdID, nil
+	for clordid, order := range c.orders {
+		if order.OrderID == orderid {
+			return clordid, nil
+		}
 	}
 	return "", fmt.Errorf("could not find ClOrdID for OrderID %s", orderid)
 }

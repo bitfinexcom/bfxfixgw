@@ -48,7 +48,7 @@ func main() {
 	} else {
 		storeFactory = fix.NewNoStoreFactory()
 	}
-	client, err := mock.NewTestFixClient(settings, storeFactory)
+	client, err := mock.NewTestFixClient(settings, storeFactory, "Client")
 	if err != nil {
 		log.Fatal(err)
 	}

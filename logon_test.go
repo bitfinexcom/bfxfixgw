@@ -72,7 +72,7 @@ type mockFixSettings struct {
 }
 
 func attemptRemove() error {
-	tries := 20
+	tries := 40
 	var err error
 	for i := 0; i < tries; i++ {
 		err = os.RemoveAll("tmp/")
@@ -94,7 +94,6 @@ func checkFixTags(fix string, tags ...string) error {
 }
 
 func setupWithClientCheck(t *testing.T, port int, settings mockFixSettings, checkClient bool) (*mock.TestFixClient, *mock.TestFixClient, *mock.MockWs, *Gateway) {
-	log.Print("\n\n\n")
 	err := attemptRemove()
 	if err != nil {
 		t.Fatal(err)
@@ -132,7 +131,7 @@ func setupWithClientCheck(t *testing.T, port int, settings mockFixSettings, chec
 
 	// mock FIX client
 	clientMDSettings := loadSettings(fmt.Sprintf("conf/integration_test/client/marketdata_%s.cfg", settings.FixVersion))
-	clientMDFix, err := mock.NewTestFixClient(clientMDSettings, fix.NewNoStoreFactory())
+	clientMDFix, err := mock.NewTestFixClient(clientMDSettings, fix.NewNoStoreFactory(), "MarketData")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -151,7 +150,7 @@ func setupWithClientCheck(t *testing.T, port int, settings mockFixSettings, chec
 	}
 
 	clientOrdSettings := loadSettings(fmt.Sprintf("conf/integration_test/client/orders_%s.cfg", settings.FixVersion))
-	clientOrdFix, err := mock.NewTestFixClient(clientOrdSettings, quickfix.NewFileStoreFactory(clientOrdSettings))
+	clientOrdFix, err := mock.NewTestFixClient(clientOrdSettings, quickfix.NewFileStoreFactory(clientOrdSettings), "Orders")
 	clientOrdFix.ApiKey = settings.ApiKey
 	clientOrdFix.ApiSecret = settings.ApiSecret
 	clientOrdFix.BfxUserID = settings.BfxUserID
@@ -266,4 +265,10 @@ func TestLogonNoCredentials(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	// TODO assert reject?
+}
+
+func TestLogonInvalidCredentials(t *testing.T) {
+	// TODO assert reject?
 }

@@ -6,6 +6,7 @@ import (
 	"github.com/bitfinexcom/bitfinex-api-go/v2/websocket"
 	"github.com/quickfixgo/quickfix"
 	"go.uber.org/zap"
+	"log"
 )
 
 type ClientFactory interface {
@@ -31,6 +32,7 @@ type Peer struct {
 	Rest     *rest.Client
 	toParent chan<- *Message
 	exit     chan struct{}
+	started  bool
 
 	logger *zap.Logger
 
@@ -47,6 +49,7 @@ type subscription struct {
 
 // New creates a peer, but does not establish a websocket connection yet
 func New(factory ClientFactory, fixSessionID quickfix.SessionID, toParent chan<- *Message) *Peer {
+	log.Printf("created peer for %s", fixSessionID)
 	return &Peer{
 		Ws:        factory.NewWs(),
 		Rest:      factory.NewRest(),
@@ -55,6 +58,7 @@ func New(factory ClientFactory, fixSessionID quickfix.SessionID, toParent chan<-
 		toParent:  toParent,
 		exit:      make(chan struct{}),
 		cache:     newCache(bfxlog.Logger),
+		started:   false,
 	}
 }
 
@@ -63,6 +67,7 @@ func (p *Peer) Logon(apiKey, apiSecret, bfxUserID string) error {
 	p.Rest.Credentials(apiKey, apiSecret)
 	p.Ws.Credentials(apiKey, apiSecret)
 	p.bfxUserID = bfxUserID
+	log.Printf("peer connect %p", p.Ws)
 	err := p.Ws.Connect()
 	if err != nil {
 		return err
@@ -72,6 +77,7 @@ func (p *Peer) Logon(apiKey, apiSecret, bfxUserID string) error {
 }
 
 func (p *Peer) listen() {
+	p.started = true
 	for msg := range p.Ws.Listen() {
 		p.toParent <- &Message{Data: msg, Peer: p}
 	}
@@ -88,7 +94,7 @@ func (p *Peer) FIXSessionID() quickfix.SessionID {
 }
 
 func (p *Peer) Close() {
-	if p.Ws.IsConnected() {
+	if p.started {
 		p.Ws.Close()
 		<-p.exit
 	}

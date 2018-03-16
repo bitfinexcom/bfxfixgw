@@ -3,7 +3,9 @@ package websocket
 import (
 	"github.com/bitfinexcom/bfxfixgw/convert"
 	"github.com/bitfinexcom/bitfinex-api-go/v2"
+	"github.com/bitfinexcom/bitfinex-api-go/v2/websocket"
 	"github.com/quickfixgo/enum"
+	"github.com/quickfixgo/fix42/logout"
 	"github.com/quickfixgo/quickfix"
 	"go.uber.org/zap"
 	"strconv"
@@ -31,6 +33,14 @@ func (w *Websocket) FIX42Handler(o interface{}, sID quickfix.SessionID) {
 }
 */
 
+func (w *Websocket) FIX42HandleAuth(auth *websocket.AuthEvent, sID quickfix.SessionID) {
+	if auth.Status == "FAILED" {
+		logout := logout.New()
+		logout.SetText(auth.Message)
+		quickfix.SendToTarget(logout, sID)
+	}
+}
+
 func (w *Websocket) FIX42TradeExecutionUpdateHandler(t *bitfinex.TradeExecutionUpdate, sID quickfix.SessionID) {
 	p, ok := w.FindPeer(sID.String())
 	if !ok {
@@ -39,7 +49,7 @@ func (w *Websocket) FIX42TradeExecutionUpdateHandler(t *bitfinex.TradeExecutionU
 	}
 	orderID := strconv.FormatInt(t.OrderID, 10)
 	execID := strconv.FormatInt(t.ID, 10)
-	cached, err := p.Lookup(orderID)
+	cached, err := p.LookupByOrderID(orderID)
 	// can't find order
 	if err != nil {
 		// try a REST fetch
@@ -53,7 +63,12 @@ func (w *Websocket) FIX42TradeExecutionUpdateHandler(t *bitfinex.TradeExecutionU
 		w.logger.Info("fetch order info from REST: OK", zap.String("OrderID", orderID))
 		orderID := strconv.FormatInt(os.ID, 10)
 		clOrdID := strconv.FormatInt(os.CID, 10)
-		cached = p.AddOrder(orderID, clOrdID, os.Price, os.Amount)
+		// update everything at the same time
+		p.AddOrder(clOrdID, os.Price, os.Amount, os.Symbol, p.BfxUserID(), convert.SideToFIX(t.ExecAmount), convert.OrdTypeToFIX(os.Type))
+		cached, err = p.UpdateOrder(clOrdID, orderID)
+		if err != nil {
+			w.logger.Warn("could not update order", zap.Error(err))
+		}
 	}
 	totalFillQty, avgFillPx, err := p.AddExecution(orderID, execID, t.ExecPrice, t.ExecAmount)
 	quickfix.SendToTarget(convert.FIX42ExecutionReportFromTradeExecutionUpdate(t, p.BfxUserID(), cached.ClOrdID, cached.Qty, totalFillQty, avgFillPx), sID)
@@ -91,35 +106,52 @@ func (w *Websocket) FIX42NotificationHandler(d *bitfinex.Notification, sID quick
 	switch o := d.NotifyInfo.(type) {
 	case *bitfinex.OrderCancel:
 		// Only handling error currently.
-		if d.Status == "ERROR" && d.Text == "Order not found." {
+		if d.Status == "ERROR" {
 			// Send out an OrderCancelReject
+			// BFX API returns only the original ClOrdID, not the cancel ClOrdID in acknowledgements.
+			// Must reference cache mapping to obtain cancel's ClOrdID
 			orderID := strconv.FormatInt(o.ID, 10)
-			clOrdID := ""
-			ord, err := p.Lookup(orderID)
+			origClOrdID := strconv.FormatInt(o.CID, 10)
+			cxlClOrdID := origClOrdID // error case :(
+			cache, err := p.LookupCancelByOrigClOrdID(origClOrdID)
 			if err == nil {
-				clOrdID = ord.ClOrdID
+				cxlClOrdID = cache.ClOrdID
 			}
-			quickfix.SendToTarget(convert.FIX42OrderCancelRejectFromCancel(o, p.BfxUserID(), orderID, clOrdID), sID)
+			quickfix.SendToTarget(convert.FIX42OrderCancelRejectFromCancel(o, p.BfxUserID(), orderID, origClOrdID, cxlClOrdID, d.Text), sID)
 			return
+		} else if d.Status == "SUCCESS" {
+			clOrdID := strconv.FormatInt(o.CID, 10)
+			orig, err := p.LookupByClOrdID(clOrdID)
+			if err != nil {
+				w.logger.Error("could not reference original order to publish pending cancel execution report", zap.Error(err))
+				return
+			}
+			quickfix.SendToTarget(convert.FIX42ExecutionReportFromCancelWithDetails(o, orig.Account, enum.ExecType_PENDING_CANCEL, orig.FilledQty(), enum.OrdStatus_PENDING_CANCEL, orig.OrderType, d.Text, orig.Symbol, orig.OrderID, orig.Side, orig.Qty, orig.AvgFillPx()), sID)
 		}
-		// TODO send cancel ack?
 		return
 	case *bitfinex.OrderNew:
 
 		order := bitfinex.Order(*o)
 		var ordStatus enum.OrdStatus
+		var execType enum.ExecType
 		text := ""
 		if d.Status == "ERROR" {
 			ordStatus = enum.OrdStatus_REJECTED
+			execType = enum.ExecType_REJECTED
 			text = d.Text
 		} else {
 			orderID := strconv.FormatInt(o.ID, 10)
 			clOrdID := strconv.FormatInt(o.CID, 10)
-			p.AddOrder(orderID, clOrdID, o.Price, o.Amount)
+			// rcv server order ID
+			_, err := p.UpdateOrder(clOrdID, orderID)
+			if err != nil {
+				w.logger.Warn("could not update order", zap.Error(err))
+			}
 			ordStatus = convert.OrdStatusToFIX(o.Status)
+			execType = enum.ExecType_PENDING_NEW
 		}
 
-		quickfix.SendToTarget(convert.FIX42ExecutionReportFromOrder(&order, p.BfxUserID(), enum.ExecType_NEW, 0, ordStatus, text), sID)
+		quickfix.SendToTarget(convert.FIX42ExecutionReportFromOrder(&order, p.BfxUserID(), execType, 0, ordStatus, text), sID)
 		return
 		// TODO other types
 	default:
@@ -143,6 +175,7 @@ func (w *Websocket) FIX42OrderSnapshotHandler(os *bitfinex.OrderSnapshot, sID qu
 	return
 }
 
+// for working orders after notification 'ack'
 func (w *Websocket) FIX42OrderNewHandler(o *bitfinex.OrderNew, sID quickfix.SessionID) {
 	p, ok := w.FindPeer(sID.String())
 	if !ok {
@@ -150,13 +183,7 @@ func (w *Websocket) FIX42OrderNewHandler(o *bitfinex.OrderNew, sID quickfix.Sess
 		return
 	}
 	ord := bitfinex.Order(*o)
-	orderID := strconv.FormatInt(o.ID, 10)
-	clOrdID := strconv.FormatInt(o.CID, 10)
-	cached, err := p.Lookup(orderID)
-	if err == nil {
-		cached = p.AddOrder(orderID, clOrdID, cached.Px, cached.Qty)
-	}
-	quickfix.SendToTarget(convert.FIX42ExecutionReportFromOrder(&ord, p.BfxUserID(), enum.ExecType_ORDER_STATUS, cached.FilledQty(), enum.OrdStatus_NEW, ""), sID)
+	quickfix.SendToTarget(convert.FIX42ExecutionReportFromOrder(&ord, p.BfxUserID(), enum.ExecType_NEW, 0.0, enum.OrdStatus_NEW, ""), sID)
 	return
 }
 
@@ -168,10 +195,11 @@ func (w *Websocket) FIX42OrderCancelHandler(o *bitfinex.OrderCancel, sID quickfi
 	}
 	ord := bitfinex.Order(*o)
 	orderID := strconv.FormatInt(o.ID, 10)
-	clOrdID := strconv.FormatInt(o.CID, 10)
-	cached, err := p.Lookup(orderID)
-	if err == nil {
-		cached = p.AddOrder(orderID, clOrdID, cached.Px, cached.Qty)
+	cached, err := p.LookupByOrderID(orderID)
+	// add cancel related to this order
+	if err != nil {
+		w.logger.Error("could not reference original order to publish cancel ack execution report", zap.Error(err))
+		return
 	}
 	quickfix.SendToTarget(convert.FIX42ExecutionReportFromOrder(&ord, p.BfxUserID(), enum.ExecType_CANCELED, cached.FilledQty(), enum.OrdStatus_CANCELED, ""), sID)
 	return

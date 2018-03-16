@@ -8,6 +8,7 @@ import (
 	"github.com/bitfinexcom/bfxfixgw/convert"
 
 	"go.uber.org/zap"
+	lg "log"
 
 	//er "github.com/quickfixgo/quickfix/fix42/executionreport"
 	mdr "github.com/quickfixgo/fix42/marketdatarequest"
@@ -45,6 +46,13 @@ func (f *FIX) OnFIX42NewOrderSingle(msg nos.NewOrderSingle, sID quickfix.Session
 	if err != nil {
 		return err
 	}
+
+	lg.Printf("submit order %p", p.Ws)
+
+	ordtype, _ := msg.GetOrdType()
+	clordid, _ := msg.GetClOrdID()
+	side, _ := msg.GetSide()
+	p.AddOrder(clordid, bo.Price, bo.Amount, bo.Symbol, p.BfxUserID(), side, ordtype)
 
 	e := p.Ws.SubmitOrder(context.Background(), bo)
 	if e != nil {
@@ -257,9 +265,9 @@ func (f *FIX) OnFIX42OrderStatusRequest(msg osr.OrderStatusRequest, sID quickfix
 	}
 	orderID := strconv.FormatInt(order.ID, 10)
 	clOrdID := strconv.FormatInt(order.CID, 10)
-	cached, err2 := peer.Lookup(orderID)
-	if err2 == nil {
-		cached = peer.AddOrder(orderID, clOrdID, cached.Px, cached.Qty)
+	cached, err2 := peer.LookupByOrderID(orderID)
+	if err2 != nil {
+		cached = peer.AddOrder(clOrdID, order.Price, order.Amount, order.Symbol, peer.BfxUserID(), convert.SideToFIX(order.Amount), convert.OrdTypeToFIX(order.Type))
 	}
 	status := convert.OrdStatusToFIX(order.Status)
 	er := convert.FIX42ExecutionReportFromOrder(order, peer.BfxUserID(), enum.ExecType_ORDER_STATUS, cached.FilledQty(), status, "")

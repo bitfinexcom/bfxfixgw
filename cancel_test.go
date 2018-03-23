@@ -98,7 +98,7 @@ func TestOrderCancelSimple(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = checkFixTags(fix, "35=8", "49=BFXFIX", "56=EXORG_ORD", "1=user123", "20=3", "32=0.000", "39=0", "54=1", "55=tBTCUSD", "150=A", "151=1.00", "6=0.00", "14=0.00")
+	err = checkFixTags(fix, "35=8", "49=BFXFIX", "56=EXORG_ORD", "1=user123", "20=3", "32=0.000", "39=A", "54=1", "55=tBTCUSD", "150=A", "151=1.00", "6=0.00", "14=0.00")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -241,7 +241,7 @@ func TestOrderCancelInFlightFillOK(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = checkFixTags(fix, "35=8", "49=BFXFIX", "56=EXORG_ORD", "1=user123", "20=3", "32=0.000", "39=0", "54=1", "55=tBTCUSD", "150=A", "151=1.00", "6=0.00", "14=0.00")
+	err = checkFixTags(fix, "35=8", "49=BFXFIX", "56=EXORG_ORD", "1=user123", "20=3", "32=0.000", "39=A", "54=1", "55=tBTCUSD", "150=A", "151=1.00", "6=0.00", "14=0.00")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -485,7 +485,7 @@ func TestOrderCancelInFlightFillReject(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = checkFixTags(fix, "35=8", "49=BFXFIX", "56=EXORG_ORD", "1=user123", "20=3", "32=0.000", "39=0", "54=1", "55=tBTCUSD", "150=A", "151=1.00", "6=0.00", "14=0.00")
+	err = checkFixTags(fix, "35=8", "49=BFXFIX", "56=EXORG_ORD", "1=user123", "20=3", "32=0.000", "39=A", "54=1", "55=tBTCUSD", "150=A", "151=1.00", "6=0.00", "14=0.00")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -147,11 +147,18 @@ func (w *Websocket) FIX42NotificationHandler(d *bitfinex.Notification, sID quick
 			if err != nil {
 				w.logger.Warn("could not update order", zap.Error(err))
 			}
-			ordStatus = convert.OrdStatusToFIX(o.Status)
+			ordStatus = enum.OrdStatus_PENDING_NEW
 			execType = enum.ExecType_PENDING_NEW
 		}
-
 		quickfix.SendToTarget(convert.FIX42ExecutionReportFromOrder(&order, p.BfxUserID(), execType, 0, ordStatus, text), sID)
+
+		w.logger.Info("GOT NOTIFICATION ORDER NEW", zap.String("type", o.Type), zap.String("status", string(o.Status)))
+		// market order ack
+		if (o.Type == bitfinex.OrderTypeMarket || o.Type == bitfinex.OrderTypeExchangeMarket) && (o.Status == "SUCCESS" || o.Status == "") {
+			// synthetically publish a followup NEW
+			quickfix.SendToTarget(convert.FIX42ExecutionReportFromOrder(&order, p.BfxUserID(), enum.ExecType_NEW, 0, enum.OrdStatus_NEW, text), sID)
+		}
+
 		return
 		// TODO other types
 	default:
@@ -184,6 +191,20 @@ func (w *Websocket) FIX42OrderNewHandler(o *bitfinex.OrderNew, sID quickfix.Sess
 	}
 	ord := bitfinex.Order(*o)
 	quickfix.SendToTarget(convert.FIX42ExecutionReportFromOrder(&ord, p.BfxUserID(), enum.ExecType_NEW, 0.0, enum.OrdStatus_NEW, ""), sID)
+	return
+}
+
+// for working orders after notification 'ack'
+func (w *Websocket) FIX42OrderUpdateHandler(o *bitfinex.OrderUpdate, sID quickfix.SessionID) {
+	p, ok := w.FindPeer(sID.String())
+	if !ok {
+		w.logger.Warn("could not find peer for SessionID", zap.String("SessionID", sID.String()))
+		return
+	}
+	ord := bitfinex.Order(*o)
+	ordStatus := convert.OrdStatusToFIX(o.Status)
+	execType := convert.ExecTypeToFIX(o.Status)
+	quickfix.SendToTarget(convert.FIX42ExecutionReportFromOrder(&ord, p.BfxUserID(), execType, 0.0, ordStatus, ""), sID)
 	return
 }
 

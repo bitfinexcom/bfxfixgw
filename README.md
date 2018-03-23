@@ -59,11 +59,44 @@ It was also proposed to have a configuration file containing a batch of X sessio
 that will manually associated to a user on bitfinex's backend side, so websocket
 authentication message will just be `{ "event": "auth", "token": SEND_COMP_ID}`. 
 
+## Order State Details
+
+When receiving a Bitfinex Order update object (on, ou, oc), the following tables demonstrate rules for mapping tag 39 OrdStatuses.
+
+### Bitfinex order update status mappings
+
+| BFX Order State 	| FIX OrdStatus Code 	| Order Status 		|
+|-------------------|-----------------------|-------------------|
+| ACTIVE			| 0						| NEW				|
+| EXECUTED			| 2						| FILLED			|
+| PARTIALLY FILLED	| 1						| PARTIALLY FILLED	|
+| CANCELED			| 4						| CANCELED			|
+
+Executions are received as `te` TradeExecution messages and `tu` TradeUpdate messages.  TradeExecution messages come first, but generally omit the order type, original price, fee, and some other fields.  The gateway processes `tu` TradeUpdate messages as executions.  When receiving a TradeUpdate, MsgType `8` ExecutionReports are generated following these rules:
+
+- 1 TradeUpdate message will create 1 ExecutionReport
+- Tag 37 OrderID is derived from the `tu` server-assigned ID
+- An order's CID is mapped to a tag 11 ClOrdID
+- The gateway maintains an in-memory cache of ClOrdID -> order information, including:
+	- Original order details (symbol, account, price, quantity, type, side)
+	- Calculated state details (average fill price, total open quantity, total filled quantity)
+	- Executions related to the original order
+	- Cancel details related to a ClOrdID (original order ID, symbol, account, ClOrdID, and side)
+- When receiving order state updates (rejection, fill, cancel acknowledgement), the cache must be referenced to provide FIX-required details
+- When receiving a TradeUpdate, if cached details indicate the incoming TradeUpdate would fully fill the order, the gateway will publish an ExecutionReport with an OrdStatus of FILLED.
+
+### Synthetic order state message mappings
+
+`on-req` generally maps to PENDING NEW, with an exception for market orders, which do not receive subsequent `on` ack working messages.
+
+| BFX Order Type	| Incoming BFX Message	| FIX OrdStatus Code	| Order Status		| Notes	|
+|-------------------|-----------------------|-----------------------|-------------------|-------|
+| EXCHANGE MARKET	| n (on-req)			| A & 0					| PENDING NEW & NEW	| Market orders do not receive `on` messages.  The first successful acknowledgement publishes both PENDING NEW and NEW execution reports. |
+| EXCHANGE LIMIT	| n (on-req)			| A						| PENDING NEW		| |
+| EXCHANGE LIMIT	| on					| 0						| NEW				| |
+| EXCHANGE LIMIT	| oc					| 4						| CANCELED			| |
+| EXCHANGE LIMIT	| ou					| Depends on status		| Depends on status	| |
+
 ## Issues
 
-`OrderCancelReject` currently does not get passed the `ClOrdID` of the `OrderCancelRequest`
-because bitfinex doesn’t care about it and in the current state there’s no way
-to pass that `ClOrdID` along.
-One solution could be to register handlers for different responses inside the 
-e.g. `OrderCancelRequest` that gets called once the reply from bitfinex arrives
-and then removed after.
+- Cached state details are lost on restart (must fetch account order & execution state on startup)

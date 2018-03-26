@@ -23,18 +23,18 @@ func OrdStatusToFIX(status bitfinex.OrderStatus) enum.OrdStatus {
 }
 
 // follows FIX 4.1+ rules on merging ExecTransType + ExecType fields into new ExecType enums.
-func ExecTypeToFIX(status bitfinex.OrderStatus) field.ExecTypeField {
+func ExecTypeToFIX(status bitfinex.OrderStatus) enum.ExecType {
 	switch status {
 	default:
-		return field.NewExecType(enum.ExecType_ORDER_STATUS)
+		return enum.ExecType_ORDER_STATUS
 	case bitfinex.OrderStatusActive:
-		return field.NewExecType(enum.ExecType_NEW)
+		return enum.ExecType_NEW
 	case bitfinex.OrderStatusCanceled:
-		return field.NewExecType(enum.ExecType_TRADE_CANCEL)
+		return enum.ExecType_TRADE_CANCEL
 	case bitfinex.OrderStatusPartiallyFilled:
-		return field.NewExecType(enum.ExecType_TRADE)
+		return enum.ExecType_TRADE
 	case bitfinex.OrderStatusExecuted:
-		return field.NewExecType(enum.ExecType_TRADE)
+		return enum.ExecType_TRADE
 	}
 }
 

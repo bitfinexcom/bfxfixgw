@@ -103,6 +103,8 @@ func (s *Service) listen() {
 			s.Websocket.FIX42OrderNewHandler(obj, msg.FIXSessionID())
 		case *bitfinex.OrderCancel:
 			s.Websocket.FIX42OrderCancelHandler(obj, msg.FIXSessionID())
+		case *bitfinex.OrderUpdate:
+			s.Websocket.FIX42OrderUpdateHandler(obj, msg.FIXSessionID())
 		case *wsv2.InfoEvent:
 			// no-op
 		case *wsv2.AuthEvent:

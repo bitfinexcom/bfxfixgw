@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/quickfixgo/enum"
 	"go.uber.org/zap"
+	"log"
 	"sync"
 )
 
@@ -132,6 +133,12 @@ func (c *cache) AddOrder(clordid string, px, qty float64, symbol, account string
 	c.orders[clordid] = order
 	c.lock.Unlock()
 	return order
+}
+
+func (c *cache) dump() {
+	for clordid, order := range c.orders {
+		log.Printf("%s:\t%s", clordid, order.OrderID)
+	}
 }
 
 // update when receiving a on-req with a server-assigned order ID

@@ -1,6 +1,7 @@
 package service
 
 import (
+	"github.com/bitfinexcom/bfxfixgw/convert"
 	lg "github.com/bitfinexcom/bfxfixgw/log"
 	"github.com/bitfinexcom/bfxfixgw/service/fix"
 	"github.com/bitfinexcom/bfxfixgw/service/peer"
@@ -10,6 +11,7 @@ import (
 	"github.com/quickfixgo/quickfix"
 	"go.uber.org/zap"
 	"log"
+	"strconv"
 	"sync"
 )
 
@@ -91,6 +93,16 @@ func (s *Service) processOrderTerminal(o *bitfinex.OrderCancel, sid quickfix.Ses
 	// this is handled by the last 'tu' message
 }
 
+func (s *Service) processOrderSnapshot(snapshot *bitfinex.OrderSnapshot, sID quickfix.SessionID) {
+	peer, ok := s.FindPeer(sID.String())
+	if ok {
+		for _, order := range snapshot.Snapshot {
+			cache := peer.AddOrder(strconv.FormatInt(order.CID, 10), order.Price, order.Amount, order.Symbol, peer.BfxUserID(), convert.SideToFIX(order.Amount), convert.OrdTypeToFIX(order.Type))
+			cache.OrderID = strconv.FormatInt(order.ID, 10)
+		}
+	}
+}
+
 func (s *Service) listen() {
 	for msg := range s.inbound {
 		if msg == nil {
@@ -129,8 +141,7 @@ func (s *Service) listen() {
 		case *bitfinex.PositionUpdate:
 			// no-op
 		case *bitfinex.OrderSnapshot:
-			log.Printf("got order snapshot: %#v", obj)
-			// TODO
+			s.processOrderSnapshot(obj, msg.FIXSessionID())
 		case *wsv2.SubscribeEvent:
 			// TODO handle these or no?
 		case *bitfinex.BookUpdateSnapshot:

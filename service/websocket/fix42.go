@@ -126,7 +126,7 @@ func (w *Websocket) FIX42NotificationHandler(d *bitfinex.Notification, sID quick
 				w.logger.Error("could not reference original order to publish pending cancel execution report", zap.Error(err))
 				return
 			}
-			quickfix.SendToTarget(convert.FIX42ExecutionReportFromCancelWithDetails(o, orig.Account, enum.ExecType_PENDING_CANCEL, orig.FilledQty(), enum.OrdStatus_PENDING_CANCEL, orig.OrderType, d.Text, orig.Symbol, orig.OrderID, orig.Side, orig.Qty, orig.AvgFillPx()), sID)
+			quickfix.SendToTarget(convert.FIX42ExecutionReportFromCancelWithDetails(o, orig.Account, enum.ExecType_PENDING_CANCEL, orig.FilledQty(), enum.OrdStatus_PENDING_CANCEL, orig.OrderType, d.Text, orig.Symbol, orig.ClOrdID, orig.OrderID, orig.Side, orig.Qty, orig.AvgFillPx()), sID)
 		}
 		return
 	case *bitfinex.OrderNew:
@@ -145,7 +145,9 @@ func (w *Websocket) FIX42NotificationHandler(d *bitfinex.Notification, sID quick
 			// rcv server order ID
 			_, err := p.UpdateOrder(clOrdID, orderID)
 			if err != nil {
-				w.logger.Warn("could not update order", zap.Error(err))
+				w.logger.Warn("couldn't update cache, adding unknown order ack (order entered outside this session)", zap.Error(err))
+				cache := p.AddOrder(clOrdID, order.Price, order.Amount, order.Symbol, p.BfxUserID(), convert.SideToFIX(order.Amount), convert.OrdTypeToFIX(order.Type))
+				cache.OrderID = orderID
 			}
 			ordStatus = enum.OrdStatus_PENDING_NEW
 			execType = enum.ExecType_PENDING_NEW

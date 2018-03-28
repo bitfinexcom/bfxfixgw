@@ -78,7 +78,7 @@ func defixifySymbol(sym string) string {
 	return sym
 }
 
-func FIX42ExecutionReport(symbol, orderID, account string, execType enum.ExecType, side enum.Side, origQty, thisQty, cumQty, avgPx float64, ordStatus enum.OrdStatus, ordType enum.OrdType, text string) fix42er.ExecutionReport {
+func FIX42ExecutionReport(symbol, clOrdID, orderID, account string, execType enum.ExecType, side enum.Side, origQty, thisQty, cumQty, avgPx float64, ordStatus enum.OrdStatus, ordType enum.OrdType, text string) fix42er.ExecutionReport {
 	uid, err := uuid.NewV4()
 	execID := ""
 	if err == nil {
@@ -117,12 +117,14 @@ func FIX42ExecutionReport(symbol, orderID, account string, execType enum.ExecTyp
 		e.SetText(text)
 	}
 	e.SetOrdType(ordType)
+	e.SetClOrdID(clOrdID)
 	return e
 }
 
 // used for oc-req notifications where only a cancel's CID is provided
-func FIX42ExecutionReportFromCancelWithDetails(c *bitfinex.OrderCancel, account string, execType enum.ExecType, cumQty float64, ordStatus enum.OrdStatus, ordType enum.OrdType, text, symbol, orderID string, side enum.Side, qty, avgPx float64) fix42er.ExecutionReport {
-	e := FIX42ExecutionReport(symbol, orderID, account, execType, side, qty, 0.0, cumQty, avgPx, ordStatus, ordType, text)
+func FIX42ExecutionReportFromCancelWithDetails(c *bitfinex.OrderCancel, account string, execType enum.ExecType, cumQty float64, ordStatus enum.OrdStatus, ordType enum.OrdType, text, symbol, clOrdID, orderID string, side enum.Side, qty, avgPx float64) fix42er.ExecutionReport {
+	e := FIX42ExecutionReport(symbol, clOrdID, orderID, account, execType, side, qty, 0.0, cumQty, avgPx, ordStatus, ordType, text)
+	// TODO add clordid
 	// TODO cxl details?
 	return e
 }
@@ -134,7 +136,7 @@ func FIX42ExecutionReportFromOrder(o *bitfinex.Order, account string, execType e
 	if fAmt < 0 {
 		fAmt = -fAmt
 	}
-	e := FIX42ExecutionReport(o.Symbol, orderID, account, execType, SideToFIX(o.Amount), fAmt, 0.0, cumQty, o.PriceAvg, ordStatus, OrdTypeToFIX(o.Type), text)
+	e := FIX42ExecutionReport(o.Symbol, strconv.FormatInt(o.CID, 10), orderID, account, execType, SideToFIX(o.Amount), fAmt, 0.0, cumQty, o.PriceAvg, ordStatus, OrdTypeToFIX(o.Type), text)
 	switch o.Type {
 	case bitfinex.OrderTypeLimit:
 		e.SetPrice(decimal.NewFromFloat(o.Price), 4)
@@ -166,7 +168,7 @@ func FIX42ExecutionReportFromTradeExecutionUpdate(t *bitfinex.TradeExecutionUpda
 	if execAmt < 0 {
 		execAmt = -execAmt
 	}
-	return FIX42ExecutionReport(t.Pair, orderID, account, execType, SideToFIX(t.ExecAmount), origQty, execAmt, totalFillQty, avgFillPx, ordStatus, OrdTypeToFIX(t.OrderType), "")
+	return FIX42ExecutionReport(t.Pair, clOrdID, orderID, account, execType, SideToFIX(t.ExecAmount), origQty, execAmt, totalFillQty, avgFillPx, ordStatus, OrdTypeToFIX(t.OrderType), "")
 }
 
 func rejectReasonFromText(text string) enum.CxlRejReason {

@@ -145,7 +145,7 @@ func (w *Websocket) FIX42NotificationHandler(d *bitfinex.Notification, sID quick
 			// rcv server order ID
 			_, err := p.UpdateOrder(clOrdID, orderID)
 			if err != nil {
-				w.logger.Warn("couldn't update cache, adding unknown order ack (order entered outside this session)", zap.Error(err))
+				w.logger.Warn("adding unknown order (entered outside session)", zap.String("ClOrdID", clOrdID), zap.String("OrderID", orderID))
 				cache := p.AddOrder(clOrdID, order.Price, order.Amount, order.Symbol, p.BfxUserID(), convert.SideToFIX(order.Amount), convert.OrdTypeToFIX(order.Type))
 				cache.OrderID = orderID
 			}
@@ -153,8 +153,6 @@ func (w *Websocket) FIX42NotificationHandler(d *bitfinex.Notification, sID quick
 			execType = enum.ExecType_PENDING_NEW
 		}
 		quickfix.SendToTarget(convert.FIX42ExecutionReportFromOrder(&order, p.BfxUserID(), execType, 0, ordStatus, text), sID)
-
-		w.logger.Info("GOT NOTIFICATION ORDER NEW", zap.String("type", o.Type), zap.String("status", string(o.Status)))
 		// market order ack
 		if (o.Type == bitfinex.OrderTypeMarket || o.Type == bitfinex.OrderTypeExchangeMarket) && (o.Status == "SUCCESS" || o.Status == "") {
 			// synthetically publish a followup NEW

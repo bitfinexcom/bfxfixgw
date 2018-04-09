@@ -82,9 +82,14 @@ func (w *Websocket) FIX42BookSnapshot(s *bitfinex.BookUpdateSnapshot, sID quickf
 	}
 	var mdReqID string
 	if len(s.Snapshot) > 0 {
-		mdReqID = p.LookupMDReqID(s.Snapshot[0].Symbol)
+		mdReqID, ok = p.LookupMDReqID(s.Snapshot[0].Symbol)
+		if ok {
+			quickfix.SendToTarget(convert.FIX42MarketDataFullRefreshFromBookSnapshot(mdReqID, s), sID)
+		} else {
+			w.logger.Warn("could not find MDReqID for symbol", zap.String("MDReqID", mdReqID))
+		}
 	}
-	quickfix.SendToTarget(convert.FIX42MarketDataFullRefreshFromBookSnapshot(mdReqID, s), sID)
+
 }
 
 func (w *Websocket) FIX42BookUpdate(u *bitfinex.BookUpdate, sID quickfix.SessionID) {
@@ -93,8 +98,12 @@ func (w *Websocket) FIX42BookUpdate(u *bitfinex.BookUpdate, sID quickfix.Session
 		w.logger.Warn("could not find peer for SessionID", zap.String("SessionID", sID.String()))
 		return
 	}
-	mdReqID := p.LookupMDReqID(u.Symbol)
-	quickfix.SendToTarget(convert.FIX42MarketDataIncrementalRefreshFromBookUpdate(mdReqID, u), sID)
+	mdReqID, ok := p.LookupMDReqID(u.Symbol)
+	if ok {
+		quickfix.SendToTarget(convert.FIX42MarketDataIncrementalRefreshFromBookUpdate(mdReqID, u), sID)
+	} else {
+		w.logger.Warn("could not find MDReqID for symbol", zap.String("MDReqID", mdReqID))
+	}
 }
 
 func (w *Websocket) FIX42NotificationHandler(d *bitfinex.Notification, sID quickfix.SessionID) {

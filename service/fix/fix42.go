@@ -68,7 +68,7 @@ func reject(err error) quickfix.MessageRejectError {
 	return quickfix.NewMessageRejectError(err.Error(), rejectReasonOther, nil)
 }
 
-func makeReject(msg string) quickfix.MessageRejectError {
+func rejectError(msg string) quickfix.MessageRejectError {
 	return quickfix.NewBusinessMessageRejectError(msg, rejectReasonOther, nil)
 }
 
@@ -120,6 +120,10 @@ func (f *FIX) OnFIX42MarketDataRequest(msg mdr.MarketDataRequest, sID quickfix.S
 	if err != nil {
 		return err
 	}
+	// validate depth
+	if depth < 0 {
+		return rejectError(fmt.Sprintf("invalid market depth for market data request: %d", depth))
+	}
 
 	var precision rest.BookPrecision
 	fixPrecision, err := msg.GetString(PricePrecision)
@@ -129,7 +133,7 @@ func (f *FIX) OnFIX42MarketDataRequest(msg mdr.MarketDataRequest, sID quickfix.S
 		var ok bool
 		precision, ok = validatePrecision(fixPrecision)
 		if !ok {
-			return makeReject(fmt.Sprintf("invalid precision for market data request: %s", fixPrecision))
+			return rejectError(fmt.Sprintf("invalid precision for market data request: %s", fixPrecision))
 		}
 	}
 
@@ -139,7 +143,6 @@ func (f *FIX) OnFIX42MarketDataRequest(msg mdr.MarketDataRequest, sID quickfix.S
 		if err != nil {
 			return err
 		}
-		p.StoreMDReqID(symbol, mdReqID)
 
 		// XXX: The following could most likely be abtracted to work both for 4.2 and 4.4.
 		switch subType {
@@ -151,6 +154,7 @@ func (f *FIX) OnFIX42MarketDataRequest(msg mdr.MarketDataRequest, sID quickfix.S
 			quickfix.SendToTarget(rej, sID)
 
 		case enum.SubscriptionRequestType_SNAPSHOT:
+			p.MapSymbolToReqID(symbol, mdReqID)
 			snapshot, err := p.Rest.Book.All(symbol, precision, depth)
 			if err != nil {
 				return reject(err)
@@ -159,14 +163,21 @@ func (f *FIX) OnFIX42MarketDataRequest(msg mdr.MarketDataRequest, sID quickfix.S
 			quickfix.SendToTarget(fix, sID)
 
 		case enum.SubscriptionRequestType_SNAPSHOT_PLUS_UPDATES:
-			// TODO manage subscription
-			// TODO price levels
-			p.Ws.SubscribeBook(context.Background(), symbol, websocket.PrecisionRawBook, websocket.FrequencyRealtime, 25)
+			p.MapSymbolToReqID(symbol, mdReqID)
+			apiReqID, err := p.Ws.SubscribeBook(context.Background(), symbol, websocket.PrecisionRawBook, websocket.FrequencyRealtime, depth)
+			if err != nil {
+				return reject(err)
+			}
+			f.logger.Info("mapping FIX->API request ID", zap.String("MDReqID", mdReqID), zap.String("APIReqID", apiReqID))
+			p.MapMDReqID(mdReqID, apiReqID)
 
 		case enum.SubscriptionRequestType_DISABLE_PREVIOUS_SNAPSHOT_PLUS_UPDATE_REQUEST:
-			// TODO unsubscribe
+			if reqID, ok := p.LookupAPIReqID(mdReqID); ok {
+				f.logger.Info("unsubscribe from API", zap.String("MDReqID", mdReqID), zap.String("APIReqID", reqID))
+				p.Ws.Unsubscribe(context.Background(), reqID)
+			}
+			return rejectError(fmt.Sprintf("could not find subscription with ID \"%s\"", mdReqID))
 		}
-
 	}
 
 	return nil

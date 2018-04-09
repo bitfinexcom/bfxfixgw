@@ -59,11 +59,11 @@ It was also proposed to have a configuration file containing a batch of X sessio
 that will manually associated to a user on bitfinex's backend side, so websocket
 authentication message will just be `{ "event": "auth", "token": SEND_COMP_ID}`. 
 
-## Order State Details
+# Order State Details
 
 When receiving a Bitfinex Order update object (on, ou, oc), the following tables demonstrate rules for mapping tag 39 OrdStatuses.
 
-### Bitfinex order update status mappings
+## Bitfinex order update status mappings
 
 | BFX Order State 	| FIX OrdStatus Code 	| Order Status 		|
 |-------------------|-----------------------|-------------------|
@@ -85,7 +85,7 @@ Executions are received as `te` TradeExecution messages and `tu` TradeUpdate mes
 - When receiving order state updates (rejection, fill, cancel acknowledgement), the cache must be referenced to provide FIX-required details
 - When receiving a TradeUpdate, if cached details indicate the incoming TradeUpdate would fully fill the order, the gateway will publish an ExecutionReport with an OrdStatus of FILLED.
 
-### Synthetic order state message mappings
+## Synthetic order state message mappings
 
 `on-req` generally maps to PENDING NEW, with an exception for market orders, which do not receive subsequent `on` ack working messages.
 
@@ -97,6 +97,18 @@ Executions are received as `te` TradeExecution messages and `tu` TradeUpdate mes
 | EXCHANGE LIMIT	| oc					| 4						| CANCELED			| |
 | EXCHANGE LIMIT	| ou					| Depends on status		| Depends on status	| |
 
-## Issues
+# Troubleshooting
+
+Below are a few common issues with simple procedures to resolve runtime problems.
+
+## FIX client won't log on
+
+If the session has been rolled over or restarted, a FIX initiator may have a higher sequence number than its acceptor, which is an error condition.  Simply reset the FIX initiator's sequence number (deleting the sequence store file in QuickFIX works) and the initiator should no longer disconnect on logon.
+
+## FIX logs on but does not process requests
+
+Ensure the correct endpoint is configured for use. (i.e. MarketDataRequests should be sent to the FIX Market Data endpoint, and NewOrderSingle messages should be sent to the order routing endpoint).
+
+# Issues
 
 - Cached state details are lost on restart (must fetch account order & execution state on startup)

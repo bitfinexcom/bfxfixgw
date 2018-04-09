@@ -155,26 +155,38 @@ func (f *FIX) OnFIX42MarketDataRequest(msg mdr.MarketDataRequest, sID quickfix.S
 
 		case enum.SubscriptionRequestType_SNAPSHOT:
 			p.MapSymbolToReqID(symbol, mdReqID)
-			snapshot, err := p.Rest.Book.All(symbol, precision, depth)
+			bookSnapshot, err := p.Rest.Book.All(symbol, precision, depth)
 			if err != nil {
 				return reject(err)
 			}
-			fix := convert.FIX42MarketDataFullRefreshFromBookSnapshot(mdReqID, snapshot)
+			fix := convert.FIX42MarketDataFullRefreshFromBookSnapshot(mdReqID, bookSnapshot)
+			quickfix.SendToTarget(fix, sID)
+			tradeSnapshot, err := p.Rest.Trades.All(symbol)
+			if err != nil {
+				return reject(err)
+			}
+			fix = convert.FIX42MarketDataFullRefreshFromTradeSnapshot(mdReqID, tradeSnapshot)
 			quickfix.SendToTarget(fix, sID)
 
 		case enum.SubscriptionRequestType_SNAPSHOT_PLUS_UPDATES:
 			p.MapSymbolToReqID(symbol, mdReqID)
-			apiReqID, err := p.Ws.SubscribeBook(context.Background(), symbol, websocket.PrecisionRawBook, websocket.FrequencyRealtime, depth)
+			bookReqID, err := p.Ws.SubscribeBook(context.Background(), symbol, websocket.PrecisionRawBook, websocket.FrequencyRealtime, depth)
 			if err != nil {
 				return reject(err)
 			}
-			f.logger.Info("mapping FIX->API request ID", zap.String("MDReqID", mdReqID), zap.String("APIReqID", apiReqID))
-			p.MapMDReqID(mdReqID, apiReqID)
+			tradeReqID, err := p.Ws.SubscribeTrades(context.Background(), symbol)
+			if err != nil {
+				p.Ws.Unsubscribe(context.Background(), bookReqID) // remove book subscription
+				return reject(err)
+			}
+			f.logger.Info("mapping FIX->API request ID", zap.String("MDReqID", mdReqID), zap.String("BookReqID", bookReqID), zap.String("TradeReqID", tradeReqID))
+			p.MapMDReqIDs(mdReqID, bookReqID, tradeReqID)
 
 		case enum.SubscriptionRequestType_DISABLE_PREVIOUS_SNAPSHOT_PLUS_UPDATE_REQUEST:
-			if reqID, ok := p.LookupAPIReqID(mdReqID); ok {
-				f.logger.Info("unsubscribe from API", zap.String("MDReqID", mdReqID), zap.String("APIReqID", reqID))
-				p.Ws.Unsubscribe(context.Background(), reqID)
+			if bookReqID, tradeReqID, ok := p.LookupAPIReqIDs(mdReqID); ok {
+				f.logger.Info("unsubscribe from API", zap.String("MDReqID", mdReqID), zap.String("BookReqID", bookReqID), zap.String("TradeReqID", tradeReqID))
+				p.Ws.Unsubscribe(context.Background(), bookReqID)
+				p.Ws.Unsubscribe(context.Background(), tradeReqID)
 			}
 			return rejectError(fmt.Sprintf("could not find subscription with ID \"%s\"", mdReqID))
 		}

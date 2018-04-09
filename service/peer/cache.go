@@ -90,10 +90,15 @@ func (o *CachedOrder) Stats() (string, float64, float64, float64) {
 	return o.ClOrdID, o.Qty, o.filledQty(), o.avgFillPx()
 }
 
+type ids struct {
+	marketDataID string
+	tradeID      string
+}
+
 type cache struct {
 	orders        map[string]*CachedOrder
 	cancels       map[string]*CachedCancel
-	mdReqIDs      map[string]string // FIX req ID -> Websocket req ID
+	mdReqIDs      map[string]ids    // FIX req ID -> Websocket req IDs
 	symbolToReqID map[string]string // symbol -> FIX req ID, for looking up FIX req IDs
 	lock          sync.Mutex
 	log           *zap.Logger
@@ -104,7 +109,7 @@ func newCache(log *zap.Logger) *cache {
 		orders:        make(map[string]*CachedOrder),
 		cancels:       make(map[string]*CachedCancel),
 		log:           log,
-		mdReqIDs:      make(map[string]string),
+		mdReqIDs:      make(map[string]ids),
 		symbolToReqID: make(map[string]string),
 	}
 }
@@ -122,17 +127,20 @@ func (c *cache) LookupMDReqID(symbol string) (string, bool) {
 	return id, ok
 }
 
-func (c *cache) MapMDReqID(fixReqID, apiReqID string) {
+func (c *cache) MapMDReqIDs(fixReqID, bookReqID, tradeReqID string) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
-	c.mdReqIDs[fixReqID] = apiReqID
+	c.mdReqIDs[fixReqID] = ids{marketDataID: bookReqID, tradeID: tradeReqID}
 }
 
-func (c *cache) LookupAPIReqID(fixReqID string) (string, bool) {
+func (c *cache) LookupAPIReqIDs(fixReqID string) (string, string, bool) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
-	id, ok := c.mdReqIDs[fixReqID]
-	return id, ok
+	ids, ok := c.mdReqIDs[fixReqID]
+	if !ok {
+		return "", "", false
+	}
+	return ids.marketDataID, ids.tradeID, true
 }
 
 // add when receiving a NewOrderSingle over FIX

@@ -21,6 +21,30 @@ import (
 	//fix42nos "github.com/quickfixgo/quickfix/fix42/newordersingle"
 )
 
+func FIX42MarketDataFullRefreshFromTradeSnapshot(mdReqID string, snapshot *bitfinex.TradeSnapshot) *fix42mdsfr.MarketDataSnapshotFullRefresh {
+	if len(snapshot.Snapshot) <= 0 {
+		return nil
+	}
+	first := snapshot.Snapshot[0]
+	message := fix42mdsfr.New(field.NewSymbol(defixifySymbol(first.Pair)))
+	message.SetMDReqID(mdReqID)
+	// TODO securityID?
+	// TODO securityIDSource?
+	group := fix42mdsfr.NewNoMDEntriesRepeatingGroup()
+	for _, update := range snapshot.Snapshot {
+		entry := group.Add()
+		entry.SetMDEntryType(enum.MDEntryType_TRADE)
+		entry.SetMDEntryPx(decimal.NewFromFloat(update.Price), 4)
+		amt := update.Amount
+		if amt < 0 {
+			amt = -amt
+		}
+		entry.SetMDEntrySize(decimal.NewFromFloat(amt), 4)
+	}
+	message.SetNoMDEntries(group)
+	return &message
+}
+
 func FIX42MarketDataFullRefreshFromBookSnapshot(mdReqID string, snapshot *bitfinex.BookUpdateSnapshot) *fix42mdsfr.MarketDataSnapshotFullRefresh {
 	if len(snapshot.Snapshot) <= 0 {
 		return nil
@@ -42,8 +66,31 @@ func FIX42MarketDataFullRefreshFromBookSnapshot(mdReqID string, snapshot *bitfin
 		}
 		entry.SetMDEntryType(t)
 		entry.SetMDEntryPx(decimal.NewFromFloat(update.Price), 4)
-		entry.SetMDEntrySize(decimal.NewFromFloat(update.Amount), 4)
+		amt := update.Amount
+		if amt < 0 {
+			amt = -amt
+		}
+		entry.SetMDEntrySize(decimal.NewFromFloat(amt), 4)
 	}
+	message.SetNoMDEntries(group)
+	return &message
+}
+
+func FIX42MarketDataIncrementalRefreshFromTrade(mdReqID string, trade *bitfinex.Trade) *fix42mdir.MarketDataIncrementalRefresh {
+	message := fix42mdir.New()
+	message.SetMDReqID(mdReqID)
+	// TODO securityID?
+	// TODO securityIDSource?
+	// TODO symbol?
+	group := fix42mdir.NewNoMDEntriesRepeatingGroup()
+	entry := group.Add()
+	entry.SetMDEntryType(enum.MDEntryType_TRADE)
+	entry.SetMDEntryPx(decimal.NewFromFloat(trade.Price), 4)
+	amt := trade.Amount
+	if amt < 0 {
+		amt = -amt
+	}
+	entry.SetMDEntrySize(decimal.NewFromFloat(amt), 4)
 	message.SetNoMDEntries(group)
 	return &message
 }
@@ -65,7 +112,11 @@ func FIX42MarketDataIncrementalRefreshFromBookUpdate(mdReqID string, update *bit
 	}
 	entry.SetMDEntryType(t)
 	entry.SetMDEntryPx(decimal.NewFromFloat(update.Price), 4)
-	entry.SetMDEntrySize(decimal.NewFromFloat(update.Amount), 4)
+	amt := update.Amount
+	if amt < 0 {
+		amt = -amt
+	}
+	entry.SetMDEntrySize(decimal.NewFromFloat(amt), 4)
 	message.SetNoMDEntries(group)
 	return &message
 }

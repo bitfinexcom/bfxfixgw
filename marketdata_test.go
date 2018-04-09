@@ -110,7 +110,7 @@ func TestMarketData(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if `{"subId":"nonce2","event":"subscribe","channel":"trades","symbol":"tBTCUSD"}` != msg {
+	if `{"subId":"nonce3","event":"subscribe","channel":"trades","symbol":"tBTCUSD"}` != msg {
 		t.Fatalf("msg was not as expected, got: %s", msg)
 	}
 

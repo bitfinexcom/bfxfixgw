@@ -41,6 +41,39 @@ func (w *Websocket) FIX42HandleAuth(auth *websocket.AuthEvent, sID quickfix.Sess
 	}
 }
 
+// public trades
+func (w *Websocket) FIX42TradeHandler(t *bitfinex.Trade, sID quickfix.SessionID) {
+	p, ok := w.FindPeer(sID.String())
+	if !ok {
+		w.logger.Warn("could not find peer for SessionID", zap.String("SessionID", sID.String()))
+		return
+	}
+	if reqID, ok := p.LookupMDReqID(t.Pair); ok {
+		fix := convert.FIX42MarketDataIncrementalRefreshFromTrade(reqID, t)
+		quickfix.SendToTarget(fix, sID)
+	} else {
+		w.logger.Warn("could not find MDReqID for BFX trade", zap.String("Pair", t.Pair))
+	}
+}
+
+func (w *Websocket) FIX42TradeSnapshotHandler(s *bitfinex.TradeSnapshot, sID quickfix.SessionID) {
+	p, ok := w.FindPeer(sID.String())
+	if !ok {
+		w.logger.Warn("could not find peer for SessionID", zap.String("SessionID", sID.String()))
+		return
+	}
+	if len(s.Snapshot) > 0 {
+		t := s.Snapshot[0]
+		if reqID, ok := p.LookupMDReqID(t.Pair); ok {
+			fix := convert.FIX42MarketDataFullRefreshFromTradeSnapshot(reqID, s)
+			quickfix.SendToTarget(fix, sID)
+		} else {
+			w.logger.Warn("could not find MDReqID for BFX trade", zap.String("Pair", t.Pair))
+			return
+		}
+	} // else no-op
+}
+
 func (w *Websocket) FIX42TradeExecutionUpdateHandler(t *bitfinex.TradeExecutionUpdate, sID quickfix.SessionID) {
 	p, ok := w.FindPeer(sID.String())
 	if !ok {

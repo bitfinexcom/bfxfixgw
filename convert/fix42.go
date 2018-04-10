@@ -3,8 +3,6 @@
 package convert
 
 import (
-	//"errors"
-	lg "log"
 	"strconv"
 
 	"github.com/bitfinexcom/bitfinex-api-go/v2"
@@ -28,8 +26,10 @@ func FIX42MarketDataFullRefreshFromTradeSnapshot(mdReqID string, snapshot *bitfi
 	first := snapshot.Snapshot[0]
 	message := fix42mdsfr.New(field.NewSymbol(defixifySymbol(first.Pair)))
 	message.SetMDReqID(mdReqID)
-	// TODO securityID?
-	// TODO securityIDSource?
+	message.SetSymbol(first.Pair)
+	message.SetSecurityID(first.Pair)
+	message.SetIDSource(enum.IDSource_EXCHANGE_SYMBOL)
+	// MDStreamID?
 	group := fix42mdsfr.NewNoMDEntriesRepeatingGroup()
 	for _, update := range snapshot.Snapshot {
 		entry := group.Add()
@@ -52,8 +52,10 @@ func FIX42MarketDataFullRefreshFromBookSnapshot(mdReqID string, snapshot *bitfin
 	first := snapshot.Snapshot[0]
 	message := fix42mdsfr.New(field.NewSymbol(defixifySymbol(first.Symbol)))
 	message.SetMDReqID(mdReqID)
-	// TODO securityID?
-	// TODO securityIDSource?
+	message.SetSymbol(first.Symbol)
+	message.SetSecurityID(first.Symbol)
+	message.SetIDSource(enum.IDSource_EXCHANGE_SYMBOL)
+	// MDStreamID?
 	group := fix42mdsfr.NewNoMDEntriesRepeatingGroup()
 	for _, update := range snapshot.Snapshot {
 		entry := group.Add()
@@ -79,18 +81,20 @@ func FIX42MarketDataFullRefreshFromBookSnapshot(mdReqID string, snapshot *bitfin
 func FIX42MarketDataIncrementalRefreshFromTrade(mdReqID string, trade *bitfinex.Trade) *fix42mdir.MarketDataIncrementalRefresh {
 	message := fix42mdir.New()
 	message.SetMDReqID(mdReqID)
-	// TODO securityID?
-	// TODO securityIDSource?
-	// TODO symbol?
+	// MDStreamID?
 	group := fix42mdir.NewNoMDEntriesRepeatingGroup()
 	entry := group.Add()
 	entry.SetMDEntryType(enum.MDEntryType_TRADE)
+	entry.SetMDUpdateAction(enum.MDUpdateAction_NEW)
 	entry.SetMDEntryPx(decimal.NewFromFloat(trade.Price), 4)
+	entry.SetSecurityID(trade.Pair)
+	entry.SetIDSource(enum.IDSource_EXCHANGE_SYMBOL)
 	amt := trade.Amount
 	if amt < 0 {
 		amt = -amt
 	}
 	entry.SetMDEntrySize(decimal.NewFromFloat(amt), 4)
+	entry.SetSymbol(trade.Pair)
 	message.SetNoMDEntries(group)
 	return &message
 }
@@ -98,9 +102,7 @@ func FIX42MarketDataIncrementalRefreshFromTrade(mdReqID string, trade *bitfinex.
 func FIX42MarketDataIncrementalRefreshFromBookUpdate(mdReqID string, update *bitfinex.BookUpdate) *fix42mdir.MarketDataIncrementalRefresh {
 	message := fix42mdir.New()
 	message.SetMDReqID(mdReqID)
-	// TODO securityID?
-	// TODO securityIDSource?
-	// TODO symbol?
+	// MDStreamID?
 	group := fix42mdir.NewNoMDEntriesRepeatingGroup()
 	entry := group.Add()
 	var t enum.MDEntryType
@@ -111,12 +113,16 @@ func FIX42MarketDataIncrementalRefreshFromBookUpdate(mdReqID string, update *bit
 		t = enum.MDEntryType_OFFER
 	}
 	entry.SetMDEntryType(t)
+	entry.SetMDUpdateAction(enum.MDUpdateAction_NEW)
 	entry.SetMDEntryPx(decimal.NewFromFloat(update.Price), 4)
+	entry.SetSecurityID(update.Symbol)
+	entry.SetIDSource(enum.IDSource_EXCHANGE_SYMBOL)
 	amt := update.Amount
 	if amt < 0 {
 		amt = -amt
 	}
 	entry.SetMDEntrySize(decimal.NewFromFloat(amt), 4)
+	entry.SetSymbol(update.Symbol)
 	message.SetNoMDEntries(group)
 	return &message
 }
@@ -175,8 +181,7 @@ func FIX42ExecutionReport(symbol, clOrdID, orderID, account string, execType enu
 // used for oc-req notifications where only a cancel's CID is provided
 func FIX42ExecutionReportFromCancelWithDetails(c *bitfinex.OrderCancel, account string, execType enum.ExecType, cumQty float64, ordStatus enum.OrdStatus, ordType enum.OrdType, text, symbol, clOrdID, orderID string, side enum.Side, qty, avgPx float64) fix42er.ExecutionReport {
 	e := FIX42ExecutionReport(symbol, clOrdID, orderID, account, execType, side, qty, 0.0, cumQty, avgPx, ordStatus, ordType, text)
-	// TODO add clordid
-	// TODO cxl details?
+	// additional cxl details?
 	return e
 }
 
@@ -203,9 +208,7 @@ func FIX42ExecutionReportFromOrder(o *bitfinex.Order, account string, execType e
 }
 
 func FIX42ExecutionReportFromTradeExecutionUpdate(t *bitfinex.TradeExecutionUpdate, account, clOrdID string, origQty, totalFillQty, avgFillPx float64) fix42er.ExecutionReport {
-	lg.Printf("trade: %#v", t)
 	orderID := strconv.FormatInt(t.OrderID, 10)
-	//execID := strconv.FormatInt(t.ID, 10)
 	var execType enum.ExecType
 	var ordStatus enum.OrdStatus
 	if totalFillQty >= origQty {

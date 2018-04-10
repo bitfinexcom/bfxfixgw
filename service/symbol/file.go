@@ -61,8 +61,8 @@ func (f *FileSymbology) ToBitfinex(symbol, counterparty string) (string, error) 
 		return "", fmt.Errorf("could not find counterparty: %s", counterparty)
 	}
 	for bfx, cp := range symset {
-		if bfx == symbol {
-			return cp, nil
+		if cp == symbol {
+			return bfx, nil
 		}
 	}
 	return "", fmt.Errorf("could not find Bitfinex symbol mapping \"%s\" for counterparty \"%s\"", symbol, counterparty)

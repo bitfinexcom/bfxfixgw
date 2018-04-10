@@ -1,0 +1,7 @@
+[CounterpartyA]
+tBTCUSD=XBT
+tETHUSD=XTH
+
+[CounterpartyB]
+tBTCUSD=BTC
+tETHUSD=ETH

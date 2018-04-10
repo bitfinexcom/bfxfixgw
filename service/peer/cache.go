@@ -90,36 +90,57 @@ func (o *CachedOrder) Stats() (string, float64, float64, float64) {
 	return o.ClOrdID, o.Qty, o.filledQty(), o.avgFillPx()
 }
 
+type ids struct {
+	marketDataID string
+	tradeID      string
+}
+
 type cache struct {
-	orders   map[string]*CachedOrder
-	cancels  map[string]*CachedCancel
-	mdReqIDs map[string]string // symbol -> req ID
-	lock     sync.Mutex
-	log      *zap.Logger
+	orders        map[string]*CachedOrder
+	cancels       map[string]*CachedCancel
+	mdReqIDs      map[string]ids    // FIX req ID -> Websocket req IDs
+	symbolToReqID map[string]string // symbol -> FIX req ID, for looking up FIX req IDs
+	lock          sync.Mutex
+	log           *zap.Logger
 }
 
 func newCache(log *zap.Logger) *cache {
 	return &cache{
-		orders:   make(map[string]*CachedOrder),
-		cancels:  make(map[string]*CachedCancel),
-		log:      log,
-		mdReqIDs: make(map[string]string),
+		orders:        make(map[string]*CachedOrder),
+		cancels:       make(map[string]*CachedCancel),
+		log:           log,
+		mdReqIDs:      make(map[string]ids),
+		symbolToReqID: make(map[string]string),
 	}
 }
 
-func (c *cache) StoreMDReqID(symbol, mdReqID string) {
+func (c *cache) MapSymbolToReqID(symbol, mdReqID string) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
-	c.mdReqIDs[symbol] = mdReqID
+	c.symbolToReqID[symbol] = mdReqID
 }
 
-func (c *cache) LookupMDReqID(symbol string) string {
+func (c *cache) LookupMDReqID(symbol string) (string, bool) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
-	if mdReqID, ok := c.mdReqIDs[symbol]; ok {
-		return mdReqID
+	id, ok := c.symbolToReqID[symbol]
+	return id, ok
+}
+
+func (c *cache) MapMDReqIDs(fixReqID, bookReqID, tradeReqID string) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	c.mdReqIDs[fixReqID] = ids{marketDataID: bookReqID, tradeID: tradeReqID}
+}
+
+func (c *cache) LookupAPIReqIDs(fixReqID string) (string, string, bool) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	ids, ok := c.mdReqIDs[fixReqID]
+	if !ok {
+		return "", "", false
 	}
-	return ""
+	return ids.marketDataID, ids.tradeID, true
 }
 
 // add when receiving a NewOrderSingle over FIX

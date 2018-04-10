@@ -152,6 +152,10 @@ func (s *Service) listen() {
 			// ignore trade executions in favor of trade execution updates (more data)
 		case *bitfinex.TradeExecutionUpdate:
 			s.Websocket.FIX42TradeExecutionUpdateHandler(obj, msg.FIXSessionID())
+		case *bitfinex.Trade: // public trade
+			s.Websocket.FIX42TradeHandler(obj, msg.FIXSessionID())
+		case *bitfinex.TradeSnapshot:
+			s.Websocket.FIX42TradeSnapshotHandler(obj, msg.FIXSessionID())
 		case error:
 			s.log.Error("processing error", zap.Any("msg", obj))
 		default:

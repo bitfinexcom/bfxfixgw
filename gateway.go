@@ -24,6 +24,8 @@ import (
 var (
 	mdcfg  = flag.String("mdcfg", "demo_fix_marketdata.cfg", "Market data FIX configuration file name")
 	ordcfg = flag.String("ordcfg", "demo_fix_orders.cfg", "Order flow FIX configuration file name")
+	orders = flag.Bool("orders", false, "enable order routing FIX endpoint")
+	md     = flag.Bool("md", false, "enable market data FIX endpoint")
 	ws     = flag.String("ws", "wss://api.bitfinex.com/ws/2", "v2 Websocket API URL")
 	rst    = flag.String("rest", "https://api.bitfinex.com/v2/", "v2 REST API URL")
 	//flag.StringVar(&logfile, "logfile", "logs/debug.log", "path to the log file")
@@ -54,16 +56,29 @@ type Gateway struct {
 }
 
 func (g *Gateway) Start() error {
-	err := g.MarketData.Start()
-	if err != nil {
-		return err
+	var err error
+	if g.MarketData != nil {
+		err = g.MarketData.Start()
+		if err != nil {
+			return err
+		}
 	}
-	return g.OrderRouting.Start()
+	if g.OrderRouting != nil {
+		err = g.OrderRouting.Start()
+		if err != nil {
+			return err
+		}
+	}
+	return err
 }
 
 func (g *Gateway) Stop() {
-	g.OrderRouting.Stop()
-	g.MarketData.Stop()
+	if g.OrderRouting != nil {
+		g.OrderRouting.Stop()
+	}
+	if g.MarketData != nil {
+		g.MarketData.Stop()
+	}
 }
 
 func New(mdSettings, orderSettings *quickfix.Settings, factory peer.ClientFactory) (*Gateway, error) {
@@ -72,15 +87,19 @@ func New(mdSettings, orderSettings *quickfix.Settings, factory peer.ClientFactor
 		factory: factory,
 	}
 	var err error
-	g.MarketData, err = service.New(factory, mdSettings, fix.MarketDataService)
-	if err != nil {
-		log.Logger.Fatal("create market data FIX", zap.Error(err))
-		return nil, err
+	if mdSettings != nil {
+		g.MarketData, err = service.New(factory, mdSettings, fix.MarketDataService)
+		if err != nil {
+			log.Logger.Fatal("create market data FIX", zap.Error(err))
+			return nil, err
+		}
 	}
-	g.OrderRouting, err = service.New(factory, orderSettings, fix.OrderRoutingService)
-	if err != nil {
-		log.Logger.Fatal("create order routing FIX", zap.Error(err))
-		return nil, err
+	if orderSettings != nil {
+		g.OrderRouting, err = service.New(factory, orderSettings, fix.OrderRoutingService)
+		if err != nil {
+			log.Logger.Fatal("create order routing FIX", zap.Error(err))
+			return nil, err
+		}
 	}
 	return g, nil
 }
@@ -111,22 +130,27 @@ func (d *defaultClientFactory) NewRest() *rest.Client {
 
 func main() {
 	flag.Parse()
-
-	mdf, err := os.Open(path.Join(FIXConfigDirectory, *mdcfg))
-	if err != nil {
-		log.Logger.Fatal("FIX market data config", zap.Error(err))
+	var err error
+	var mds, ords *quickfix.Settings
+	if *md {
+		mdf, err := os.Open(path.Join(FIXConfigDirectory, *mdcfg))
+		if err != nil {
+			log.Logger.Fatal("FIX market data config", zap.Error(err))
+		}
+		mds, err = quickfix.ParseSettings(mdf)
+		if err != nil {
+			log.Logger.Fatal("parse FIX market data settings", zap.Error(err))
+		}
 	}
-	mds, err := quickfix.ParseSettings(mdf)
-	if err != nil {
-		log.Logger.Fatal("parse FIX market data settings", zap.Error(err))
-	}
-	ordf, err := os.Open(path.Join(FIXConfigDirectory, *ordcfg))
-	if err != nil {
-		log.Logger.Fatal("FIX order flow config", zap.Error(err))
-	}
-	ords, err := quickfix.ParseSettings(ordf)
-	if err != nil {
-		log.Logger.Fatal("parse FIX order flow settings", zap.Error(err))
+	if *orders {
+		ordf, err := os.Open(path.Join(FIXConfigDirectory, *ordcfg))
+		if err != nil {
+			log.Logger.Fatal("FIX order flow config", zap.Error(err))
+		}
+		ords, err = quickfix.ParseSettings(ordf)
+		if err != nil {
+			log.Logger.Fatal("parse FIX order flow settings", zap.Error(err))
+		}
 	}
 	params := websocket.NewDefaultParameters()
 	params.URL = *ws

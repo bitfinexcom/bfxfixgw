@@ -67,4 +67,19 @@ func TestFileSymbol(t *testing.T) {
 	if "tETHUSD" != s {
 		t.Fatalf("expected tETHUSD, got %s", s)
 	}
+	// test passthrough
+	s, err = sym.ToBitfinex("ABC", "CounterpartyC")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if "ABC" != s {
+		t.Fatalf("expected ABC, got %s", s)
+	}
+	s, err = sym.FromBitfinex("ABC", "CounterpartyC")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if "ABC" != s {
+		t.Fatalf("expected ABC, got %s", s)
+	}
 }

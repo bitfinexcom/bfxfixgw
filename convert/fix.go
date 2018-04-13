@@ -5,37 +5,40 @@ import (
 	"github.com/quickfixgo/enum"
 	"github.com/quickfixgo/field"
 	"github.com/shopspring/decimal"
+	"strings"
 )
 
 // Generic FIX types.
 
 func OrdStatusToFIX(status bitfinex.OrderStatus) enum.OrdStatus {
-	switch status {
-	default:
-		return enum.OrdStatus_NEW
-	case bitfinex.OrderStatusCanceled:
-		return enum.OrdStatus_CANCELED
-	case bitfinex.OrderStatusPartiallyFilled:
-		return enum.OrdStatus_PARTIALLY_FILLED
-	case bitfinex.OrderStatusExecuted:
+	// if the status is a composite (e.g. EXECUTED @ X: was PARTIALLY FILLED @ Y)
+	if strings.HasPrefix(string(status), string(bitfinex.OrderStatusExecuted)) {
 		return enum.OrdStatus_FILLED
 	}
+	if strings.HasPrefix(string(status), string(bitfinex.OrderStatusPartiallyFilled)) {
+		return enum.OrdStatus_PARTIALLY_FILLED
+	}
+	if strings.HasPrefix(string(status), string(bitfinex.OrderStatusCanceled)) {
+		return enum.OrdStatus_CANCELED
+	}
+	return enum.OrdStatus_NEW
 }
 
 // follows FIX 4.1+ rules on merging ExecTransType + ExecType fields into new ExecType enums.
 func ExecTypeToFIX(status bitfinex.OrderStatus) enum.ExecType {
-	switch status {
-	default:
-		return enum.ExecType_ORDER_STATUS
-	case bitfinex.OrderStatusActive:
+	if strings.HasPrefix(string(status), string(bitfinex.OrderStatusActive)) {
 		return enum.ExecType_NEW
-	case bitfinex.OrderStatusCanceled:
+	}
+	if strings.HasPrefix(string(status), string(bitfinex.OrderStatusCanceled)) {
 		return enum.ExecType_TRADE_CANCEL
-	case bitfinex.OrderStatusPartiallyFilled:
-		return enum.ExecType_TRADE
-	case bitfinex.OrderStatusExecuted:
+	}
+	if strings.HasPrefix(string(status), string(bitfinex.OrderStatusPartiallyFilled)) {
 		return enum.ExecType_TRADE
 	}
+	if strings.HasPrefix(string(status), string(bitfinex.OrderStatusExecuted)) {
+		return enum.ExecType_TRADE
+	}
+	return enum.ExecType_ORDER_STATUS
 }
 
 func SideToFIX(amount float64) enum.Side {

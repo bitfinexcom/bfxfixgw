@@ -159,13 +159,13 @@ func (f *FIX) OnFIX42MarketDataRequest(msg mdr.MarketDataRequest, sID quickfix.S
 			if err != nil {
 				return reject(err)
 			}
-			fix := convert.FIX42MarketDataFullRefreshFromBookSnapshot(mdReqID, bookSnapshot)
+			fix := convert.FIX42MarketDataFullRefreshFromBookSnapshot(mdReqID, bookSnapshot, f.Symbology, sID.SenderCompID)
 			quickfix.SendToTarget(fix, sID)
 			tradeSnapshot, err := p.Rest.Trades.All(symbol)
 			if err != nil {
 				return reject(err)
 			}
-			fix = convert.FIX42MarketDataFullRefreshFromTradeSnapshot(mdReqID, tradeSnapshot)
+			fix = convert.FIX42MarketDataFullRefreshFromTradeSnapshot(mdReqID, tradeSnapshot, f.Symbology, sID.SenderCompID)
 			quickfix.SendToTarget(fix, sID)
 
 		case enum.SubscriptionRequestType_SNAPSHOT_PLUS_UPDATES:
@@ -293,7 +293,7 @@ func (f *FIX) OnFIX42OrderStatusRequest(msg osr.OrderStatusRequest, sID quickfix
 		cached = peer.AddOrder(clOrdID, order.Price, order.Amount, order.Symbol, peer.BfxUserID(), convert.SideToFIX(order.Amount), convert.OrdTypeToFIX(order.Type))
 	}
 	status := convert.OrdStatusToFIX(order.Status)
-	er := convert.FIX42ExecutionReportFromOrder(order, peer.BfxUserID(), enum.ExecType_ORDER_STATUS, cached.FilledQty(), status, "")
+	er := convert.FIX42ExecutionReportFromOrder(order, peer.BfxUserID(), enum.ExecType_ORDER_STATUS, cached.FilledQty(), status, "", f.Symbology, sID.SenderCompID)
 	quickfix.SendToTarget(er, sID)
 
 	return nil

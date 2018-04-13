@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/bitfinexcom/bfxfixgw/integration_test/mock"
 	"github.com/bitfinexcom/bfxfixgw/service/fix"
+	"github.com/bitfinexcom/bfxfixgw/service/symbol"
 	"github.com/bitfinexcom/bitfinex-api-go/utils"
 	"github.com/quickfixgo/quickfix"
 	"log"
@@ -120,7 +121,7 @@ func setupWithClientCheck(t *testing.T, port int, settings mockFixSettings, chec
 	// create gateway
 	gatewayMdSettings := loadSettings(fmt.Sprintf("conf/integration_test/service/marketdata_%s.cfg", settings.FixVersion))
 	gatewayOrdSettings := loadSettings(fmt.Sprintf("conf/integration_test/service/orders_%s.cfg", settings.FixVersion))
-	gateway, err := New(gatewayMdSettings, gatewayOrdSettings, &factory)
+	gateway, err := New(gatewayMdSettings, gatewayOrdSettings, &factory, symbol.NewPassthroughSymbology())
 	if err != nil {
 		t.Fatal(err)
 	}

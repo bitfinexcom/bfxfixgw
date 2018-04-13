@@ -5,6 +5,7 @@ import (
 	lg "github.com/bitfinexcom/bfxfixgw/log"
 	"github.com/bitfinexcom/bfxfixgw/service/fix"
 	"github.com/bitfinexcom/bfxfixgw/service/peer"
+	"github.com/bitfinexcom/bfxfixgw/service/symbol"
 	"github.com/bitfinexcom/bfxfixgw/service/websocket"
 	"github.com/bitfinexcom/bitfinex-api-go/v2"
 	wsv2 "github.com/bitfinexcom/bitfinex-api-go/v2/websocket"
@@ -26,15 +27,15 @@ type Service struct {
 	inbound chan *peer.Message
 }
 
-func New(factory peer.ClientFactory, settings *quickfix.Settings, srvType fix.FIXServiceType) (*Service, error) {
+func New(factory peer.ClientFactory, settings *quickfix.Settings, srvType fix.FIXServiceType, symbology symbol.Symbology) (*Service, error) {
 	service := &Service{factory: factory, log: lg.Logger, peers: make(map[string]*peer.Peer), inbound: make(chan *peer.Message)}
 	var err error
-	service.FIX, err = fix.New(settings, service, srvType)
+	service.FIX, err = fix.New(settings, service, srvType, symbology)
 	if err != nil {
 		lg.Logger.Fatal("create FIX", zap.Error(err))
 		return nil, err
 	}
-	service.Websocket = websocket.New(service)
+	service.Websocket = websocket.New(service, symbology)
 	return service, nil
 }
 

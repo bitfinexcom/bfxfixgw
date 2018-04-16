@@ -205,17 +205,13 @@ func (w *Websocket) FIX42NotificationHandler(d *bitfinex.Notification, sID quick
 }
 
 func (w *Websocket) FIX42OrderSnapshotHandler(os *bitfinex.OrderSnapshot, sID quickfix.SessionID) {
-	_, ok := w.FindPeer(sID.String())
-	if !ok {
-		w.logger.Warn("could not find peer for SessionID", zap.String("SessionID", sID.String()))
-		return
-	}
-	/*
-		TODO
-		for _, o := range os.Snapshot {
-			quickfix.SendToTarget(convert.FIX42ExecutionReportFromOrder(o, p.BfxUserID(), enum.ExecType_ORDER_STATUS), sID)
+	peer, ok := w.FindPeer(sID.String())
+	if ok {
+		for _, order := range os.Snapshot {
+			cache := peer.AddOrder(strconv.FormatInt(order.CID, 10), order.Price, order.Amount, order.Symbol, peer.BfxUserID(), convert.SideToFIX(order.Amount), convert.OrdTypeToFIX(order.Type))
+			cache.OrderID = strconv.FormatInt(order.ID, 10)
 		}
-	*/
+	}
 	return
 }
 

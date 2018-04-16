@@ -30,7 +30,7 @@ func ExecTypeToFIX(status bitfinex.OrderStatus) enum.ExecType {
 		return enum.ExecType_NEW
 	}
 	if strings.HasPrefix(string(status), string(bitfinex.OrderStatusCanceled)) {
-		return enum.ExecType_TRADE_CANCEL
+		return enum.ExecType_CANCELED
 	}
 	if strings.HasPrefix(string(status), string(bitfinex.OrderStatusPartiallyFilled)) {
 		return enum.ExecType_TRADE

@@ -172,7 +172,6 @@ func (w *Websocket) FIX42NotificationHandler(d *bitfinex.Notification, sID quick
 		}
 		return
 	case *bitfinex.OrderNew:
-
 		order := bitfinex.Order(*o)
 		var ordStatus enum.OrdStatus
 		var execType enum.ExecType
@@ -191,15 +190,11 @@ func (w *Websocket) FIX42NotificationHandler(d *bitfinex.Notification, sID quick
 				cache := p.AddOrder(clOrdID, order.Price, order.Amount, order.Symbol, p.BfxUserID(), convert.SideToFIX(order.Amount), convert.OrdTypeToFIX(order.Type))
 				cache.OrderID = orderID
 			}
-			ordStatus = enum.OrdStatus_PENDING_NEW
-			execType = enum.ExecType_PENDING_NEW
+			ordStatus = enum.OrdStatus_NEW
+			execType = enum.ExecType_NEW
 		}
 		quickfix.SendToTarget(convert.FIX42ExecutionReportFromOrder(&order, p.BfxUserID(), execType, 0, ordStatus, text, w.Symbology, sID.SenderCompID), sID)
 		// market order ack
-		if (o.Type == bitfinex.OrderTypeMarket || o.Type == bitfinex.OrderTypeExchangeMarket) && (o.Status == "SUCCESS" || o.Status == "") {
-			// synthetically publish a followup NEW
-			quickfix.SendToTarget(convert.FIX42ExecutionReportFromOrder(&order, p.BfxUserID(), enum.ExecType_NEW, 0, enum.OrdStatus_NEW, text, w.Symbology, sID.SenderCompID), sID)
-		}
 
 		return
 		// TODO other types
@@ -226,14 +221,11 @@ func (w *Websocket) FIX42OrderSnapshotHandler(os *bitfinex.OrderSnapshot, sID qu
 
 // for working orders after notification 'ack'
 func (w *Websocket) FIX42OrderNewHandler(o *bitfinex.OrderNew, sID quickfix.SessionID) {
-	p, ok := w.FindPeer(sID.String())
-	if !ok {
-		w.logger.Warn("could not find peer for SessionID", zap.String("SessionID", sID.String()))
-		return
-	}
-	ord := bitfinex.Order(*o)
-	quickfix.SendToTarget(convert.FIX42ExecutionReportFromOrder(&ord, p.BfxUserID(), enum.ExecType_NEW, 0.0, enum.OrdStatus_NEW, "", w.Symbology, sID.SenderCompID), sID)
-	return
+	// order new notification is sent prior to this message and is translated into a NEW ER.
+	// this message is received is a limit order is resting on the book after submission,
+	// but the corresponding execution report has already been sent (server did not reject)
+
+	// no-op.
 }
 
 // for working orders after notification 'ack'
@@ -268,6 +260,9 @@ func (w *Websocket) FIX42OrderCancelHandler(o *bitfinex.OrderCancel, sID quickfi
 	// oc is simply a terminal state for an order, may be a full fill here
 	execType := convert.ExecTypeToFIX(ord.Status)
 	ordStatus := convert.OrdStatusToFIX(ord.Status)
+	if ordStatus == enum.OrdStatus_FILLED || ordStatus == enum.OrdStatus_PARTIALLY_FILLED {
+		return // do not publish duplicate execution report--tu/te will have more information (fees, etc.) for this event
+	}
 	quickfix.SendToTarget(convert.FIX42ExecutionReportFromOrder(&ord, p.BfxUserID(), execType, cached.FilledQty(), ordStatus, string(ord.Status), w.Symbology, sID.SenderCompID), sID)
 	return
 }

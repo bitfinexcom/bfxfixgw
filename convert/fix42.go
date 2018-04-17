@@ -221,7 +221,7 @@ func FIX42ExecutionReportFromOrder(o *bitfinex.Order, account string, execType e
 	return e
 }
 
-func FIX42ExecutionReportFromTradeExecutionUpdate(t *bitfinex.TradeExecutionUpdate, account, clOrdID string, origQty, totalFillQty, avgFillPx float64, symbology symbol.Symbology, counterparty string) fix42er.ExecutionReport {
+func FIX42ExecutionReportFromTradeExecutionUpdate(t *bitfinex.TradeExecutionUpdate, account, clOrdID string, origQty, totalFillQty, origPx, avgFillPx float64, symbology symbol.Symbology, counterparty string) fix42er.ExecutionReport {
 	orderID := strconv.FormatInt(t.OrderID, 10)
 	var execType enum.ExecType
 	var ordStatus enum.OrdStatus
@@ -245,6 +245,9 @@ func FIX42ExecutionReportFromTradeExecutionUpdate(t *bitfinex.TradeExecutionUpda
 	er.SetCommission(fee, 4)
 	er.SetCommType(enum.CommType_ABSOLUTE)
 	er.SetLastPx(decimal.NewFromFloat(t.ExecPrice), 4)
+	if origPx > 0 {
+		er.SetPrice(decimal.NewFromFloat(origPx), 4)
+	}
 	return er
 }
 

@@ -59,12 +59,13 @@ func (o *CachedOrder) AvgFillPx() float64 {
 
 func (o *CachedOrder) avgFillPx() float64 {
 	tot := 0.0
-	n := len(o.Executions)
+	qty := 0.0
 	for _, e := range o.Executions {
-		tot = tot + e.Px
+		tot = tot + (e.Px * e.Qty)
+		qty = qty + e.Qty
 	}
-	if n > 0 {
-		return tot / float64(n)
+	if qty > 0 {
+		return tot / qty
 	}
 	return 0
 }

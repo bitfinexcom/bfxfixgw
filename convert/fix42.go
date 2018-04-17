@@ -241,6 +241,7 @@ func FIX42ExecutionReportFromTradeExecutionUpdate(t *bitfinex.TradeExecutionUpda
 	fee := decimal.NewFromFloat(f)
 	er.SetCommission(fee, 4)
 	er.SetCommType(enum.CommType_ABSOLUTE)
+	er.SetLastPx(decimal.NewFromFloat(t.ExecPrice), 4)
 	return er
 }
 

@@ -139,19 +139,19 @@ Subscribe to `tETHUSD` full raw book updates at 25 price levels:
 Receive FIX `35=W` book snapshot (for the first tBTCUSD request):
 
 ```
-TODO
+8=FIX.4.2|9=168|35=W|34=3|49=BFXFIX|52=20180417-19:40:21.294|56=EXORG_MD|22=8|48=tBTCUSD|55=tBTCUSD|262=req-tBTCUSD|268=2|269=0|270=1663.9000|271=0.0400|269=1|270=1670.8000|271=0.1000|10=242|
 ```
 
-Receive FIX `35=W` trade snapshot (for the first tBTCUSD request):
+Receive FIX `35=X` market data incremental update (for the first tBTCUSD request):
 
 ```
-
+8=FIX.4.2|9=140|35=X|34=5|49=BFXFIX|52=20180417-19:41:48.474|56=EXORG_MD|262=req-tBTCUSD|268=1|279=2|269=1|55=tBTCUSD|48=tBTCUSD|22=8|270=0.0000|271=1.0000|10=185|
 ```
 
-Receive FIX `35=X` incremental update (for the first tBTCUSD request):
+Receive FIX `35=X` trade incremental update (for the first tBTCUSD request):
 
 ```
-TODO
+8=FIX.4.2|9=143|35=X|34=5|49=BFXFIX|52=20180417-21:25:27.455|56=EXORG_MD|262=req-tBTCUSD|268=1|279=0|269=2|55=tBTCUSD|48=tBTCUSD|22=8|270=1671.0000|271=0.1000|10=081|
 ```
 
 ## Order Routing
@@ -163,37 +163,48 @@ Order routing can be enabled with the `-ord` and `-ordcfg` flags on startup.
 Send limit new order single:
 
 ```
-TODO
-```
-
-Send market new order single:
-
-```
-TODO
+8=FIX.4.2|9=142|35=D|34=34|49=EXORG_ORD|52=20180417-22:28:26.326|56=BFXFIX|11=2000|21=3|38=0.1000|40=2|44=20000.0000|54=2|55=tBTCUSD|60=20180417-22:28:26.326|10=208|
 ```
 
 Receive FIX `35=8` execution report for working order:
 
 ```
-TODO
+8=FIX.4.2|9=232|35=8|34=38|49=BFXFIX|52=20180417-22:28:26.555|56=EXORG_ORD|1=connamara|6=0.00|11=2000|14=0.0000|17=935a0300-2f34-4908-9e03-6b899f9718c6|20=3|32=0.0000|37=1149698709|38=0.1000|39=0|40=2|44=20000.0000|54=2|55=tBTCUSD|150=0|151=0.1000|10=097|
 ```
 
-Receive FIX `35=8` execution report for a partial or full fill:
+Send market new order single:
 
 ```
-TODO
+8=FIX.4.2|9=128|35=D|34=39|49=EXORG_ORD|52=20180417-22:30:34.310|56=BFXFIX|11=2002|21=3|38=1.5000|40=1|54=2|55=tBTCUSD|60=20180417-22:30:34.310|10=059|
+```
+
+Receive FIX `35=8` execution report for a partial fill:
+
+```
+8=FIX.4.2|9=249|35=8|34=45|49=BFXFIX|52=20180417-22:30:35.100|56=EXORG_ORD|1=connamara|6=1663.90|11=2002|12=0.1331|13=3|14=0.0400|17=f4d8af6e-04ce-447b-80ed-3e82d1476274|20=3|31=1663.9000|32=0.0400|37=1149698710|38=1.5000|39=1|40=1|54=2|55=tBTCUSD|150=1|151=1.4600|10=163|
+```
+
+Receive the alst FIX `35=8` execution report for a full fill:
+
+```
+8=FIX.4.2|9=249|35=8|34=48|49=BFXFIX|52=20180417-22:30:35.135|56=EXORG_ORD|1=connamara|6=1662.70|11=2002|12=0.3327|13=3|14=1.5000|17=6ee60005-4e99-4e6d-aa51-3aa617489dc7|20=3|31=1663.5000|32=0.1000|37=1149698710|38=1.5000|39=2|40=1|54=2|55=tBTCUSD|150=2|151=0.0000|10=112|
 ```
 
 Cancel working limit order:
 
 ```
-TODO
+8=FIX.4.2|9=116|35=F|34=36|49=EXORG_ORD|52=20180417-22:29:11.115|56=BFXFIX|11=2001|41=2000|54=2|55=tBTCUSD|60=20180417-22:29:11.115|10=051|
+```
+
+Receive FIX `35=8` pending cancel acknowledgement:
+```
+8=FIX.4.2|9=296|35=8|34=40|49=BFXFIX|52=20180417-22:29:11.290|56=EXORG_ORD|1=connamara|6=0.00|11=2000|14=0.0000|17=d067ff27-4182-454f-8c51-bd08c09b5730|20=3|37=1149698709|38=0.1000|39=6|40=2|44=20000.0000|54=2|55=tBTCUSD|58=Submitted for cancellation; waiting for confirmation (ID: 1149698709).|150=6|151=0.1000|10=112|
 ```
 
 Receive FIX `35=8` cancel acknowledgement:
 
 ```
-TODO
+8=FIX.4.2|9=244|35=8|34=41|49=BFXFIX|52=20180417-22:29:11.305|56=EXORG_ORD|1=connamara|6=0.00|11=2000|14=0.0000|17=a674d1b4-214e-408a-8cc1-fa364ecd8d97|20=3|32=0.0000|37=1149698709|38=0.1000|39=4|40=2|44=20000.0000|54=2|55=tBTCUSD|58=CANCELED|150=4|151=0.0000|10=112|
 ```
 
 ## Order State Details

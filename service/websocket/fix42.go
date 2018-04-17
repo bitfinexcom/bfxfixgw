@@ -7,6 +7,7 @@ import (
 	"github.com/quickfixgo/enum"
 	"github.com/quickfixgo/fix42/logout"
 	"github.com/quickfixgo/quickfix"
+	"github.com/shopspring/decimal"
 	"go.uber.org/zap"
 	"strconv"
 )
@@ -168,7 +169,11 @@ func (w *Websocket) FIX42NotificationHandler(d *bitfinex.Notification, sID quick
 				w.logger.Error("could not reference original order to publish pending cancel execution report", zap.Error(err))
 				return
 			}
-			quickfix.SendToTarget(convert.FIX42ExecutionReportFromCancelWithDetails(o, orig.Account, enum.ExecType_PENDING_CANCEL, orig.FilledQty(), enum.OrdStatus_PENDING_CANCEL, orig.OrderType, d.Text, orig.Symbol, orig.ClOrdID, orig.OrderID, orig.Side, orig.Qty, orig.AvgFillPx(), w.Symbology, sID.SenderCompID), sID)
+			er := convert.FIX42ExecutionReport(orig.Symbol, orig.ClOrdID, orig.OrderID, orig.Account, enum.ExecType_PENDING_CANCEL, orig.Side, orig.Qty, 0.0, orig.FilledQty(), orig.AvgFillPx(), enum.OrdStatus_PENDING_CANCEL, orig.OrderType, d.Text, w.Symbology, sID.SenderCompID)
+			if orig.Px > 0 {
+				er.SetPrice(decimal.NewFromFloat(orig.Px), 4)
+			}
+			quickfix.SendToTarget(er, sID)
 		}
 		return
 	case *bitfinex.OrderNew:

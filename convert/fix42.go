@@ -198,12 +198,6 @@ func FIX42ExecutionReport(symbol, clOrdID, orderID, account string, execType enu
 	return e
 }
 
-// used for oc-req notifications where only a cancel's CID is provided
-func FIX42ExecutionReportFromCancelWithDetails(c *bitfinex.OrderCancel, account string, execType enum.ExecType, cumQty float64, ordStatus enum.OrdStatus, ordType enum.OrdType, text, symbol, clOrdID, orderID string, side enum.Side, qty, avgPx float64, symbology symbol.Symbology, counterparty string) fix42er.ExecutionReport {
-	e := FIX42ExecutionReport(symbol, clOrdID, orderID, account, execType, side, qty, 0.0, cumQty, avgPx, ordStatus, ordType, text, symbology, counterparty)
-	return e
-}
-
 func FIX42ExecutionReportFromOrder(o *bitfinex.Order, account string, execType enum.ExecType, cumQty float64, ordStatus enum.OrdStatus, text string, symbology symbol.Symbology, counterparty string) fix42er.ExecutionReport {
 	orderID := strconv.FormatInt(o.ID, 10)
 	// total order qty
@@ -214,6 +208,7 @@ func FIX42ExecutionReportFromOrder(o *bitfinex.Order, account string, execType e
 	e := FIX42ExecutionReport(o.Symbol, strconv.FormatInt(o.CID, 10), orderID, account, execType, SideToFIX(o.Amount), fAmt, 0.0, cumQty, o.PriceAvg, ordStatus, OrdTypeToFIX(o.Type), text, symbology, counterparty)
 	switch o.Type {
 	case bitfinex.OrderTypeLimit:
+	case bitfinex.OrderTypeExchangeLimit:
 		e.SetPrice(decimal.NewFromFloat(o.Price), 4)
 	case bitfinex.OrderTypeStopLimit:
 		e.SetPrice(decimal.NewFromFloat(o.Price), 4)

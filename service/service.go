@@ -16,8 +16,9 @@ import (
 
 // LogicalService connects a logical FIX endpoint with a logical websocket connection
 type Service struct {
-	factory peer.ClientFactory
-	peers   map[string]*peer.Peer
+	factory     peer.ClientFactory
+	peers       map[string]*peer.Peer
+	serviceType fix.FIXServiceType
 	*fix.FIX
 	*websocket.Websocket
 	lock    sync.Mutex
@@ -26,7 +27,7 @@ type Service struct {
 }
 
 func New(factory peer.ClientFactory, settings *quickfix.Settings, srvType fix.FIXServiceType, symbology symbol.Symbology) (*Service, error) {
-	service := &Service{factory: factory, log: lg.Logger, peers: make(map[string]*peer.Peer), inbound: make(chan *peer.Message)}
+	service := &Service{factory: factory, log: lg.Logger, peers: make(map[string]*peer.Peer), inbound: make(chan *peer.Message), serviceType: srvType}
 	var err error
 	service.FIX, err = fix.New(settings, service, srvType, symbology)
 	if err != nil {
@@ -76,6 +77,14 @@ func (s *Service) RemovePeer(fixSessionID string) bool {
 	return false
 }
 
+func (s *Service) isMarketDataService() bool {
+	return s.serviceType == fix.MarketDataService
+}
+
+func (s *Service) isOrderRoutingService() bool {
+	return s.serviceType == fix.OrderRoutingService
+}
+
 func (s *Service) listen() {
 	for msg := range s.inbound {
 		if msg == nil {
@@ -85,10 +94,19 @@ func (s *Service) listen() {
 		case *bitfinex.Notification:
 			s.Websocket.FIX42NotificationHandler(obj, msg.FIXSessionID())
 		case *bitfinex.OrderNew:
+			if !s.isOrderRoutingService() {
+				continue
+			}
 			s.Websocket.FIX42OrderNewHandler(obj, msg.FIXSessionID())
 		case *bitfinex.OrderCancel:
+			if !s.isOrderRoutingService() {
+				continue
+			}
 			s.Websocket.FIX42OrderCancelHandler(obj, msg.FIXSessionID())
 		case *bitfinex.OrderUpdate:
+			if !s.isOrderRoutingService() {
+				continue
+			}
 			s.Websocket.FIX42OrderUpdateHandler(obj, msg.FIXSessionID())
 		case *wsv2.InfoEvent:
 			// no-op
@@ -113,20 +131,38 @@ func (s *Service) listen() {
 		case *bitfinex.PositionUpdate:
 			// no-op
 		case *bitfinex.OrderSnapshot:
+			if !s.isOrderRoutingService() {
+				continue
+			}
 			s.Websocket.FIX42OrderSnapshotHandler(obj, msg.FIXSessionID())
 		case *wsv2.SubscribeEvent:
 			// no-op, don't need to ack subscription to client
 		case *bitfinex.BookUpdateSnapshot:
+			if !s.isMarketDataService() {
+				continue
+			}
 			s.Websocket.FIX42BookSnapshot(obj, msg.FIXSessionID())
 		case *bitfinex.BookUpdate:
+			if !s.isMarketDataService() {
+				continue
+			}
 			s.Websocket.FIX42BookUpdate(obj, msg.FIXSessionID())
 		case *bitfinex.TradeExecution:
 			// ignore trade executions in favor of trade execution updates (more data)
 		case *bitfinex.TradeExecutionUpdate:
+			if !s.isOrderRoutingService() {
+				continue
+			}
 			s.Websocket.FIX42TradeExecutionUpdateHandler(obj, msg.FIXSessionID())
 		case *bitfinex.Trade: // public trade
+			if !s.isMarketDataService() {
+				continue
+			}
 			s.Websocket.FIX42TradeHandler(obj, msg.FIXSessionID())
 		case *bitfinex.TradeSnapshot:
+			if !s.isMarketDataService() {
+				continue
+			}
 			s.Websocket.FIX42TradeSnapshotHandler(obj, msg.FIXSessionID())
 		case error:
 			s.log.Error("processing error", zap.Any("msg", obj))

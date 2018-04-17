@@ -129,9 +129,8 @@ func (f *FIX) OnFIX42MarketDataRequest(msg mdr.MarketDataRequest, sID quickfix.S
 	if err != nil {
 		precision = bitfinex.Precision0
 	} else {
-		var ok bool
 		precision, overridePrecision = validatePrecision(fixPrecision)
-		if !ok {
+		if !overridePrecision {
 			return rejectError(fmt.Sprintf("invalid precision for market data request: %s", fixPrecision))
 		}
 	}

@@ -171,6 +171,7 @@ func (f *FIX) OnFIX42MarketDataRequest(msg mdr.MarketDataRequest, sID quickfix.S
 		case enum.SubscriptionRequestType_SNAPSHOT_PLUS_UPDATES:
 			p.MapSymbolToReqID(symbol, mdReqID)
 			bookReqID, err := p.Ws.SubscribeBook(context.Background(), symbol, websocket.PrecisionRawBook, websocket.FrequencyRealtime, depth)
+			//bookReqID, err := p.Ws.SubscribeBook(context.Background(), symbol, websocket.Precision0, websocket.FrequencyRealtime, depth)
 			if err != nil {
 				return reject(err)
 			}

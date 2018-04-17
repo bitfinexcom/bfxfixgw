@@ -24,13 +24,14 @@ import (
 )
 
 var (
-	mdcfg  = flag.String("mdcfg", "demo_fix_marketdata.cfg", "Market data FIX configuration file name")
-	ordcfg = flag.String("ordcfg", "demo_fix_orders.cfg", "Order flow FIX configuration file name")
-	orders = flag.Bool("orders", false, "enable order routing FIX endpoint")
-	md     = flag.Bool("md", false, "enable market data FIX endpoint")
-	ws     = flag.String("ws", "wss://api.bitfinex.com/ws/2", "v2 Websocket API URL")
-	rst    = flag.String("rest", "https://api.bitfinex.com/v2/", "v2 REST API URL")
-	sym    = flag.String("symbology", "", "symbol master, omit for passthrough symbology or provide a symbology master file")
+	mdcfg   = flag.String("mdcfg", "demo_fix_marketdata.cfg", "Market data FIX configuration file name")
+	ordcfg  = flag.String("ordcfg", "demo_fix_orders.cfg", "Order flow FIX configuration file name")
+	orders  = flag.Bool("orders", false, "enable order routing FIX endpoint")
+	md      = flag.Bool("md", false, "enable market data FIX endpoint")
+	ws      = flag.String("ws", "wss://api.bitfinex.com/ws/2", "v2 Websocket API URL")
+	rst     = flag.String("rest", "https://api.bitfinex.com/v2/", "v2 REST API URL")
+	sym     = flag.String("symbology", "", "symbol master, omit for passthrough symbology or provide a symbology master file")
+	verbose = flag.Bool("v", false, "verbose logging")
 	//flag.StringVar(&logfile, "logfile", "logs/debug.log", "path to the log file")
 	//flag.StringVar(&configfile, "configfile", "config/server.cfg", "path to the config file")
 )
@@ -168,6 +169,7 @@ func main() {
 	}
 	params := websocket.NewDefaultParameters()
 	params.URL = *ws
+	params.LogTransport = *verbose
 	factory := &defaultClientFactory{
 		Parameters: params,
 		RestURL:    *rst,

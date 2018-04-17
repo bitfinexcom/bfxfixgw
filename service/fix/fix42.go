@@ -23,12 +23,10 @@ import (
 	"github.com/quickfixgo/quickfix"
 
 	bitfinex "github.com/bitfinexcom/bitfinex-api-go/v2"
-	"github.com/bitfinexcom/bitfinex-api-go/v2/rest"
-	"github.com/bitfinexcom/bitfinex-api-go/v2/websocket"
 )
 
 const (
-	PricePrecision quickfix.Tag = 20100
+	PricePrecision quickfix.Tag = 20003
 )
 
 // Handle FIX42 messages and process them upstream to Bitfinex.
@@ -72,20 +70,20 @@ func rejectError(msg string) quickfix.MessageRejectError {
 	return quickfix.NewBusinessMessageRejectError(msg, rejectReasonOther, nil)
 }
 
-func validatePrecision(prec string) (rest.BookPrecision, bool) {
+func validatePrecision(prec string) (bitfinex.BookPrecision, bool) {
 	switch prec {
-	case string(rest.Precision0):
-		return rest.Precision0, true
-	case string(rest.Precision1):
-		return rest.Precision1, true
-	case string(rest.Precision2):
-		return rest.Precision2, true
-	case string(rest.Precision3):
-		return rest.Precision3, true
-	case string(rest.PrecisionRawBook):
-		return rest.PrecisionRawBook, true
+	case string(bitfinex.Precision0):
+		return bitfinex.Precision0, true
+	case string(bitfinex.Precision1):
+		return bitfinex.Precision1, true
+	case string(bitfinex.Precision2):
+		return bitfinex.Precision2, true
+	case string(bitfinex.Precision3):
+		return bitfinex.Precision3, true
+	case string(bitfinex.PrecisionRawBook):
+		return bitfinex.PrecisionRawBook, true
 	}
-	return rest.Precision0, false
+	return bitfinex.Precision0, false
 }
 
 func (f *FIX) OnFIX42MarketDataRequest(msg mdr.MarketDataRequest, sID quickfix.SessionID) quickfix.MessageRejectError {
@@ -125,13 +123,14 @@ func (f *FIX) OnFIX42MarketDataRequest(msg mdr.MarketDataRequest, sID quickfix.S
 		return rejectError(fmt.Sprintf("invalid market depth for market data request: %d", depth))
 	}
 
-	var precision rest.BookPrecision
+	var precision bitfinex.BookPrecision
+	var overridePrecision bool
 	fixPrecision, err := msg.GetString(PricePrecision)
 	if err != nil {
-		precision = rest.Precision0
+		precision = bitfinex.Precision0
 	} else {
 		var ok bool
-		precision, ok = validatePrecision(fixPrecision)
+		precision, overridePrecision = validatePrecision(fixPrecision)
 		if !ok {
 			return rejectError(fmt.Sprintf("invalid precision for market data request: %s", fixPrecision))
 		}
@@ -159,18 +158,28 @@ func (f *FIX) OnFIX42MarketDataRequest(msg mdr.MarketDataRequest, sID quickfix.S
 			if err != nil {
 				return reject(err)
 			}
-			fix := convert.FIX42MarketDataFullRefreshFromBookSnapshot(mdReqID, bookSnapshot)
+			fix := convert.FIX42MarketDataFullRefreshFromBookSnapshot(mdReqID, bookSnapshot, f.Symbology, sID.SenderCompID)
 			quickfix.SendToTarget(fix, sID)
 			tradeSnapshot, err := p.Rest.Trades.All(symbol)
 			if err != nil {
 				return reject(err)
 			}
-			fix = convert.FIX42MarketDataFullRefreshFromTradeSnapshot(mdReqID, tradeSnapshot)
+			fix = convert.FIX42MarketDataFullRefreshFromTradeSnapshot(mdReqID, tradeSnapshot, f.Symbology, sID.SenderCompID)
 			quickfix.SendToTarget(fix, sID)
 
 		case enum.SubscriptionRequestType_SNAPSHOT_PLUS_UPDATES:
 			p.MapSymbolToReqID(symbol, mdReqID)
-			bookReqID, err := p.Ws.SubscribeBook(context.Background(), symbol, websocket.PrecisionRawBook, websocket.FrequencyRealtime, depth)
+
+			prec := bitfinex.PrecisionRawBook
+			if overridePrecision {
+				prec = precision
+			} else {
+				aggregate, _ := msg.GetAggregatedBook() // aggregate by price (most granular by default) if no precision override is given
+				if aggregate {
+					prec = bitfinex.Precision0
+				}
+			}
+			bookReqID, err := p.Ws.SubscribeBook(context.Background(), symbol, prec, bitfinex.FrequencyRealtime, depth)
 			if err != nil {
 				return reject(err)
 			}
@@ -293,7 +302,7 @@ func (f *FIX) OnFIX42OrderStatusRequest(msg osr.OrderStatusRequest, sID quickfix
 		cached = peer.AddOrder(clOrdID, order.Price, order.Amount, order.Symbol, peer.BfxUserID(), convert.SideToFIX(order.Amount), convert.OrdTypeToFIX(order.Type))
 	}
 	status := convert.OrdStatusToFIX(order.Status)
-	er := convert.FIX42ExecutionReportFromOrder(order, peer.BfxUserID(), enum.ExecType_ORDER_STATUS, cached.FilledQty(), status, "")
+	er := convert.FIX42ExecutionReportFromOrder(order, peer.BfxUserID(), enum.ExecType_ORDER_STATUS, cached.FilledQty(), status, "", f.Symbology, sID.SenderCompID)
 	quickfix.SendToTarget(er, sID)
 
 	return nil

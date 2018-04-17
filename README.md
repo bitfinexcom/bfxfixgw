@@ -23,6 +23,12 @@ reload of the config could be considered.
 - `FIX_SETTINGS_DIRECTORY=./config` to read the configs from the given directory, `./config`
   is the default directory.
 
+Staging startup from source:
+
+```bash
+FIX_SETTINGS_DIRECTORY=conf/integration_test/service/ bfxfixgw.exe -orders -ordcfg orders_fix42.cfg -md -mdcfg marketdata_fix42.cfg -ws wss://dev-prdn.bitfinex.com:2998/ws/2 -rest https://dev-prdn.bitfinex.com:2998/v2/
+```
+
 ## Sessions
 
 The current plan is to have one FIX instance per config file/port to enable restarting
@@ -58,6 +64,12 @@ It was also proposed to have a configuration file containing a batch of X sessio
 (senderCompId + targetCompId), where each senderCompId is an authentication token
 that will manually associated to a user on bitfinex's backend side, so websocket
 authentication message will just be `{ "event": "auth", "token": SEND_COMP_ID}`. 
+
+# Market Data Distribution
+
+The FIX gateway service may be configured to distribute market data. Starting the process with `-md` will enable market data distribution, configured by the `-mdcfg` flag.
+
+# Order Routing
 
 # Order State Details
 

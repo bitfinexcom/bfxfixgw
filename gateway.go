@@ -4,6 +4,7 @@ package main
 
 import (
 	"flag"
+	"github.com/bitfinexcom/bfxfixgw/service/symbol"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
@@ -17,17 +18,20 @@ import (
 	"github.com/bitfinexcom/bfxfixgw/service/fix"
 	"github.com/bitfinexcom/bfxfixgw/service/peer"
 
+	"fmt"
 	"github.com/quickfixgo/quickfix"
 	"go.uber.org/zap"
 )
 
 var (
-	mdcfg  = flag.String("mdcfg", "demo_fix_marketdata.cfg", "Market data FIX configuration file name")
-	ordcfg = flag.String("ordcfg", "demo_fix_orders.cfg", "Order flow FIX configuration file name")
-	orders = flag.Bool("orders", false, "enable order routing FIX endpoint")
-	md     = flag.Bool("md", false, "enable market data FIX endpoint")
-	ws     = flag.String("ws", "wss://api.bitfinex.com/ws/2", "v2 Websocket API URL")
-	rst    = flag.String("rest", "https://api.bitfinex.com/v2/", "v2 REST API URL")
+	mdcfg   = flag.String("mdcfg", "demo_fix_marketdata.cfg", "Market data FIX configuration file name")
+	ordcfg  = flag.String("ordcfg", "demo_fix_orders.cfg", "Order flow FIX configuration file name")
+	orders  = flag.Bool("orders", false, "enable order routing FIX endpoint")
+	md      = flag.Bool("md", false, "enable market data FIX endpoint")
+	ws      = flag.String("ws", "wss://api.bitfinex.com/ws/2", "v2 Websocket API URL")
+	rst     = flag.String("rest", "https://api.bitfinex.com/v2/", "v2 REST API URL")
+	sym     = flag.String("symbology", "", "symbol master, omit for passthrough symbology or provide a symbology master file")
+	verbose = flag.Bool("v", false, "verbose logging")
 	//flag.StringVar(&logfile, "logfile", "logs/debug.log", "path to the log file")
 	//flag.StringVar(&configfile, "configfile", "config/server.cfg", "path to the config file")
 )
@@ -81,21 +85,21 @@ func (g *Gateway) Stop() {
 	}
 }
 
-func New(mdSettings, orderSettings *quickfix.Settings, factory peer.ClientFactory) (*Gateway, error) {
+func New(mdSettings, orderSettings *quickfix.Settings, factory peer.ClientFactory, symbology symbol.Symbology) (*Gateway, error) {
 	g := &Gateway{
 		logger:  log.Logger,
 		factory: factory,
 	}
 	var err error
 	if mdSettings != nil {
-		g.MarketData, err = service.New(factory, mdSettings, fix.MarketDataService)
+		g.MarketData, err = service.New(factory, mdSettings, fix.MarketDataService, symbology)
 		if err != nil {
 			log.Logger.Fatal("create market data FIX", zap.Error(err))
 			return nil, err
 		}
 	}
 	if orderSettings != nil {
-		g.OrderRouting, err = service.New(factory, orderSettings, fix.OrderRoutingService)
+		g.OrderRouting, err = service.New(factory, orderSettings, fix.OrderRoutingService, symbology)
 		if err != nil {
 			log.Logger.Fatal("create order routing FIX", zap.Error(err))
 			return nil, err
@@ -132,6 +136,17 @@ func main() {
 	flag.Parse()
 	var err error
 	var mds, ords *quickfix.Settings
+	var symbology symbol.Symbology
+	if *sym == "" {
+		log.Logger.Info("Symbology: passthrough")
+		symbology = symbol.NewPassthroughSymbology()
+	} else {
+		log.Logger.Info(fmt.Sprintf("Symbology: %s", *sym))
+		symbology, err = symbol.NewFileSymbology(*sym)
+		if err != nil {
+			log.Logger.Fatal("could not create file symbology", zap.Error(err))
+		}
+	}
 	if *md {
 		mdf, err := os.Open(path.Join(FIXConfigDirectory, *mdcfg))
 		if err != nil {
@@ -154,11 +169,12 @@ func main() {
 	}
 	params := websocket.NewDefaultParameters()
 	params.URL = *ws
+	params.LogTransport = *verbose
 	factory := &defaultClientFactory{
 		Parameters: params,
 		RestURL:    *rst,
 	}
-	g, err := New(mds, ords, factory)
+	g, err := New(mds, ords, factory, symbology)
 	if err != nil {
 		log.Logger.Fatal("could not create gateway", zap.Error(err))
 	}

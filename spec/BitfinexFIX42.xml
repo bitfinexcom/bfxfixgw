@@ -986,6 +986,7 @@
     <field name='EncodedSecurityDesc' required='N' />
     <field name='TradingSessionID' required='N' />
    </group>
+   <field name='PriceAggregation' required='N' />
   </message>
   <message name='MarketDataSnapshotFullRefresh' msgtype='W' msgcat='app'>
    <field name='MDReqID' required='N' />
@@ -2748,5 +2749,6 @@
   <field number='20000' name='BfxApiKey' type='STRING' />
   <field number='20001' name='BfxApiSecret' type='STRING' />
   <field number='20002' name='BfxUserID' type='STRING' />
+  <field number='20003' name='PricePrecision' type='STRING' />
  </fields>
 </fix>

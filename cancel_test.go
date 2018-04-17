@@ -93,21 +93,11 @@ func TestOrderCancelSimple(t *testing.T) {
 	// service publish new ack
 	srvWs.Send(OrdersClient, `[0,"n",[null,"on-req",null,null,[1234567,null,555,"tBTCUSD",null,null,1,1,"EXCHANGE LIMIT",null,null,null,null,null,null,null,12000,null,null,null,null,null,null,0,null,null],null,"SUCCESS","Submitting limit buy order for 1.0 BTC."]]`)
 
-	// assert FIX execution report PENDING NEW
-	fix, err = fixOrd.WaitForMessage(OrderSessionID, 2)
-	if err != nil {
-		t.Fatal(err)
-	}
-	err = checkFixTags(fix, "35=8", "49=BFXFIX", "56=EXORG_ORD", "1=user123", "20=3", "32=0.000", "39=A", "54=1", "55=tBTCUSD", "150=A", "151=1.00", "6=0.00", "14=0.00")
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	// service publish new working
 	srvWs.Send(OrdersClient, `[0,"on",[1234567,0,555,"tBTCUSD",1521153050972,1521153051035,1,1,"EXCHANGE LIMIT",null,null,null,0,"ACTIVE",null,null,12000,0,null,null,null,null,null,0,0,0,null,null,"API>BFX",null,null,null]]`)
 
 	// assert FIX execution report NEW
-	fix, err = fixOrd.WaitForMessage(OrderSessionID, 3)
+	fix, err = fixOrd.WaitForMessage(OrderSessionID, 2)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -139,7 +129,7 @@ func TestOrderCancelSimple(t *testing.T) {
 	// publish cancel ack
 	srvWs.Send(OrdersClient, `[0,"n",[1521153051035,"oc-req",null,null,[null,null,555,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,null,null,null,null,null,null,null,null],null,"SUCCESS","Submitted for cancellation; waiting for confirmation (ID: 1234567)."]]`)
 	// assert FIX PENDING CANCEL
-	fix, err = fixOrd.WaitForMessage(OrderSessionID, 4)
+	fix, err = fixOrd.WaitForMessage(OrderSessionID, 3)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -148,7 +138,7 @@ func TestOrderCancelSimple(t *testing.T) {
 	// publish cancel success
 	srvWs.Send(OrdersClient, `[0,"oc",[1234567,0,555,"tBTCUSD",1521062529896,1521062593974,1,1,"EXCHANGE LIMIT",null,null,null,0,"CANCELED",null,null,12000,0,null,null,null,null,null,0,0,0,null,null,"API>BFX",null,null,null]]`)
 	// assert FIX CANCEL ack
-	fix, err = fixOrd.WaitForMessage(OrderSessionID, 5)
+	fix, err = fixOrd.WaitForMessage(OrderSessionID, 4)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -236,21 +226,11 @@ func TestOrderCancelInFlightFillOK(t *testing.T) {
 	// service publish new ack
 	srvWs.Send(OrdersClient, `[0,"n",[null,"on-req",null,null,[1234567,null,555,"tBTCUSD",null,null,1,1,"EXCHANGE LIMIT",null,null,null,null,null,null,null,12000,null,null,null,null,null,null,0,null,null],null,"SUCCESS","Submitting limit buy order for 1.0 BTC."]]`)
 
-	// assert FIX execution report PENDING NEW
-	fix, err = fixOrd.WaitForMessage(OrderSessionID, 2)
-	if err != nil {
-		t.Fatal(err)
-	}
-	err = checkFixTags(fix, "35=8", "49=BFXFIX", "56=EXORG_ORD", "1=user123", "20=3", "32=0.000", "39=A", "54=1", "55=tBTCUSD", "150=A", "151=1.00", "6=0.00", "14=0.00")
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	// service publish new working
 	srvWs.Send(OrdersClient, `[0,"on",[1234567,0,555,"tBTCUSD",1521153050972,1521153051035,1,1,"EXCHANGE LIMIT",null,null,null,0,"ACTIVE",null,null,12000,0,null,null,null,null,null,0,0,0,null,null,"API>BFX",null,null,null]]`)
 
 	// assert FIX execution report NEW
-	fix, err = fixOrd.WaitForMessage(OrderSessionID, 3)
+	fix, err = fixOrd.WaitForMessage(OrderSessionID, 2)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -263,7 +243,7 @@ func TestOrderCancelInFlightFillOK(t *testing.T) {
 	srvWs.Send(OrdersClient, `[0,"tu",[1,"tBTCUSD",1514909325593,1234567,0.21679716,12000,"MARKET",12000,-1,-0.39712904,"USD"]]`)
 
 	// assert FIX execution report PARTIAL FILL
-	fix, err = fixOrd.WaitForMessage(OrderSessionID, 4)
+	fix, err = fixOrd.WaitForMessage(OrderSessionID, 3)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -295,7 +275,7 @@ func TestOrderCancelInFlightFillOK(t *testing.T) {
 	// publish cancel ack
 	srvWs.Send(OrdersClient, `[0,"n",[1521153051035,"oc-req",null,null,[null,null,555,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,null,0,null,null,null,null,null,null,null,null],null,"SUCCESS","Submitted for cancellation; waiting for confirmation (ID: 1234567)."]]`)
 	// assert FIX PENDING CANCEL
-	fix, err = fixOrd.WaitForMessage(OrderSessionID, 5)
+	fix, err = fixOrd.WaitForMessage(OrderSessionID, 4)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -304,7 +284,7 @@ func TestOrderCancelInFlightFillOK(t *testing.T) {
 	// publish cancel success
 	srvWs.Send(OrdersClient, `[0,"oc",[1234567,0,555,"tBTCUSD",1521062529896,1521062593974,1,1,"EXCHANGE LIMIT",null,null,null,0,"CANCELED",null,null,12000,0,null,null,null,null,null,0,0,0,null,null,"API>BFX",null,null,null]]`)
 	// assert FIX CANCEL ack
-	fix, err = fixOrd.WaitForMessage(OrderSessionID, 6)
+	fix, err = fixOrd.WaitForMessage(OrderSessionID, 5)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -480,21 +460,11 @@ func TestOrderCancelInFlightFillReject(t *testing.T) {
 	// service publish new ack
 	srvWs.Send(OrdersClient, `[0,"n",[null,"on-req",null,null,[1234567,null,555,"tBTCUSD",null,null,1,1,"EXCHANGE LIMIT",null,null,null,null,null,null,null,12000,null,null,null,null,null,null,0,null,null],null,"SUCCESS","Submitting limit buy order for 1.0 BTC."]]`)
 
-	// assert FIX execution report PENDING NEW
-	fix, err = fixOrd.WaitForMessage(OrderSessionID, 2)
-	if err != nil {
-		t.Fatal(err)
-	}
-	err = checkFixTags(fix, "35=8", "49=BFXFIX", "56=EXORG_ORD", "1=user123", "20=3", "32=0.000", "39=A", "54=1", "55=tBTCUSD", "150=A", "151=1.00", "6=0.00", "14=0.00")
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	// service publish new working
 	srvWs.Send(OrdersClient, `[0,"on",[1234567,0,555,"tBTCUSD",1521153050972,1521153051035,1,1,"EXCHANGE LIMIT",null,null,null,0,"ACTIVE",null,null,12000,0,null,null,null,null,null,0,0,0,null,null,"API>BFX",null,null,null]]`)
 
 	// assert FIX execution report NEW
-	fix, err = fixOrd.WaitForMessage(OrderSessionID, 3)
+	fix, err = fixOrd.WaitForMessage(OrderSessionID, 2)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -507,7 +477,7 @@ func TestOrderCancelInFlightFillReject(t *testing.T) {
 	srvWs.Send(OrdersClient, `[0,"tu",[1,"tBTCUSD",1514909325593,1234567,0.21679716,12000,"MARKET",12000,1,-0.39712904,"USD"]]`)
 
 	// assert FIX execution report PARTIAL FILL
-	fix, err = fixOrd.WaitForMessage(OrderSessionID, 4)
+	fix, err = fixOrd.WaitForMessage(OrderSessionID, 3)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -520,7 +490,7 @@ func TestOrderCancelInFlightFillReject(t *testing.T) {
 	srvWs.Send(OrdersClient, `[0,"tu",[1,"tBTCUSD",1514909325593,1234567,0.78320284,12000,"MARKET",12000,1,-0.39712904,"USD"]]`)
 
 	// assert FIX execution report FULL FILL
-	fix, err = fixOrd.WaitForMessage(OrderSessionID, 5)
+	fix, err = fixOrd.WaitForMessage(OrderSessionID, 4)
 	if err != nil {
 		t.Fatal(err)
 	}

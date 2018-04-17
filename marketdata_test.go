@@ -115,7 +115,7 @@ func TestMarketData(t *testing.T) {
 	srvWs.Send(MarketDataClient, `{"event":"subscribed","channel":"trades","chanId":19,"symbol":"tBTCUSD","subId":"nonce3","pair":"BTCUSD"}`)
 
 	// srv->client book snapshot
-	srvWs.Send(MarketDataClient, `[8,[[1085.2,1,0.16337353],[1085,1,1],[1084.5,1,-0.0360446]]]`)
+	srvWs.Send(MarketDataClient, `[8,[[1,1085.2,0.16337353],[2,1085,1],[3,1084.5,-0.0360446]]]`)
 
 	// assert book snapshot
 	fix, err = fixMd.WaitForMessage(MarketDataSessionID, 2)
@@ -143,7 +143,7 @@ func TestMarketData(t *testing.T) {
 	}
 
 	// srv->client book update
-	srvWs.Send(MarketDataClient, `[8,[1084,1,0.05246595]]`)
+	srvWs.Send(MarketDataClient, `[8,[1,1084,0.05246595]]`)
 
 	// assert book update
 	fix, err = fixMd.WaitForMessage(MarketDataSessionID, 3)

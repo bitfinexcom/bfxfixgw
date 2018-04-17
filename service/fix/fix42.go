@@ -119,6 +119,9 @@ func (f *FIX) OnFIX42MarketDataRequest(msg mdr.MarketDataRequest, sID quickfix.S
 	if depth < 0 {
 		return rejectError(fmt.Sprintf("invalid market depth for market data request: %d", depth))
 	}
+	if 0 == depth {
+		depth = 100
+	}
 
 	var precision bitfinex.BookPrecision
 	var overridePrecision bool
@@ -166,13 +169,13 @@ func (f *FIX) OnFIX42MarketDataRequest(msg mdr.MarketDataRequest, sID quickfix.S
 		case enum.SubscriptionRequestType_SNAPSHOT_PLUS_UPDATES:
 			p.MapSymbolToReqID(symbol, mdReqID)
 
-			prec := bitfinex.PrecisionRawBook
+			prec := bitfinex.Precision0
 			if overridePrecision {
 				prec = precision
 			} else {
 				aggregate, _ := msg.GetAggregatedBook() // aggregate by price (most granular by default) if no precision override is given
-				if aggregate {
-					prec = bitfinex.Precision0
+				if !aggregate {
+					prec = bitfinex.PrecisionRawBook
 				}
 			}
 			bookReqID, err := p.Ws.SubscribeBook(context.Background(), symbol, prec, bitfinex.FrequencyRealtime, depth)

@@ -134,12 +134,9 @@ func (s *Service) listen() {
 		case *bitfinex.PositionUpdate:
 			// no-op
 		case *bitfinex.OrderSnapshot:
-			if !s.isOrderRoutingService() {
-				continue
-			}
-			s.Websocket.FIX42OrderSnapshotHandler(obj, msg.FIXSessionID())
+			// no-op: do not provide order snapshots
 		case *wsv2.SubscribeEvent:
-			// no-op, don't need to ack subscription to client
+			// no-op: don't need to ack subscription to client
 		case *bitfinex.BookUpdateSnapshot:
 			if !s.isMarketDataService() {
 				continue

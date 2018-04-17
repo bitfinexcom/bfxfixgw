@@ -150,6 +150,20 @@ func FIX42ExecutionReport(symbol, clOrdID, orderID, account string, execType enu
 
 	// remaining to be executed
 	remaining := amt.Sub(cumAmt)
+	switch ordStatus {
+	case enum.OrdStatus_CANCELED:
+		fallthrough
+	case enum.OrdStatus_DONE_FOR_DAY:
+		fallthrough
+	case enum.OrdStatus_EXPIRED:
+		fallthrough
+	case enum.OrdStatus_REPLACED:
+		fallthrough
+	case enum.OrdStatus_STOPPED:
+		fallthrough
+	case enum.OrdStatus_SUSPENDED:
+		remaining = decimal.Zero
+	}
 
 	// this execution
 	lastShares := decimal.NewFromFloat(thisQty)
@@ -187,7 +201,6 @@ func FIX42ExecutionReport(symbol, clOrdID, orderID, account string, execType enu
 // used for oc-req notifications where only a cancel's CID is provided
 func FIX42ExecutionReportFromCancelWithDetails(c *bitfinex.OrderCancel, account string, execType enum.ExecType, cumQty float64, ordStatus enum.OrdStatus, ordType enum.OrdType, text, symbol, clOrdID, orderID string, side enum.Side, qty, avgPx float64, symbology symbol.Symbology, counterparty string) fix42er.ExecutionReport {
 	e := FIX42ExecutionReport(symbol, clOrdID, orderID, account, execType, side, qty, 0.0, cumQty, avgPx, ordStatus, ordType, text, symbology, counterparty)
-	// additional cxl details?
 	return e
 }
 

@@ -127,22 +127,28 @@ The FIX gateway service may be configured to distribute market data. Starting th
 Subscribe to `tBTCUSD` top-of-book Precision0 updates:
 
 ```
+8=FIX.4.2|9=111|35=V|34=2|49=EXORG_MD|52=20180417-19:40:17.467|56=BFXFIX|146=1|55=tBTCUSD|262=req-tBTCUSD|263=1|264=1|20003=P0|10=167|
+```
+
+Subscribe to `tETHUSD` full raw book updates at 25 price levels:
+
+```
+8=FIX.4.2|9=112|35=V|34=3|49=EXORG_MD|52=20180417-19:46:44.594|56=BFXFIX|146=1|55=tETHUSD|262=req-tETHUSD|263=1|264=25|20003=R0|10=248|
+```
+
+Receive FIX `35=W` book snapshot (for the first tBTCUSD request):
+
+```
 TODO
 ```
 
-Subscribe to `tETHUSD` full raw book updates (all price levels):
+Receive FIX `35=W` trade snapshot (for the first tBTCUSD request):
 
 ```
-TODO
-```
-
-Receive FIX `35=W` book snapshot:
 
 ```
-TODO
-```
 
-Receive FIX `35=X` incremental update:
+Receive FIX `35=X` incremental update (for the first tBTCUSD request):
 
 ```
 TODO

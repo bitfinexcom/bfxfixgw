@@ -17,7 +17,6 @@ import (
 	fix42mdir "github.com/quickfixgo/fix42/marketdataincrementalrefresh"
 	fix42mdsfr "github.com/quickfixgo/fix42/marketdatasnapshotfullrefresh"
 	ocj "github.com/quickfixgo/fix42/ordercancelreject"
-	lg "log"
 	//fix42nos "github.com/quickfixgo/quickfix/fix42/newordersingle"
 )
 
@@ -38,7 +37,6 @@ func FIX42MarketDataFullRefreshFromTradeSnapshot(mdReqID string, snapshot *bitfi
 	// MDStreamID?
 	group := fix42mdsfr.NewNoMDEntriesRepeatingGroup()
 	for _, update := range snapshot.Snapshot {
-		lg.Printf("update: %#v", update)
 		entry := group.Add()
 		entry.SetMDEntryType(enum.MDEntryType_TRADE)
 		entry.SetMDEntryPx(decimal.NewFromFloat(update.Price), 4)
@@ -69,7 +67,6 @@ func FIX42MarketDataFullRefreshFromBookSnapshot(mdReqID string, snapshot *bitfin
 	// MDStreamID?
 	group := fix42mdsfr.NewNoMDEntriesRepeatingGroup()
 	for _, update := range snapshot.Snapshot {
-		lg.Printf("update: %#v", update)
 		entry := group.Add()
 		var t enum.MDEntryType
 		switch update.Side {
@@ -94,7 +91,6 @@ func FIX42MarketDataIncrementalRefreshFromTrade(mdReqID string, trade *bitfinex.
 	message := fix42mdir.New()
 	message.SetMDReqID(mdReqID)
 	// MDStreamID?
-	lg.Printf("trade: %#v", trade)
 	group := fix42mdir.NewNoMDEntriesRepeatingGroup()
 	entry := group.Add()
 	entry.SetMDEntryType(enum.MDEntryType_TRADE)
@@ -116,7 +112,6 @@ func FIX42MarketDataIncrementalRefreshFromBookUpdate(mdReqID string, update *bit
 	message := fix42mdir.New()
 	message.SetMDReqID(mdReqID)
 	// MDStreamID?
-	lg.Printf("update: %#v", update)
 	group := fix42mdir.NewNoMDEntriesRepeatingGroup()
 	entry := group.Add()
 	var t enum.MDEntryType
@@ -127,7 +122,7 @@ func FIX42MarketDataIncrementalRefreshFromBookUpdate(mdReqID string, update *bit
 		t = enum.MDEntryType_OFFER
 	}
 	entry.SetMDEntryType(t)
-	entry.SetMDUpdateAction(enum.MDUpdateAction_NEW)
+	entry.SetMDUpdateAction(BookActionToFIX(update.Action))
 	entry.SetMDEntryPx(decimal.NewFromFloat(update.Price), 4)
 	entry.SetSecurityID(update.Symbol)
 	entry.SetIDSource(enum.IDSource_EXCHANGE_SYMBOL)

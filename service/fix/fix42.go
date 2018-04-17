@@ -8,7 +8,6 @@ import (
 	"github.com/bitfinexcom/bfxfixgw/convert"
 
 	"go.uber.org/zap"
-	lg "log"
 
 	//er "github.com/quickfixgo/quickfix/fix42/executionreport"
 	mdr "github.com/quickfixgo/fix42/marketdatarequest"
@@ -44,8 +43,6 @@ func (f *FIX) OnFIX42NewOrderSingle(msg nos.NewOrderSingle, sID quickfix.Session
 	if err != nil {
 		return err
 	}
-
-	lg.Printf("submit order %p", p.Ws)
 
 	ordtype, _ := msg.GetOrdType()
 	clordid, _ := msg.GetClOrdID()

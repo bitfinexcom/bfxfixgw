@@ -85,3 +85,13 @@ func OrdTypeToFIX(ordtype string) enum.OrdType {
 	}
 	return enum.OrdType_MARKET
 }
+
+func BookActionToFIX(action bitfinex.BookAction) enum.MDUpdateAction {
+	switch action {
+	case bitfinex.BookUpdateEntry:
+		return enum.MDUpdateAction_NEW
+	case bitfinex.BookRemoveEntry:
+		return enum.MDUpdateAction_DELETE
+	}
+	return enum.MDUpdateAction_NEW
+}

@@ -92,6 +92,9 @@ func (s *Service) listen() {
 		}
 		switch obj := msg.Data.(type) {
 		case *bitfinex.Notification:
+			if !s.isOrderRoutingService() {
+				continue
+			}
 			s.Websocket.FIX42NotificationHandler(obj, msg.FIXSessionID())
 		case *bitfinex.OrderNew:
 			if !s.isOrderRoutingService() {

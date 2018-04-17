@@ -1,81 +1,200 @@
-# bfxfixgw
+# Bitfinex FIX Gateway
 
-We are going to use [quickfixgo](https://github.com/quickfixgo/quickfix) to implement 
-the FIX side of the proxy and [gorilla’s websocket](https://github.com/gorilla/websocket) 
-package for the communication between the proxy and [bitfinex’s websocket API](https://bitfinex.readme.io/docs).
+The Bitfinex FIX gateway uses [QuickFix/go](https://github.com/quickfixgo/quickfix) to implement FIX connectivity. [The Bitfinex Go API](https://github.com/bitfinexcom/bitfinex-api-go) is used to manage the [Bitfinex API websocket](https://bitfinex.readme.io/docs) connection, which ultimately uses [Gorilla](https://github.com/gorilla/websocket).
 
-# Configuration
+## Build
 
-The configuration is supplied to quickfixgo via a simple `io.Reader`, which means
-that the actual config file can be stored just about anywhere. The problem is 
-that right now it seems like quickfixgo does not offer a method to reload the 
-global configuration, meaning that adding a new session would require a stop/start 
-of all sessions. One possible remedy for that with the current quickfixgo library 
-could be running instance per session, i.e. each user gets their own port to
-connect to.
+First obtain all sources:
 
-At some point in the future extending the quickfixgo library to allow a graceful
-reload of the config could be considered.
+```bash
+go get ./...
+```
 
-## Environment
+Build:
+
+```bash
+go build ./...
+```
+
+Run tests:
+
+```bash
+go test ./...
+```
+
+And install binaries:
+
+```bash
+go install ./...
+```
+
+## Configuration
+
+The FIX gateway can operate in order routing mode, market data mode, or both.  Order routing & market data FIX endpoints must be separate with distinct session IDs.
+
+### Environment
 
 - `DEBUG=1` to enable debug logging
 - `FIX_SETTINGS_DIRECTORY=./config` to read the configs from the given directory, `./config`
   is the default directory.
 
-Staging startup from source:
+### Sessions
+
+Sessions must be known to the FIX gateway prior to startup.  A FIX gateway can manage any number of sessions.  Each FIX session will create 1 websocket proxy connection.
+
+#### Sequence Numbers
+
+The market data service does not support resend requests or replaying FIX messages. When connecting to the market data FIX endpoint, a FIX initiator must either have the correct sequence number or a lower than expected sequence number.
+
+The order routing service strictly tracks sequence numbers and does support message storage.
+
+### FIX Configuration Examples
+
+Example service FIX session configuration for a market data service:
+
+```
+[DEFAULT]
+SenderCompID=BFXFIX
+ResetOnLogon=Y
+ReconnectInterval=60
+FileLogPath=tmp/md_service/log
+SocketAcceptPort=5001
+StartTime=00:05:00
+StartDay=Sun
+EndTime=00:00:00
+EndDay=Sun
+
+[SESSION]
+TargetCompID=EXORG_MD
+BeginString=FIX.4.2
+DefaultApplVerID=FIX.4.2
+HeartBtInt=30
+```
+
+Example service FIX session configuration for an order routing service:
+
+```
+[DEFAULT]
+SenderCompID=BFXFIX
+ReconnectInterval=60
+FileLogPath=tmp/ord_service/log
+FileStorePath=tmp/ord_service/data
+SocketAcceptPort=5002
+StartTime=00:05:00
+StartDay=Sun
+EndTime=00:00:00
+EndDay=Sun
+
+[SESSION]
+TargetCompID=EXORG_ORD
+BeginString=FIX.4.2
+DefaultApplVerID=FIX.4.2
+HeartBtInt=30
+```
+
+### Startup
+
+To startup the gateway with both order routing and market data endpoints (staging configuration):
 
 ```bash
 FIX_SETTINGS_DIRECTORY=conf/integration_test/service/ bfxfixgw.exe -orders -ordcfg orders_fix42.cfg -md -mdcfg marketdata_fix42.cfg -ws wss://dev-prdn.bitfinex.com:2998/ws/2 -rest https://dev-prdn.bitfinex.com:2998/v2/
 ```
 
-## Sessions
+## Authentication
 
-The current plan is to have one FIX instance per config file/port to enable restarting
-single sessions in the future.
+FIX session information must be obtained prior to a FIX client establishing a connection.  The pre-determined TargetCompID, SenderCompID, and FIX version strings should be configured in the FIX client configuration.
 
-The creation of the sessions happen at the startup of the application "onCreate"
-event. So for each session, as soon as the app starts, we connect the authenticated 
-websocket and map it to the sessionId.
+Once sessions are configured, a FIX client can authenticate by adding the following FIX fields into the `35=A Logon` message body:
 
-# Authentication
+| Field 		| FIX Tag # | Description 		|
+|---------------|-----------|-------------------|
+| BfxApiKey 	| 20000		| User's API Key	|
+| BfxApiSecret 	| 20001		| User's API Secret	|
+| BfxUserID 	| 20002		| User's Bfx ID		|
 
-Authentication is problematic given that FIX 4.4 allows username/password, FIX 
-4.2 does not, which means that there's no consisten way of handling the authentication.
-One possibility would be to use the RawData field, but many clients don't seem to
-support that.
-The current approach is to use the `SenderCompID` and `TargetCompID`. The 
-`SenderCompID` is the key for the API and the `TargetCompID` is the secret, e.g.
-one session in the cfg file for the proxy/server might look like this:
+These tags are supported by the gateway's default [data dictionary](spec/Bitfinex_FIX42.xml).  An example staging logon message (`SOH` replaced with `|`):
 
 ```
-[SESSION]
-SenderCompID=wGqfsyrEi2c1eD4c1E9BHAXCL50rE4j2wqjNQjq4DAh
-TargetCompID=8NGQqizVUE5e3benJklHpB33FSFHGb64U49h1rGBhHZ
-BeginString=FIX.4.4
+8=FIX.4.2|9=186|35=A|34=1|49=EXORG_ORD|52=20180416-18:27:47.541|56=BFXFIX|20000=U83q9jkML2GVj1fVxFJOAXQeDGaXIzeZ6PwNPQLEXt4|20001=77SWIRggvw0rCOJUgk9GVcxbldjTxOJP5WLCjWBFIVc|20002=connamara|98=0|108=30|10=117|
 ```
 
-The issues with using `SenderCompID` and `TargetCompID` are the misuse of the
-protocol and both fields only being protected by TLS, i.e. without TLS they are
-transmitted in plaintext over the wire, because they're part of the Header, which
-is always unencrypted.
-
-It was also proposed to have a configuration file containing a batch of X sessions
-(senderCompId + targetCompId), where each senderCompId is an authentication token
-that will manually associated to a user on bitfinex's backend side, so websocket
-authentication message will just be `{ "event": "auth", "token": SEND_COMP_ID}`. 
-
-# Market Data Distribution
+## Market Data Distribution
 
 The FIX gateway service may be configured to distribute market data. Starting the process with `-md` will enable market data distribution, configured by the `-mdcfg` flag.
 
-# Order Routing
+### Examples
 
-# Order State Details
+Subscribe to `tBTCUSD` top-of-book Precision0 updates:
 
-When receiving a Bitfinex Order update object (on, ou, oc), the following tables demonstrate rules for mapping tag 39 OrdStatuses.
+```
+TODO
+```
 
-## Bitfinex order update status mappings
+Subscribe to `tETHUSD` full raw book updates (all price levels):
+
+```
+TODO
+```
+
+Receive FIX `35=W` book snapshot:
+
+```
+TODO
+```
+
+Receive FIX `35=X` incremental update:
+
+```
+TODO
+```
+
+## Order Routing
+
+Order routing can be enabled with the `-ord` and `-ordcfg` flags on startup.
+
+### Examples
+
+Send limit new order single:
+
+```
+TODO
+```
+
+Send market new order single:
+
+```
+TODO
+```
+
+Receive FIX `35=8` execution report for working order:
+
+```
+TODO
+```
+
+Receive FIX `35=8` execution report for a partial or full fill:
+
+```
+TODO
+```
+
+Cancel working limit order:
+
+```
+TODO
+```
+
+Receive FIX `35=8` cancel acknowledgement:
+
+```
+TODO
+```
+
+## Order State Details
+
+When receiving a Bitfinex Order update object (on, ou, oc), the following tables demonstrate rules for mapping FIX tag `39 OrdStatus`:
+
+### Order Update Status Mappings
 
 | BFX Order State 	| FIX OrdStatus Code 	| Order Status 		|
 |-------------------|-----------------------|-------------------|
@@ -97,30 +216,35 @@ Executions are received as `te` TradeExecution messages and `tu` TradeUpdate mes
 - When receiving order state updates (rejection, fill, cancel acknowledgement), the cache must be referenced to provide FIX-required details
 - When receiving a TradeUpdate, if cached details indicate the incoming TradeUpdate would fully fill the order, the gateway will publish an ExecutionReport with an OrdStatus of FILLED.
 
-## Synthetic order state message mappings
+### Synthetic Order State Message Mappings
 
 `on-req` generally maps to PENDING NEW, with an exception for market orders, which do not receive subsequent `on` ack working messages.
 
 | BFX Order Type	| Incoming BFX Message	| FIX OrdStatus Code	| Order Status		| Notes	|
 |-------------------|-----------------------|-----------------------|-------------------|-------|
-| EXCHANGE MARKET	| n (on-req)			| A & 0					| PENDING NEW & NEW	| Market orders do not receive `on` messages.  The first successful acknowledgement publishes both PENDING NEW and NEW execution reports. |
-| EXCHANGE LIMIT	| n (on-req)			| A						| PENDING NEW		| |
-| EXCHANGE LIMIT	| on					| 0						| NEW				| |
-| EXCHANGE LIMIT	| oc					| 4						| CANCELED			| |
+| EXCHANGE MARKET	| n (on-req)			| 0					| NEW	| Market orders do not receive `on` messages. |
+| EXCHANGE LIMIT	| n (on-req)			| 0						| PENDING NEW		| |
+| EXCHANGE LIMIT	| oc					| 4						| CANCELED			| `oc` objects are also received for terminal order states, such as fills, in which case an `oc` will generate no FIX message |
 | EXCHANGE LIMIT	| ou					| Depends on status		| Depends on status	| |
 
-# Troubleshooting
+## Troubleshooting
 
-Below are a few common issues with simple procedures to resolve runtime problems.
+Below are a few common issues with simple procedures to resolve runtime problems:
 
-## FIX client won't log on
+#### FIX client won't log on
 
 If the session has been rolled over or restarted, a FIX initiator may have a higher sequence number than its acceptor, which is an error condition.  Simply reset the FIX initiator's sequence number (deleting the sequence store file in QuickFIX works) and the initiator should no longer disconnect on logon.
 
-## FIX logs on but does not process requests
+#### FIX logs on but does not process requests
 
 Ensure the correct endpoint is configured for use. (i.e. MarketDataRequests should be sent to the FIX Market Data endpoint, and NewOrderSingle messages should be sent to the order routing endpoint).
 
 # Issues
 
-- Cached state details are lost on restart (must fetch account order & execution state on startup)
+## Average price on restart
+
+The gateway calculates average fill price based on executions the gateway has received and stored in working memory.
+
+If the gateway is restarted while a client's order is partially filled, but still working, the average fill prices will only reflect fills subsequent to the gateway's restart.
+
+To fix this issue, the gateway should fetch execution information for each order in the order snapshot received when logging a user onto the Bitfinex API, which it currently does not do.

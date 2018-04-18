@@ -22,19 +22,20 @@ func OrderNewTypeFromFIX42NewOrderSingle(nos fix42nos.NewOrderSingle) string {
 
 	pref := "EXCHANGE "
 
-	switch {
-	case ot == enum.OrdType_MARKET:
+	// map AON & IOC => FOK
+	if tif == enum.TimeInForce_FILL_OR_KILL || ei == enum.ExecInst_ALL_OR_NONE && tif == enum.TimeInForce_IMMEDIATE_OR_CANCEL {
+		return pref + "FOK"
+	}
+
+	switch ot {
+	case enum.OrdType_MARKET:
 		return pref + "MARKET"
-	case ot == enum.OrdType_LIMIT:
+	case enum.OrdType_LIMIT:
 		return pref + "LIMIT"
-	case ot == enum.OrdType_STOP:
+	case enum.OrdType_STOP:
 		return pref + "STOP"
-	case ot == enum.OrdType_STOP_LIMIT:
+	case enum.OrdType_STOP_LIMIT:
 		return "STOP LIMIT"
-	case tif == enum.TimeInForce_FILL_OR_KILL:
-		return pref + "FOK"
-	case ei == enum.ExecInst_ALL_OR_NONE && tif == enum.TimeInForce_IMMEDIATE_OR_CANCEL:
-		return pref + "FOK"
 	default:
 		return ""
 	}
@@ -78,12 +79,6 @@ func OrderNewFromFIX42NewOrderSingle(nos fix42nos.NewOrderSingle, symbology symb
 	q, _ := qd.Float64()
 
 	t, _ := nos.GetOrdType()
-	// TODO
-	// Trailing Stop
-	// Fill or Kill
-	// One Cancels Other
-	// Hidden
-	// Post-Only Limit
 	switch t {
 	case enum.OrdType_LIMIT:
 		pd, err := nos.GetPrice()
@@ -92,9 +87,22 @@ func OrderNewFromFIX42NewOrderSingle(nos fix42nos.NewOrderSingle, symbology symb
 		}
 		on.Price, _ = pd.Float64()
 	case enum.OrdType_STOP:
-		// TODO
+		pd, err := nos.GetStopPx()
+		if err != nil {
+			return nil, err
+		}
+		on.Price, _ = pd.Float64()
 	case enum.OrdType_STOP_LIMIT:
-		// TODO
+		lm, err := nos.GetPrice()
+		if err != nil {
+			return nil, err
+		}
+		on.Price, _ = lm.Float64()
+		pd, err := nos.GetStopPx()
+		if err != nil {
+			return nil, err
+		}
+		on.PriceAuxLimit, _ = pd.Float64()
 	}
 
 	side, err := nos.GetSide()

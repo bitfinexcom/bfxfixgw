@@ -22,6 +22,7 @@ import (
 	"github.com/quickfixgo/quickfix"
 
 	bitfinex "github.com/bitfinexcom/bitfinex-api-go/v2"
+	lg "log"
 )
 
 const (
@@ -39,7 +40,7 @@ func (f *FIX) OnFIX42NewOrderSingle(msg nos.NewOrderSingle, sID quickfix.Session
 		return quickfix.NewMessageRejectError("could not find established peer for session ID", rejectReasonOther, nil)
 	}
 
-	bo, err := convert.OrderNewFromFIX42NewOrderSingle(msg, f.Symbology, sID.SenderCompID)
+	bo, err := convert.OrderNewFromFIX42NewOrderSingle(msg, f.Symbology, sID.TargetCompID)
 	if err != nil {
 		return err
 	}
@@ -142,11 +143,13 @@ func (f *FIX) OnFIX42MarketDataRequest(msg mdr.MarketDataRequest, sID quickfix.S
 		if err != nil {
 			return err
 		}
-		translated, err2 := f.Symbology.ToBitfinex(fixSymbol, sID.SenderCompID)
+		translated, err2 := f.Symbology.ToBitfinex(fixSymbol, sID.TargetCompID)
 		var symbol string
 		if err2 == nil {
+			lg.Printf("translate FIX %s to %s", fixSymbol, translated)
 			symbol = translated
 		} else {
+			lg.Printf("could not translate FIX %s: %s", fixSymbol, err2.Error())
 			symbol = fixSymbol
 		}
 
@@ -165,13 +168,13 @@ func (f *FIX) OnFIX42MarketDataRequest(msg mdr.MarketDataRequest, sID quickfix.S
 			if err != nil {
 				return reject(err)
 			}
-			fix := convert.FIX42MarketDataFullRefreshFromBookSnapshot(mdReqID, bookSnapshot, f.Symbology, sID.SenderCompID)
+			fix := convert.FIX42MarketDataFullRefreshFromBookSnapshot(mdReqID, bookSnapshot, f.Symbology, sID.TargetCompID)
 			quickfix.SendToTarget(fix, sID)
 			tradeSnapshot, err := p.Rest.Trades.All(symbol)
 			if err != nil {
 				return reject(err)
 			}
-			fix = convert.FIX42MarketDataFullRefreshFromTradeSnapshot(mdReqID, tradeSnapshot, f.Symbology, sID.SenderCompID)
+			fix = convert.FIX42MarketDataFullRefreshFromTradeSnapshot(mdReqID, tradeSnapshot, f.Symbology, sID.TargetCompID)
 			quickfix.SendToTarget(fix, sID)
 
 		case enum.SubscriptionRequestType_SNAPSHOT_PLUS_UPDATES:
@@ -308,7 +311,7 @@ func (f *FIX) OnFIX42OrderStatusRequest(msg osr.OrderStatusRequest, sID quickfix
 		cached = peer.AddOrder(clOrdID, order.Price, order.Amount, order.Symbol, peer.BfxUserID(), convert.SideToFIX(order.Amount), convert.OrdTypeToFIX(order.Type))
 	}
 	status := convert.OrdStatusToFIX(order.Status)
-	er := convert.FIX42ExecutionReportFromOrder(order, peer.BfxUserID(), enum.ExecType_ORDER_STATUS, cached.FilledQty(), status, "", f.Symbology, sID.SenderCompID)
+	er := convert.FIX42ExecutionReportFromOrder(order, peer.BfxUserID(), enum.ExecType_ORDER_STATUS, cached.FilledQty(), status, "", f.Symbology, sID.TargetCompID)
 	quickfix.SendToTarget(er, sID)
 
 	return nil

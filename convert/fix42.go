@@ -221,12 +221,26 @@ func FIX42ExecutionReportFromOrder(o *bitfinex.Order, account string, execType e
 	e := FIX42ExecutionReport(o.Symbol, strconv.FormatInt(o.CID, 10), orderID, account, execType, SideToFIX(o.Amount), fAmt, 0.0, cumQty, o.PriceAvg, ordStatus, OrdTypeToFIX(o.Type), text, symbology, counterparty)
 	switch o.Type {
 	case bitfinex.OrderTypeLimit:
+		fallthrough
 	case bitfinex.OrderTypeExchangeLimit:
 		e.SetPrice(decimal.NewFromFloat(o.Price), 4)
 	case bitfinex.OrderTypeStopLimit:
 		e.SetPrice(decimal.NewFromFloat(o.Price), 4)
 		//e.SetStopPx(decimal.NewFromFloat(o.PriceAuxLimit), 4) // ??
+	case bitfinex.OrderTypeStop:
+		fallthrough
+	case bitfinex.OrderTypeExchangeStop:
+		// TODO
+	case bitfinex.OrderTypeTrailingStop:
+		fallthrough
+	case bitfinex.OrderTypeExchangeTrailingStop:
+		// TODO
+	case bitfinex.OrderTypeFOK:
+		fallthrough
+	case bitfinex.OrderTypeExchangeFOK:
+		// TODO
 	}
+	// TODO order options?
 	if text != "" {
 		e.SetText(text)
 	}
@@ -254,6 +268,7 @@ func FIX42ExecutionReportFromTradeExecutionUpdate(t *bitfinex.TradeExecutionUpda
 	if f < 0 {
 		f = -f
 	}
+	// TODO order type specific fields?
 	fee := decimal.NewFromFloat(f)
 	er.SetCommission(fee, 4)
 	er.SetCommType(enum.CommType_ABSOLUTE)

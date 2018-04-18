@@ -160,10 +160,7 @@ func (s *Service) listen() {
 			}
 			s.Websocket.FIX42TradeHandler(obj, msg.FIXSessionID())
 		case *bitfinex.TradeSnapshot:
-			if !s.isMarketDataService() {
-				continue
-			}
-			s.Websocket.FIX42TradeSnapshotHandler(obj, msg.FIXSessionID())
+			// no-op: do not provide trade snapshots
 		case error:
 			s.log.Error("processing error", zap.Any("msg", obj))
 		default:

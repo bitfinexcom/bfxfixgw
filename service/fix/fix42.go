@@ -39,7 +39,7 @@ func (f *FIX) OnFIX42NewOrderSingle(msg nos.NewOrderSingle, sID quickfix.Session
 		return quickfix.NewMessageRejectError("could not find established peer for session ID", rejectReasonOther, nil)
 	}
 
-	bo, err := convert.OrderNewFromFIX42NewOrderSingle(msg)
+	bo, err := convert.OrderNewFromFIX42NewOrderSingle(msg, f.Symbology, sID.SenderCompID)
 	if err != nil {
 		return err
 	}
@@ -47,6 +47,7 @@ func (f *FIX) OnFIX42NewOrderSingle(msg nos.NewOrderSingle, sID quickfix.Session
 	ordtype, _ := msg.GetOrdType()
 	clordid, _ := msg.GetClOrdID()
 	side, _ := msg.GetSide()
+
 	p.AddOrder(clordid, bo.Price, bo.Amount, bo.Symbol, p.BfxUserID(), side, ordtype)
 
 	e := p.Ws.SubmitOrder(context.Background(), bo)
@@ -137,9 +138,16 @@ func (f *FIX) OnFIX42MarketDataRequest(msg mdr.MarketDataRequest, sID quickfix.S
 
 	for i := 0; i < relSym.Len(); i++ {
 
-		symbol, err := relSym.Get(i).GetSymbol()
+		fixSymbol, err := relSym.Get(i).GetSymbol()
 		if err != nil {
 			return err
+		}
+		translated, err2 := f.Symbology.ToBitfinex(fixSymbol, sID.SenderCompID)
+		var symbol string
+		if err2 == nil {
+			symbol = translated
+		} else {
+			symbol = fixSymbol
 		}
 
 		// XXX: The following could most likely be abtracted to work both for 4.2 and 4.4.
@@ -210,7 +218,6 @@ func (f *FIX) OnFIX42OrderCancelRequest(msg ocr.OrderCancelRequest, sID quickfix
 	}
 
 	cid, _ := msg.GetClOrdID()
-
 	id, _ := msg.GetOrderID()
 
 	// The spec says that a quantity and side are also required but the bitfinex API does not

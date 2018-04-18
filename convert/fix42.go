@@ -87,7 +87,12 @@ func FIX42MarketDataFullRefreshFromBookSnapshot(mdReqID string, snapshot *bitfin
 	return &message
 }
 
-func FIX42MarketDataIncrementalRefreshFromTrade(mdReqID string, trade *bitfinex.Trade) *fix42mdir.MarketDataIncrementalRefresh {
+func FIX42MarketDataIncrementalRefreshFromTrade(mdReqID string, trade *bitfinex.Trade, symbology symbol.Symbology, counterparty string) *fix42mdir.MarketDataIncrementalRefresh {
+	symbol, err := symbology.FromBitfinex(trade.Pair, counterparty)
+	if err != nil {
+		symbol = trade.Pair
+	}
+
 	message := fix42mdir.New()
 	message.SetMDReqID(mdReqID)
 	// MDStreamID?
@@ -96,19 +101,24 @@ func FIX42MarketDataIncrementalRefreshFromTrade(mdReqID string, trade *bitfinex.
 	entry.SetMDEntryType(enum.MDEntryType_TRADE)
 	entry.SetMDUpdateAction(enum.MDUpdateAction_NEW)
 	entry.SetMDEntryPx(decimal.NewFromFloat(trade.Price), 4)
-	entry.SetSecurityID(trade.Pair)
+	entry.SetSecurityID(symbol)
 	entry.SetIDSource(enum.IDSource_EXCHANGE_SYMBOL)
 	amt := trade.Amount
 	if amt < 0 {
 		amt = -amt
 	}
 	entry.SetMDEntrySize(decimal.NewFromFloat(amt), 4)
-	entry.SetSymbol(trade.Pair)
+	entry.SetSymbol(symbol)
 	message.SetNoMDEntries(group)
 	return &message
 }
 
-func FIX42MarketDataIncrementalRefreshFromBookUpdate(mdReqID string, update *bitfinex.BookUpdate) *fix42mdir.MarketDataIncrementalRefresh {
+func FIX42MarketDataIncrementalRefreshFromBookUpdate(mdReqID string, update *bitfinex.BookUpdate, symbology symbol.Symbology, counterparty string) *fix42mdir.MarketDataIncrementalRefresh {
+	symbol, err := symbology.FromBitfinex(update.Symbol, counterparty)
+	if err != nil {
+		symbol = update.Symbol
+	}
+
 	message := fix42mdir.New()
 	message.SetMDReqID(mdReqID)
 	// MDStreamID?
@@ -125,7 +135,7 @@ func FIX42MarketDataIncrementalRefreshFromBookUpdate(mdReqID string, update *bit
 	entry.SetMDEntryType(t)
 	entry.SetMDUpdateAction(action)
 	entry.SetMDEntryPx(decimal.NewFromFloat(update.Price), 4)
-	entry.SetSecurityID(update.Symbol)
+	entry.SetSecurityID(symbol)
 	entry.SetIDSource(enum.IDSource_EXCHANGE_SYMBOL)
 	amt := update.Amount
 	if amt < 0 {
@@ -134,7 +144,7 @@ func FIX42MarketDataIncrementalRefreshFromBookUpdate(mdReqID string, update *bit
 	if action != enum.MDUpdateAction_DELETE {
 		entry.SetMDEntrySize(decimal.NewFromFloat(amt), 4)
 	}
-	entry.SetSymbol(update.Symbol)
+	entry.SetSymbol(symbol)
 	message.SetNoMDEntries(group)
 	return &message
 }

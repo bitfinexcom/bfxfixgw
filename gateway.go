@@ -122,7 +122,7 @@ func (d *defaultClientFactory) NewWs() *websocket.Client {
 	if d.Parameters == nil {
 		d.Parameters = websocket.NewDefaultParameters()
 	}
-	return websocket.NewWithParams(d.Parameters)
+	return websocket.NewWithParamsNonce(d.Parameters, peer.NewMultikeyNonceGenerator())
 }
 
 func (d *defaultClientFactory) NewRest() *rest.Client {

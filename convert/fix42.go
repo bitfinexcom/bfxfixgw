@@ -121,8 +121,9 @@ func FIX42MarketDataIncrementalRefreshFromBookUpdate(mdReqID string, update *bit
 	case bitfinex.Ask:
 		t = enum.MDEntryType_OFFER
 	}
+	action := BookActionToFIX(update.Action)
 	entry.SetMDEntryType(t)
-	entry.SetMDUpdateAction(BookActionToFIX(update.Action))
+	entry.SetMDUpdateAction(action)
 	entry.SetMDEntryPx(decimal.NewFromFloat(update.Price), 4)
 	entry.SetSecurityID(update.Symbol)
 	entry.SetIDSource(enum.IDSource_EXCHANGE_SYMBOL)
@@ -130,7 +131,9 @@ func FIX42MarketDataIncrementalRefreshFromBookUpdate(mdReqID string, update *bit
 	if amt < 0 {
 		amt = -amt
 	}
-	entry.SetMDEntrySize(decimal.NewFromFloat(amt), 4)
+	if action != enum.MDUpdateAction_DELETE {
+		entry.SetMDEntrySize(decimal.NewFromFloat(amt), 4)
+	}
 	entry.SetSymbol(update.Symbol)
 	message.SetNoMDEntries(group)
 	return &message

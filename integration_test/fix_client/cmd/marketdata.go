@@ -18,7 +18,9 @@ const FixPricePrecision fix.Tag = 20003
 
 func newMdRequest(reqID, symbol string, depth int, precision string) *mdr.MarketDataRequest {
 	mdreq := mdr.New(field.NewMDReqID(reqID), field.NewSubscriptionRequestType(enum.SubscriptionRequestType_SNAPSHOT_PLUS_UPDATES), field.NewMarketDepth(depth))
-	mdreq.SetString(FixPricePrecision, precision)
+	if precision != "" {
+		mdreq.SetString(FixPricePrecision, precision)
+	}
 	nrsg := mdr.NewNoRelatedSymRepeatingGroup()
 	nrs := nrsg.Add()
 	nrs.Set(field.NewSymbol(symbol))
@@ -30,11 +32,9 @@ func buildFixMdRequests(symbols []string, depth int, raw bool, precLevel string)
 	reqs := make([]fix.Messagable, 0, len(symbols))
 	for _, sym := range symbols {
 		reqID := fmt.Sprintf("req-%s", sym)
-		precision := "P0"
+		precision := ""
 		if raw {
 			precision = "R0"
-		} else if precLevel != "" {
-			precision = precLevel
 		}
 		req := newMdRequest(reqID, sym, depth, precision)
 		reqs = append(reqs, req)

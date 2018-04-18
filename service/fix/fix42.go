@@ -173,8 +173,8 @@ func (f *FIX) OnFIX42MarketDataRequest(msg mdr.MarketDataRequest, sID quickfix.S
 			if overridePrecision {
 				prec = precision
 			} else {
-				aggregate, _ := msg.GetAggregatedBook() // aggregate by price (most granular by default) if no precision override is given
-				if !aggregate {
+				aggregate, err := msg.GetAggregatedBook() // aggregate by price (most granular by default) if no precision override is given
+				if err == nil && !aggregate {
 					prec = bitfinex.PrecisionRawBook
 				}
 			}

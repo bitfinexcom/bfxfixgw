@@ -80,8 +80,19 @@ func OrdTypeToFIX(ordtype string) enum.OrdType {
 	case "LIMIT":
 		return enum.OrdType_LIMIT
 	case "EXCHANGE MARKET":
+		fallthrough
 	case "MARKET":
 		return enum.OrdType_MARKET
+	case "STOP":
+		fallthrough
+	case "EXCHANGE STOP":
+		return enum.OrdType_STOP
+	case "STOP LIMIT":
+		return enum.OrdType_STOP_LIMIT
+	case "FOK":
+		fallthrough
+	case "EXCHANGE FOK":
+		return enum.OrdType_LIMIT
 	}
 	return enum.OrdType_MARKET
 }
@@ -94,4 +105,14 @@ func BookActionToFIX(action bitfinex.BookAction) enum.MDUpdateAction {
 		return enum.MDUpdateAction_DELETE
 	}
 	return enum.MDUpdateAction_NEW
+}
+
+func TimeInForceToFIX(ordtype string) enum.TimeInForce {
+	switch ordtype {
+	case "FOK":
+		fallthrough
+	case "EXCHANGE FOK":
+		return enum.TimeInForce_FILL_OR_KILL
+	}
+	return enum.TimeInForce_GOOD_TILL_CANCEL // GTC default
 }

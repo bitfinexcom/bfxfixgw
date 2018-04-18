@@ -48,8 +48,12 @@ func (f *FIX) OnFIX42NewOrderSingle(msg nos.NewOrderSingle, sID quickfix.Session
 	ordtype, _ := msg.GetOrdType()
 	clordid, _ := msg.GetClOrdID()
 	side, _ := msg.GetSide()
+	tif, err := msg.GetTimeInForce()
+	if err != nil {
+		tif = enum.TimeInForce_GOOD_TILL_CANCEL // default TIF
+	}
 
-	p.AddOrder(clordid, bo.Price, bo.Amount, bo.Symbol, p.BfxUserID(), side, ordtype)
+	p.AddOrder(clordid, bo.Price, bo.PriceAuxLimit, bo.Amount, bo.Symbol, p.BfxUserID(), side, ordtype, tif)
 
 	e := p.Ws.SubmitOrder(context.Background(), bo)
 	if e != nil {
@@ -306,9 +310,10 @@ func (f *FIX) OnFIX42OrderStatusRequest(msg osr.OrderStatusRequest, sID quickfix
 	}
 	orderID := strconv.FormatInt(order.ID, 10)
 	clOrdID := strconv.FormatInt(order.CID, 10)
+	tif := convert.TimeInForceToFIX(order.Type)
 	cached, err2 := peer.LookupByOrderID(orderID)
 	if err2 != nil {
-		cached = peer.AddOrder(clOrdID, order.Price, order.Amount, order.Symbol, peer.BfxUserID(), convert.SideToFIX(order.Amount), convert.OrdTypeToFIX(order.Type))
+		cached = peer.AddOrder(clOrdID, order.Price, order.PriceAuxLimit, order.Amount, order.Symbol, peer.BfxUserID(), convert.SideToFIX(order.Amount), convert.OrdTypeToFIX(order.Type), tif)
 	}
 	status := convert.OrdStatusToFIX(order.Status)
 	er := convert.FIX42ExecutionReportFromOrder(order, peer.BfxUserID(), enum.ExecType_ORDER_STATUS, cached.FilledQty(), status, "", f.Symbology, sID.TargetCompID)

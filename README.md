@@ -265,3 +265,11 @@ The gateway calculates average fill price based on executions the gateway has re
 If the gateway is restarted while a client's order is partially filled, but still working, the average fill prices will only reflect fills subsequent to the gateway's restart.
 
 To fix this issue, the gateway should fetch execution information for each order in the order snapshot received when logging a user onto the Bitfinex API, which it currently does not do.
+
+## Execution reports out of order
+
+To preserve fee information, `tu` API messages are used to populate execution reports.  However, the API publishes `tu` messages out of order, so corresponding ERs may also be out of order.
+
+## Immediate or Cancel & All or None collapse into Fill or Kill time in forces
+
+If an order is sent with an Immediate or Cancel time in force and an All or None execution instruction, the order will be mapped as a Bitfinex fill or kill limit order. Corresponding execution reports will indicate the order was placed as a fill or kill limit and not an IOC AON limit order.

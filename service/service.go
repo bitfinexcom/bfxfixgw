@@ -166,8 +166,15 @@ func (s *Service) listen() {
 			}
 			s.Websocket.FIX42BookUpdate(obj, msg.FIXSessionID())
 		case *bitfinex.TradeExecution:
-			// ignore trade executions in favor of trade execution updates (more data)
+			// 'te' delivered in-order
+			/*
+				if !s.isOrderRoutingService() {
+					continue
+				}
+				s.Websocket.FIX42TradeExecutionHandler(obj, msg.FIXSessionID())
+			*/
 		case *bitfinex.TradeExecutionUpdate:
+			// ignore trade execution update ('tu') in favor of trade executions since they come in-order
 			if !s.isOrderRoutingService() {
 				continue
 			}
@@ -180,11 +187,7 @@ func (s *Service) listen() {
 		case *bitfinex.TradeSnapshot:
 			// no-op: do not provide trade snapshots
 		case *wsv2.ErrorEvent:
-			// example event: {"code":10300,"msg":"symbol: invalid"}
-			// another example: {"channel":"book","symbol":"blahbalh","prec":"P0","freq":"F0","len":"100","subId":"1524075623001","event":"error","msg":"symbol: invalid","code":10300,"pair":"lahbalh"}
-			log.Printf("error: %#v", obj)
-
-			// subscription error?
+			// subscription error
 			if obj.SubID != "" {
 				peer, ok := s.FindPeer(msg.FIXSessionID().String())
 				if ok {
@@ -201,7 +204,6 @@ func (s *Service) listen() {
 					}
 				}
 			}
-
 			// generic error
 			refMsgType := field.NewRefMsgType(s.FIX.LastMsgType()) // guess this is related to the last inbound FIX message
 			reason := field.NewBusinessRejectReason(businessRejectReason(obj.Message))

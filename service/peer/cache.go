@@ -22,23 +22,26 @@ type CachedCancel struct {
 type CachedOrder struct {
 	Symbol, Account  string
 	ClOrdID, OrderID string
-	Px, Qty          float64 // original px & qty
+	Px, Stop, Qty    float64 // original pxs & qty
 	Executions       []execution
 	lock             sync.Mutex
 	Side             enum.Side
 	OrderType        enum.OrdType
+	TimeInForce      enum.TimeInForce
 }
 
-func newOrder(clordid string, px, qty float64, symbol, account string, side enum.Side, ordType enum.OrdType) *CachedOrder {
+func newOrder(clordid string, px, stop, qty float64, symbol, account string, side enum.Side, ordType enum.OrdType, tif enum.TimeInForce) *CachedOrder {
 	return &CachedOrder{
-		ClOrdID:    clordid,
-		Px:         px,
-		Qty:        qty,
-		Executions: make([]execution, 0),
-		Symbol:     symbol,
-		Account:    account,
-		Side:       side,
-		OrderType:  ordType,
+		ClOrdID:     clordid,
+		Px:          px,
+		Stop:        stop,
+		Qty:         qty,
+		Executions:  make([]execution, 0),
+		Symbol:      symbol,
+		Account:     account,
+		Side:        side,
+		OrderType:   ordType,
+		TimeInForce: tif,
 	}
 }
 
@@ -156,13 +159,13 @@ func (c *cache) ReverseLookupAPIReqIDs(bfxReqID string) (string, bool) {
 }
 
 // add when receiving a NewOrderSingle over FIX
-func (c *cache) AddOrder(clordid string, px, qty float64, symbol, account string, side enum.Side, ordType enum.OrdType) *CachedOrder {
+func (c *cache) AddOrder(clordid string, px, stop, qty float64, symbol, account string, side enum.Side, ordType enum.OrdType, tif enum.TimeInForce) *CachedOrder {
 	if qty < 0 {
 		qty = -qty
 	}
 	c.lock.Lock()
 	c.log.Info("added order to cache", zap.String("ClOrdID", clordid), zap.Float64("Px", px), zap.Float64("Qty", qty))
-	order := newOrder(clordid, px, qty, symbol, account, side, ordType)
+	order := newOrder(clordid, px, stop, qty, symbol, account, side, ordType, tif)
 	c.orders[clordid] = order
 	c.lock.Unlock()
 	return order

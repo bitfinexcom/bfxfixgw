@@ -1,6 +1,7 @@
 package convert
 
 import (
+	"errors"
 	"strconv"
 
 	"github.com/bitfinexcom/bitfinex-api-go/v2"
@@ -15,29 +16,33 @@ import (
 // OrderNewTypeFromFIX42NewOrderSingle takes a FIX42 NewOrderSingle and tries to extract enough information
 // to figure out the appropriate type for the bitfinex order.
 // XXX: Only works for EXCHANGE orders at the moment, i.e. automatically adds EXCHANGE prefix.
-func OrderNewTypeFromFIX42NewOrderSingle(nos fix42nos.NewOrderSingle) string {
+func OrderNewTypeFromFIX42NewOrderSingle(nos fix42nos.NewOrderSingle) (string, error) {
 	ot, _ := nos.GetOrdType()
 	tif, _ := nos.GetTimeInForce()
 	ei, _ := nos.GetExecInst()
 
 	pref := "EXCHANGE "
 
+	if ei == enum.ExecInst_ALL_OR_NONE {
+		return "", errors.New("all or none execution instruction unsupported")
+	}
+
 	// map AON & IOC => FOK
 	if tif == enum.TimeInForce_FILL_OR_KILL || ei == enum.ExecInst_ALL_OR_NONE && tif == enum.TimeInForce_IMMEDIATE_OR_CANCEL {
-		return pref + "FOK"
+		return pref + "FOK", nil
 	}
 
 	switch ot {
 	case enum.OrdType_MARKET:
-		return pref + "MARKET"
+		return pref + "MARKET", nil
 	case enum.OrdType_LIMIT:
-		return pref + "LIMIT"
+		return pref + "LIMIT", nil
 	case enum.OrdType_STOP:
-		return pref + "STOP"
+		return pref + "STOP", nil
 	case enum.OrdType_STOP_LIMIT:
-		return "STOP LIMIT"
+		return "STOP LIMIT", nil
 	default:
-		return ""
+		return "", nil
 	}
 }
 
@@ -57,7 +62,11 @@ func OrderNewFromFIX42NewOrderSingle(nos fix42nos.NewOrderSingle, symbology symb
 	}
 	on.CID = cid
 
-	on.Type = OrderNewTypeFromFIX42NewOrderSingle(nos)
+	var er error
+	on.Type, er = OrderNewTypeFromFIX42NewOrderSingle(nos)
+	if er != nil {
+		return nil, quickfix.NewMessageRejectError(er.Error(), 0, nil)
+	}
 
 	s, err := nos.GetSymbol()
 	if err != nil {

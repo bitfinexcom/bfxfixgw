@@ -149,7 +149,7 @@ func FIX42MarketDataIncrementalRefreshFromBookUpdate(mdReqID string, update *bit
 	return &message
 }
 
-func FIX42ExecutionReport(symbol, clOrdID, orderID, account string, execType enum.ExecType, side enum.Side, origQty, thisQty, cumQty, avgPx float64, ordStatus enum.OrdStatus, ordType enum.OrdType, text string, symbology symbol.Symbology, counterparty string) fix42er.ExecutionReport {
+func FIX42ExecutionReport(symbol, clOrdID, orderID, account string, execType enum.ExecType, side enum.Side, origQty, thisQty, cumQty, px, stop, avgPx float64, ordStatus enum.OrdStatus, ordType enum.OrdType, tif enum.TimeInForce, text string, symbology symbol.Symbology, counterparty string) fix42er.ExecutionReport {
 	uid, err := uuid.NewV4()
 	execID := ""
 	if err == nil {
@@ -208,6 +208,18 @@ func FIX42ExecutionReport(symbol, clOrdID, orderID, account string, execType enu
 	}
 	e.SetOrdType(ordType)
 	e.SetClOrdID(clOrdID)
+
+	switch ordType {
+	case enum.OrdType_LIMIT:
+		e.SetPrice(decimal.NewFromFloat(px), 4)
+	case enum.OrdType_STOP_LIMIT:
+		e.SetPrice(decimal.NewFromFloat(px), 4)
+		e.SetStopPx(decimal.NewFromFloat(stop), 4)
+	case enum.OrdType_STOP:
+		e.SetStopPx(decimal.NewFromFloat(stop), 4)
+	}
+	e.SetTimeInForce(tif)
+
 	return e
 }
 
@@ -218,29 +230,9 @@ func FIX42ExecutionReportFromOrder(o *bitfinex.Order, account string, execType e
 	if fAmt < 0 {
 		fAmt = -fAmt
 	}
-	e := FIX42ExecutionReport(o.Symbol, strconv.FormatInt(o.CID, 10), orderID, account, execType, SideToFIX(o.Amount), fAmt, 0.0, cumQty, o.PriceAvg, ordStatus, OrdTypeToFIX(o.Type), text, symbology, counterparty)
-	switch o.Type {
-	case bitfinex.OrderTypeLimit:
-		fallthrough
-	case bitfinex.OrderTypeExchangeLimit:
-		e.SetPrice(decimal.NewFromFloat(o.Price), 4)
-	case bitfinex.OrderTypeStopLimit:
-		e.SetPrice(decimal.NewFromFloat(o.Price), 4)
-		//e.SetStopPx(decimal.NewFromFloat(o.PriceAuxLimit), 4) // ??
-	case bitfinex.OrderTypeStop:
-		fallthrough
-	case bitfinex.OrderTypeExchangeStop:
-		// TODO
-	case bitfinex.OrderTypeTrailingStop:
-		fallthrough
-	case bitfinex.OrderTypeExchangeTrailingStop:
-		// TODO
-	case bitfinex.OrderTypeFOK:
-		fallthrough
-	case bitfinex.OrderTypeExchangeFOK:
-		// TODO
-	}
-	// TODO order options?
+	fixordtype := OrdTypeToFIX(o.Type)
+	tif := TimeInForceToFIX(o.Type) // support FOK
+	e := FIX42ExecutionReport(o.Symbol, strconv.FormatInt(o.CID, 10), orderID, account, execType, SideToFIX(o.Amount), fAmt, 0.0, cumQty, o.Price, o.PriceAuxLimit, o.PriceAvg, ordStatus, fixordtype, tif, text, symbology, counterparty)
 	if text != "" {
 		e.SetText(text)
 	}
@@ -248,7 +240,7 @@ func FIX42ExecutionReportFromOrder(o *bitfinex.Order, account string, execType e
 	return e
 }
 
-func FIX42ExecutionReportFromTradeExecutionUpdate(t *bitfinex.TradeExecutionUpdate, account, clOrdID string, origQty, totalFillQty, origPx, avgFillPx float64, symbology symbol.Symbology, counterparty string) fix42er.ExecutionReport {
+func FIX42ExecutionReportFromTradeExecutionUpdate(t *bitfinex.TradeExecutionUpdate, account, clOrdID string, origQty, totalFillQty, origPx, stopPx, avgFillPx float64, symbology symbol.Symbology, counterparty string) fix42er.ExecutionReport {
 	orderID := strconv.FormatInt(t.OrderID, 10)
 	var execType enum.ExecType
 	var ordStatus enum.OrdStatus
@@ -263,19 +255,18 @@ func FIX42ExecutionReportFromTradeExecutionUpdate(t *bitfinex.TradeExecutionUpda
 	if execAmt < 0 {
 		execAmt = -execAmt
 	}
-	er := FIX42ExecutionReport(t.Pair, clOrdID, orderID, account, execType, SideToFIX(t.ExecAmount), origQty, execAmt, totalFillQty, avgFillPx, ordStatus, OrdTypeToFIX(t.OrderType), "", symbology, counterparty)
+	tif := TimeInForceToFIX(t.OrderType) // support FOK
+	er := FIX42ExecutionReport(t.Pair, clOrdID, orderID, account, execType, SideToFIX(t.ExecAmount), origQty, execAmt, totalFillQty, origPx, stopPx, avgFillPx, ordStatus, OrdTypeToFIX(t.OrderType), tif, "", symbology, counterparty)
 	f := t.Fee
 	if f < 0 {
 		f = -f
 	}
-	// TODO order type specific fields?
+
+	// trade-specific
 	fee := decimal.NewFromFloat(f)
 	er.SetCommission(fee, 4)
 	er.SetCommType(enum.CommType_ABSOLUTE)
 	er.SetLastPx(decimal.NewFromFloat(t.ExecPrice), 4)
-	if origPx > 0 {
-		er.SetPrice(decimal.NewFromFloat(origPx), 4)
-	}
 	return er
 }
 

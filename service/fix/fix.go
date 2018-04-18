@@ -4,6 +4,7 @@ import (
 	"github.com/bitfinexcom/bfxfixgw/log"
 	"github.com/bitfinexcom/bfxfixgw/service/peer"
 	"github.com/bitfinexcom/bfxfixgw/service/symbol"
+	"sync"
 
 	"go.uber.org/zap"
 
@@ -45,6 +46,9 @@ type FIX struct {
 
 	acc    *quickfix.Acceptor
 	logger *zap.Logger
+
+	lastMsgType string
+	msgTypeLock sync.RWMutex
 }
 
 func (f *FIX) OnCreate(sID quickfix.SessionID) {
@@ -96,7 +100,16 @@ func (f *FIX) FromAdmin(msg *quickfix.Message, sID quickfix.SessionID) quickfix.
 
 func (f *FIX) FromApp(msg *quickfix.Message, sID quickfix.SessionID) quickfix.MessageRejectError {
 	f.logger.Info("FIX.FromApp", zap.Any("msg", msg))
+	f.msgTypeLock.Lock()
+	f.lastMsgType, _ = msg.Header.GetString(quickfix.Tag(35))
+	f.msgTypeLock.Unlock()
 	return f.Route(msg, sID)
+}
+
+func (f *FIX) LastMsgType() string {
+	f.msgTypeLock.RLock()
+	defer f.msgTypeLock.RUnlock()
+	return f.lastMsgType
 }
 
 // New creates a new FIX acceptor & associated services

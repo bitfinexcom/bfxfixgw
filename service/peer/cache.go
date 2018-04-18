@@ -144,6 +144,17 @@ func (c *cache) LookupAPIReqIDs(fixReqID string) (string, string, bool) {
 	return ids.marketDataID, ids.tradeID, true
 }
 
+func (c *cache) ReverseLookupAPIReqIDs(bfxReqID string) (string, bool) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	for fixReqID, ids := range c.mdReqIDs {
+		if ids.marketDataID == bfxReqID || ids.tradeID == bfxReqID {
+			return fixReqID, true
+		}
+	}
+	return "", false
+}
+
 // add when receiving a NewOrderSingle over FIX
 func (c *cache) AddOrder(clordid string, px, qty float64, symbol, account string, side enum.Side, ordType enum.OrdType) *CachedOrder {
 	if qty < 0 {

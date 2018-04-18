@@ -31,8 +31,8 @@ func FIX42MarketDataFullRefreshFromTradeSnapshot(mdReqID string, snapshot *bitfi
 	}
 	message := fix42mdsfr.New(field.NewSymbol(sym))
 	message.SetMDReqID(mdReqID)
-	message.SetSymbol(first.Pair)
-	message.SetSecurityID(first.Pair)
+	message.SetSymbol(sym)
+	message.SetSecurityID(sym)
 	message.SetIDSource(enum.IDSource_EXCHANGE_SYMBOL)
 	// MDStreamID?
 	group := fix42mdsfr.NewNoMDEntriesRepeatingGroup()
@@ -61,8 +61,8 @@ func FIX42MarketDataFullRefreshFromBookSnapshot(mdReqID string, snapshot *bitfin
 	}
 	message := fix42mdsfr.New(field.NewSymbol(sym))
 	message.SetMDReqID(mdReqID)
-	message.SetSymbol(first.Symbol)
-	message.SetSecurityID(first.Symbol)
+	message.SetSymbol(sym)
+	message.SetSecurityID(sym)
 	message.SetIDSource(enum.IDSource_EXCHANGE_SYMBOL)
 	// MDStreamID?
 	group := fix42mdsfr.NewNoMDEntriesRepeatingGroup()

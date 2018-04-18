@@ -8,11 +8,17 @@ import (
 	"github.com/bitfinexcom/bfxfixgw/service/websocket"
 	"github.com/bitfinexcom/bitfinex-api-go/v2"
 	wsv2 "github.com/bitfinexcom/bitfinex-api-go/v2/websocket"
+	"github.com/quickfixgo/enum"
+	"github.com/quickfixgo/field"
+	bmr "github.com/quickfixgo/fix42/businessmessagereject"
+	mdrr "github.com/quickfixgo/fix42/marketdatarequestreject"
 	"github.com/quickfixgo/quickfix"
 	"go.uber.org/zap"
 	"log"
 	"sync"
 )
+
+const TagMDRequestType quickfix.Tag = 20004
 
 // LogicalService connects a logical FIX endpoint with a logical websocket connection
 type Service struct {
@@ -83,6 +89,15 @@ func (s *Service) isMarketDataService() bool {
 
 func (s *Service) isOrderRoutingService() bool {
 	return s.serviceType == fix.OrderRoutingService
+}
+
+func businessRejectReason(err string) enum.BusinessRejectReason {
+	switch err {
+	case "symbol: invalid":
+		return enum.BusinessRejectReason_UNKNOWN_SECURITY
+	default:
+		return enum.BusinessRejectReason_OTHER
+	}
 }
 
 func (s *Service) listen() {
@@ -164,6 +179,35 @@ func (s *Service) listen() {
 			s.Websocket.FIX42TradeHandler(obj, msg.FIXSessionID())
 		case *bitfinex.TradeSnapshot:
 			// no-op: do not provide trade snapshots
+		case *wsv2.ErrorEvent:
+			// example event: {"code":10300,"msg":"symbol: invalid"}
+			// another example: {"channel":"book","symbol":"blahbalh","prec":"P0","freq":"F0","len":"100","subId":"1524075623001","event":"error","msg":"symbol: invalid","code":10300,"pair":"lahbalh"}
+			log.Printf("error: %#v", obj)
+
+			// subscription error?
+			if obj.SubID != "" {
+				peer, ok := s.FindPeer(msg.FIXSessionID().String())
+				if ok {
+					_, err := peer.Ws.LookupSubscription(obj.SubID)
+					if err == nil { // if sub exists, we know ref msg = V
+						if fixReqID, ok := peer.ReverseLookupAPIReqIDs(obj.SubID); ok {
+							fix := mdrr.New(field.NewMDReqID(fixReqID))
+							fix.SetMDReqRejReason(enum.MDReqRejReason_UNKNOWN_SYMBOL)
+							fix.SetText(obj.Message)
+							fix.SetString(TagMDRequestType, obj.Channel)
+							quickfix.SendToTarget(fix, msg.FIXSessionID())
+							continue
+						}
+					}
+				}
+			}
+
+			// generic error
+			refMsgType := field.NewRefMsgType(s.FIX.LastMsgType()) // guess this is related to the last inbound FIX message
+			reason := field.NewBusinessRejectReason(businessRejectReason(obj.Message))
+			fix := bmr.New(refMsgType, reason)
+			fix.SetText(obj.Message)
+			quickfix.SendToTarget(fix, msg.FIXSessionID())
 		case error:
 			s.log.Error("processing error", zap.Any("msg", obj))
 		default:

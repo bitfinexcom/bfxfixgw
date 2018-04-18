@@ -1112,6 +1112,7 @@
    <field name='Text' required='N' />
    <field name='EncodedTextLen' required='N' />
    <field name='EncodedText' required='N' />
+   <field name='MDRequestType' required='N' />
   </message>
   <message name='QuoteCancel' msgtype='Z' msgcat='app'>
    <field name='QuoteReqID' required='N' />
@@ -2750,5 +2751,6 @@
   <field number='20001' name='BfxApiSecret' type='STRING' />
   <field number='20002' name='BfxUserID' type='STRING' />
   <field number='20003' name='PricePrecision' type='STRING' />
+  <field number='20004' name='MDRequestType' type='STRING' />
  </fields>
 </fix>

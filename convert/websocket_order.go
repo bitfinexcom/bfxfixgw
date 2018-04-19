@@ -14,9 +14,6 @@ import (
 	fix42nos "github.com/quickfixgo/fix42/newordersingle"
 )
 
-// TimeInForce_PostOnly sends a post-only order to the Bitfinex API.
-const TimeInForce_PostOnly enum.TimeInForce = "P"
-
 // OrderNewTypeFromFIX42NewOrderSingle takes a FIX42 NewOrderSingle and tries to extract enough information
 // to figure out the appropriate type for the bitfinex order.
 // XXX: Only works for EXCHANGE orders at the moment, i.e. automatically adds EXCHANGE prefix.
@@ -134,14 +131,13 @@ func OrderNewFromFIX42NewOrderSingle(nos fix42nos.NewOrderSingle, symbology symb
 	if err == nil && hidden {
 		on.Hidden = true
 	}
-	tif, err := nos.GetTimeInForce()
+	execInst, err := nos.GetExecInst()
 	// post only
-	if err == nil && tif == TimeInForce_PostOnly {
+	if err == nil && execInst == enum.ExecInst_PARTICIPANT_DONT_INITIATE {
 		on.PostOnly = true
 	}
 	// trailing stop
 	if t == enum.OrdType_STOP || t == enum.OrdType_STOP_LIMIT {
-		execInst, err := nos.GetExecInst()
 		if err == nil && execInst == enum.ExecInst_PRIMARY_PEG {
 			trail, err := nos.GetPegDifference()
 			if err != nil {

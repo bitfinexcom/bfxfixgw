@@ -176,11 +176,11 @@ The following table lists Bitfinex order type support in the FIX gateway:
 
 Below is a table of various Bitfinex order features and their FIX `35=D NewOrderSingle` tags:
 
-| Bitfinex Order Feature 	| FIX Tag				| FIX Tag Value		|
-|---------------------------|-----------------------|-------------------|
-| Hidden					| DisplayMethod (1084)	| Undisclosed (4)	|
-| Post-Only<sup>*</sup>		| TimeInForce (59)		| Post-Only (P)		|
-| Fill or Kill				| TimeInForce (59)		| Fill or Kill (4)	|
+| Bitfinex Order Feature 	| FIX Tag				| FIX Tag Value					|
+|---------------------------|-----------------------|-------------------------------|
+| Hidden					| DisplayMethod (1084)	| Undisclosed (4)				|
+| Post-Only<sup>*</sup>		| ExecInst (18)			| Participate don't initiate (6)|
+| Fill or Kill				| TimeInForce (59)		| Fill or Kill (4)				|
 
 <sup>*</sup> Post-Only orders are considered to have a Good-till-Cancel time in force.  
 

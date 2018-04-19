@@ -237,7 +237,7 @@ func FIX42ExecutionReport(symbol, clOrdID, orderID, account string, execType enu
 		e.SetString(tag.DisplayMethod, string(enum.DisplayMethod_UNDISCLOSED))
 	}
 	if flags&FlagPostOnly != 0 {
-		tif = TimeInForce_PostOnly
+		e.SetExecInst(enum.ExecInst_PARTICIPANT_DONT_INITIATE)
 	}
 	e.SetTimeInForce(tif)
 

@@ -1,6 +1,8 @@
 package websocket
 
 import (
+	"strconv"
+
 	"github.com/bitfinexcom/bfxfixgw/convert"
 	"github.com/bitfinexcom/bitfinex-api-go/v2"
 	"github.com/bitfinexcom/bitfinex-api-go/v2/websocket"
@@ -9,7 +11,6 @@ import (
 	"github.com/quickfixgo/quickfix"
 	"github.com/shopspring/decimal"
 	"go.uber.org/zap"
-	"strconv"
 )
 
 // Handle Bitfinex messages and process them as FIX42 downstream.
@@ -99,14 +100,14 @@ func (w *Websocket) FIX42TradeExecutionUpdateHandler(t *bitfinex.TradeExecutionU
 		clOrdID := strconv.FormatInt(os.CID, 10)
 		// update everything at the same time
 		tif := convert.TimeInForceToFIX(os.Type)
-		p.AddOrder(clOrdID, os.Price, os.PriceAuxLimit, os.Amount, os.Symbol, p.BfxUserID(), convert.SideToFIX(t.ExecAmount), convert.OrdTypeToFIX(os.Type), tif)
+		p.AddOrder(clOrdID, os.Price, os.PriceAuxLimit, os.PriceTrailing, os.Amount, os.Symbol, p.BfxUserID(), convert.SideToFIX(t.ExecAmount), convert.OrdTypeToFIX(os.Type), tif, int(os.Flags))
 		cached, err = p.UpdateOrder(clOrdID, orderID)
 		if err != nil {
 			w.logger.Warn("could not update order", zap.Error(err))
 		}
 	}
 	totalFillQty, avgFillPx, err := p.AddExecution(orderID, execID, t.ExecPrice, t.ExecAmount)
-	quickfix.SendToTarget(convert.FIX42ExecutionReportFromTradeExecutionUpdate(t, p.BfxUserID(), cached.ClOrdID, cached.Qty, totalFillQty, cached.Px, avgFillPx, cached.Stop, w.Symbology, sID.TargetCompID), sID)
+	quickfix.SendToTarget(convert.FIX42ExecutionReportFromTradeExecutionUpdate(t, p.BfxUserID(), cached.ClOrdID, cached.Qty, totalFillQty, cached.Px, cached.Stop, cached.Trail, avgFillPx, w.Symbology, sID.TargetCompID, cached.Flags), sID)
 }
 
 func (w *Websocket) FIX42BookSnapshot(s *bitfinex.BookUpdateSnapshot, sID quickfix.SessionID) {
@@ -170,7 +171,7 @@ func (w *Websocket) FIX42NotificationHandler(d *bitfinex.Notification, sID quick
 				w.logger.Error("could not reference original order to publish pending cancel execution report", zap.Error(err))
 				return
 			}
-			er := convert.FIX42ExecutionReport(orig.Symbol, orig.ClOrdID, orig.OrderID, orig.Account, enum.ExecType_PENDING_CANCEL, orig.Side, orig.Qty, 0.0, orig.FilledQty(), orig.Px, orig.Stop, orig.AvgFillPx(), enum.OrdStatus_PENDING_CANCEL, orig.OrderType, orig.TimeInForce, d.Text, w.Symbology, sID.TargetCompID)
+			er := convert.FIX42ExecutionReport(orig.Symbol, orig.ClOrdID, orig.OrderID, orig.Account, enum.ExecType_PENDING_CANCEL, orig.Side, orig.Qty, 0.0, orig.FilledQty(), orig.Px, orig.Stop, orig.Trail, orig.AvgFillPx(), enum.OrdStatus_PENDING_CANCEL, orig.OrderType, orig.TimeInForce, d.Text, w.Symbology, sID.TargetCompID, orig.Flags)
 			if orig.Px > 0 {
 				er.SetPrice(decimal.NewFromFloat(orig.Px), 4)
 			}
@@ -194,7 +195,7 @@ func (w *Websocket) FIX42NotificationHandler(d *bitfinex.Notification, sID quick
 			if err != nil {
 				w.logger.Warn("adding unknown order (entered outside session)", zap.String("ClOrdID", clOrdID), zap.String("OrderID", orderID))
 				tif := convert.TimeInForceToFIX(order.Type)
-				cache := p.AddOrder(clOrdID, order.Price, order.PriceAuxLimit, order.Amount, order.Symbol, p.BfxUserID(), convert.SideToFIX(order.Amount), convert.OrdTypeToFIX(order.Type), tif)
+				cache := p.AddOrder(clOrdID, order.Price, order.PriceAuxLimit, order.PriceTrailing, order.Amount, order.Symbol, p.BfxUserID(), convert.SideToFIX(order.Amount), convert.OrdTypeToFIX(order.Type), tif, int(order.Flags))
 				cache.OrderID = orderID
 			}
 			ordStatus = enum.OrdStatus_NEW
@@ -216,7 +217,7 @@ func (w *Websocket) FIX42OrderSnapshotHandler(os *bitfinex.OrderSnapshot, sID qu
 	if ok {
 		for _, order := range os.Snapshot {
 			tif := convert.TimeInForceToFIX(order.Type)
-			cache := peer.AddOrder(strconv.FormatInt(order.CID, 10), order.Price, order.PriceAuxLimit, order.Amount, order.Symbol, peer.BfxUserID(), convert.SideToFIX(order.Amount), convert.OrdTypeToFIX(order.Type), tif)
+			cache := peer.AddOrder(strconv.FormatInt(order.CID, 10), order.Price, order.PriceAuxLimit, order.PriceTrailing, order.Amount, order.Symbol, peer.BfxUserID(), convert.SideToFIX(order.Amount), convert.OrdTypeToFIX(order.Type), tif, int(order.Flags))
 			cache.OrderID = strconv.FormatInt(order.ID, 10)
 		}
 	}

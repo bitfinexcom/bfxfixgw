@@ -164,6 +164,45 @@ Receive FIX `35=X` trade incremental update (for the first tBTCUSD request):
 
 Order routing can be enabled with the `-ord` and `-ordcfg` flags on startup.
 
+The following table lists Bitfinex order type support in the FIX gateway:
+
+| Order Type	| FIX 4.2	|
+|---------------|:---------:|
+| Market		| ✔			|
+| Limit			| ✔			|
+| Stop			| ✔			|
+| Stop Limit	| ✔			|
+| Trailing Stop | ✔			|
+
+Below is a table of various Bitfinex order features and their FIX `35=D NewOrderSingle` tags:
+
+| Bitfinex Order Feature 	| FIX Tag				| FIX Tag Value		|
+|---------------------------|-----------------------|-------------------|
+| Hidden					| DisplayMethod (1084)	| Undisclosed (4)	|
+| Post-Only<sup>*</sup>		| TimeInForce (59)		| Post-Only (P)		|
+| Fill or Kill				| TimeInForce (59)		| Fill or Kill (4)	|
+
+<sup>*</sup> Post-Only orders are considered to have a Good-till-Cancel time in force.  
+
+For a trailing stop order:
+
+| Trailing Stop Feature		| FIX Tag				| FIX Tag Value						|
+|---------------------------|-----------------------|-----------------------------------|
+| Order Type				| OrdType (40)			| Stop (3) or Stop Limit (4)	|
+| Execute as Trailing Peg	| ExecInst (18)			| Primary Peg (R)				|
+| Trailing Peg Value		| PegOffsetValue (211)	| Price<sup>*</sup>				|
+
+<sup>*</sup> The trailing stop price should be in the same units as a Price (44) or StopPx (99).
+
+e.g. For a trailing stop limit order where the limit price is $1660.00 and the stop should trail the market by $5.25, the following FIX tags should be set:
+
+| Field				| Tag	| Value		|
+|-------------------|-------|-----------|
+| OrdType			| 40	| 4			|
+| ExecInst			| 18	| R			|
+| Price				| 44	| 1660.00	|
+| PegOffsetValue	| 211	| 5.25		|
+
 ### Examples
 
 Send limit new order single:

@@ -1,11 +1,19 @@
 package convert
 
 import (
+	"strings"
+
 	"github.com/bitfinexcom/bitfinex-api-go/v2"
 	"github.com/quickfixgo/enum"
 	"github.com/quickfixgo/field"
 	"github.com/shopspring/decimal"
-	"strings"
+)
+
+const (
+	FlagHidden   int = 64
+	FlagClose        = 512
+	FlagPostOnly     = 4096
+	FlagOCO          = 16384
 )
 
 // Generic FIX types.

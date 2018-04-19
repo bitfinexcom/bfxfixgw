@@ -21,11 +21,13 @@ import (
 	"github.com/quickfixgo/field"
 	"github.com/quickfixgo/quickfix"
 
-	bitfinex "github.com/bitfinexcom/bitfinex-api-go/v2"
 	lg "log"
+
+	bitfinex "github.com/bitfinexcom/bitfinex-api-go/v2"
 )
 
 const (
+	// PricePrecision is the FIX tag to specify a book subscription price precision
 	PricePrecision quickfix.Tag = 20003
 )
 
@@ -53,7 +55,14 @@ func (f *FIX) OnFIX42NewOrderSingle(msg nos.NewOrderSingle, sID quickfix.Session
 		tif = enum.TimeInForce_GOOD_TILL_CANCEL // default TIF
 	}
 
-	p.AddOrder(clordid, bo.Price, bo.PriceAuxLimit, bo.Amount, bo.Symbol, p.BfxUserID(), side, ordtype, tif)
+	flags := 0
+	if bo.Hidden {
+		flags = flags | convert.FlagHidden
+	}
+	if bo.PostOnly {
+		flags = flags | convert.FlagPostOnly
+	}
+	p.AddOrder(clordid, bo.Price, bo.PriceAuxLimit, bo.PriceTrailing, bo.Amount, bo.Symbol, p.BfxUserID(), side, ordtype, tif, flags)
 
 	e := p.Ws.SubmitOrder(context.Background(), bo)
 	if e != nil {
@@ -313,7 +322,7 @@ func (f *FIX) OnFIX42OrderStatusRequest(msg osr.OrderStatusRequest, sID quickfix
 	tif := convert.TimeInForceToFIX(order.Type)
 	cached, err2 := peer.LookupByOrderID(orderID)
 	if err2 != nil {
-		cached = peer.AddOrder(clOrdID, order.Price, order.PriceAuxLimit, order.Amount, order.Symbol, peer.BfxUserID(), convert.SideToFIX(order.Amount), convert.OrdTypeToFIX(order.Type), tif)
+		cached = peer.AddOrder(clOrdID, order.Price, order.PriceAuxLimit, order.PriceTrailing, order.Amount, order.Symbol, peer.BfxUserID(), convert.SideToFIX(order.Amount), convert.OrdTypeToFIX(order.Type), tif, int(order.Flags))
 	}
 	status := convert.OrdStatusToFIX(order.Status)
 	er := convert.FIX42ExecutionReportFromOrder(order, peer.BfxUserID(), enum.ExecType_ORDER_STATUS, cached.FilledQty(), status, "", f.Symbology, sID.TargetCompID)

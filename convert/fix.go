@@ -20,13 +20,14 @@ const (
 
 func OrdStatusToFIX(status bitfinex.OrderStatus) enum.OrdStatus {
 	// if the status is a composite (e.g. EXECUTED @ X: was PARTIALLY FILLED @ Y)
-	if strings.HasPrefix(string(status), string(bitfinex.OrderStatusExecuted)) {
+	// executed check must come first
+	if strings.Contains(string(status), string(bitfinex.OrderStatusExecuted)) {
 		return enum.OrdStatus_FILLED
 	}
-	if strings.HasPrefix(string(status), string(bitfinex.OrderStatusPartiallyFilled)) {
+	if strings.Contains(string(status), string(bitfinex.OrderStatusPartiallyFilled)) {
 		return enum.OrdStatus_PARTIALLY_FILLED
 	}
-	if strings.HasPrefix(string(status), string(bitfinex.OrderStatusCanceled)) {
+	if strings.Contains(string(status), string(bitfinex.OrderStatusCanceled)) {
 		return enum.OrdStatus_CANCELED
 	}
 	return enum.OrdStatus_NEW
@@ -34,16 +35,16 @@ func OrdStatusToFIX(status bitfinex.OrderStatus) enum.OrdStatus {
 
 // follows FIX 4.1+ rules on merging ExecTransType + ExecType fields into new ExecType enums.
 func ExecTypeToFIX(status bitfinex.OrderStatus) enum.ExecType {
-	if strings.HasPrefix(string(status), string(bitfinex.OrderStatusActive)) {
+	if strings.Contains(string(status), string(bitfinex.OrderStatusActive)) {
 		return enum.ExecType_NEW
 	}
-	if strings.HasPrefix(string(status), string(bitfinex.OrderStatusCanceled)) {
+	if strings.Contains(string(status), string(bitfinex.OrderStatusCanceled)) {
 		return enum.ExecType_CANCELED
 	}
-	if strings.HasPrefix(string(status), string(bitfinex.OrderStatusPartiallyFilled)) {
+	if strings.Contains(string(status), string(bitfinex.OrderStatusPartiallyFilled)) {
 		return enum.ExecType_TRADE
 	}
-	if strings.HasPrefix(string(status), string(bitfinex.OrderStatusExecuted)) {
+	if strings.Contains(string(status), string(bitfinex.OrderStatusExecuted)) {
 		return enum.ExecType_TRADE
 	}
 	return enum.ExecType_ORDER_STATUS

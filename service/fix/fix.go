@@ -1,10 +1,11 @@
 package fix
 
 import (
+	"sync"
+
 	"github.com/bitfinexcom/bfxfixgw/log"
 	"github.com/bitfinexcom/bfxfixgw/service/peer"
 	"github.com/bitfinexcom/bfxfixgw/service/symbol"
-	"sync"
 
 	"go.uber.org/zap"
 
@@ -12,17 +13,8 @@ import (
 	fix42nos "github.com/quickfixgo/fix42/newordersingle"
 	fix42ocr "github.com/quickfixgo/fix42/ordercancelrequest"
 	fix42osr "github.com/quickfixgo/fix42/orderstatusrequest"
-	/*
-		fix44mdr "github.com/quickfixgo/fix44/marketdatarequest"
-		fix44nos "github.com/quickfixgo/fix44/newordersingle"
-		fix44ocr "github.com/quickfixgo/fix44/ordercancelrequest"
-		fix44osr "github.com/quickfixgo/fix44/orderstatusrequest"
-	*/
 	"github.com/quickfixgo/quickfix"
 )
-
-// send messages to FIX clients (global w/ session ID)
-// send messages to websocket (peer map)
 
 // FIX types, defined in BitfinexFIX42.xml
 var msgTypeLogon = string([]byte("A"))
@@ -53,7 +45,6 @@ type FIX struct {
 
 func (f *FIX) OnCreate(sID quickfix.SessionID) {
 	log.Logger.Info("FIX.OnCreate", zap.Any("SessionID", sID))
-	//f.Peers.AddPeer(sID)
 }
 
 func (f *FIX) OnLogon(sID quickfix.SessionID) {

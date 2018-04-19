@@ -44,9 +44,9 @@ Sessions must be known to the FIX gateway prior to startup.  A FIX gateway can m
 
 #### Sequence Numbers
 
-The market data service does not support resend requests or replaying FIX messages. When connecting to the market data FIX endpoint, a FIX initiator must either have the correct sequence number or a lower than expected sequence number.
+The market data FIX service does not support resend requests or replaying FIX messages. When connecting to the market data FIX endpoint, a FIX initiator must have the correct sequence number, or a lower than expected sequence number.
 
-The order routing service strictly tracks sequence numbers and does support message storage.
+The order routing service strictly tracks sequence numbers and does support message storage. A FIX initiator can send `ResetSeqNumFlag=Y` on Logon to reset session sequence numbers.
 
 ### FIX Configuration Examples
 
@@ -104,13 +104,19 @@ FIX_SETTINGS_DIRECTORY=conf/integration_test/service/ bfxfixgw.exe -orders -ordc
 
 FIX session information must be obtained prior to a FIX client establishing a connection.  The pre-determined TargetCompID, SenderCompID, and FIX version strings should be configured in the FIX client configuration.
 
-Once sessions are configured, a FIX client can authenticate by adding the following FIX fields into the `35=A Logon` message body:
+Once sessions are configured, a FIX client can authenticate by adding the Bitfinex User ID, API key, and API secret into the FIX `35=A Logon` message body:
 
 | Field 		| FIX Tag # | Description 		|
 |---------------|-----------|-------------------|
 | BfxApiKey 	| 20000		| User's API Key	|
 | BfxApiSecret 	| 20001		| User's API Secret	|
 | BfxUserID 	| 20002		| User's Bfx ID		|
+
+---
+**Note:**
+FIX clients should use separate API keys for market data and order routing FIX endpoints.
+
+---
 
 These tags are supported by the gateway's default [data dictionary](spec/Bitfinex_FIX42.xml).  An example staging logon message (`SOH` replaced with `|`):
 

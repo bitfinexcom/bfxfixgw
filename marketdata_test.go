@@ -1,11 +1,12 @@
 package main
 
 import (
+	"strings"
+	"testing"
+
 	"github.com/quickfixgo/enum"
 	"github.com/quickfixgo/field"
 	mdr "github.com/quickfixgo/fix42/marketdatarequest"
-	"strings"
-	"testing"
 )
 
 func newMdRequest(reqID, symbol string, depth int) *mdr.MarketDataRequest {
@@ -97,7 +98,7 @@ func TestMarketData(t *testing.T) {
 		t.Fatal(err)
 	}
 	// raw book precision, no frequency
-	if `{"subId":"nonce2","event":"subscribe","channel":"book","symbol":"tBTCUSD","prec":"R0","len":"1"}` != msg {
+	if `{"subId":"nonce2","event":"subscribe","channel":"book","symbol":"tBTCUSD","prec":"P0","freq":"F0","len":"1"}` != msg {
 		t.Fatalf("msg was not as expected, got: %s", msg)
 	}
 	msg, err = srvWs.WaitForMessage(MarketDataClient, 2)
@@ -115,7 +116,7 @@ func TestMarketData(t *testing.T) {
 	srvWs.Send(MarketDataClient, `{"event":"subscribed","channel":"trades","chanId":19,"symbol":"tBTCUSD","subId":"nonce3","pair":"BTCUSD"}`)
 
 	// srv->client book snapshot
-	srvWs.Send(MarketDataClient, `[8,[[1,1085.2,0.16337353],[2,1085,1],[3,1084.5,-0.0360446]]]`)
+	srvWs.Send(MarketDataClient, `[8,[[1085.2,1,0.16337353],[1085,1,1],[1084.5,1,-0.0360446]]]`)
 
 	// assert book snapshot
 	fix, err = fixMd.WaitForMessage(MarketDataSessionID, 2)
@@ -143,7 +144,7 @@ func TestMarketData(t *testing.T) {
 	}
 
 	// srv->client book update
-	srvWs.Send(MarketDataClient, `[8,[1,1084,0.05246595]]`)
+	srvWs.Send(MarketDataClient, `[8,[1084,1,0.05246595]]`)
 
 	// assert book update
 	fix, err = fixMd.WaitForMessage(MarketDataSessionID, 3)
@@ -182,35 +183,12 @@ func TestMarketData(t *testing.T) {
 	// srv->client trade snapshot
 	srvWs.Send(MarketDataClient, `[19,[[24165028,1516316211920,-0.05955414,1085.2],[24165027,1516316200519,-0.04440374,1085.2],[24165026,1516316189651,-0.0551028,1085.2]]]`)
 
-	// assert trade snapshot
-	fix, err = fixMd.WaitForMessage(MarketDataSessionID, 4)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(fix, "35=W") {
-		t.Fatal(fix)
-	}
-	// NoMDEntries (268) = 3
-	if !strings.Contains(fix, "268=3") {
-		t.Fatal(fix)
-	}
-	// assert all trade entries together
-	if !strings.Contains(fix, "269=2|270=1085.2000|271=0.0596|269=2|270=1085.2000|271=0.0444|269=2|270=1085.2000|271=0.0551") {
-		t.Fatal(fix)
-	}
-	// SecurityID (48) = BXY
-	if !strings.Contains(fix, "48=tBTCUSD") {
-		t.Fatal(fix)
-	}
-	// SecurityIDSource (22) = Exchange Symbol (8)
-	if !strings.Contains(fix, "22=8") {
-		t.Fatal(fix)
-	}
+	// do not publish public trade snapshot (35=W)
 
 	// srv->client trade update
 	srvWs.Send(MarketDataClient, `[19,[24165025,1516316086676,-0.05246595,1085.2]]`)
 
-	fix, err = fixMd.WaitForMessage(MarketDataSessionID, 5)
+	fix, err = fixMd.WaitForMessage(MarketDataSessionID, 4)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -74,7 +74,7 @@ func (o *Order) Execute(keyboard <-chan string, publisher FIXPublisher) {
 		}
 	}
 	peg := 0.0
-	if ordtype == enum.OrdType_STOP_LIMIT || ordtype == enum.OrdType_STOP {
+	if ordtype == enum.OrdType_STOP {
 		log.Print("trailing stop?")
 		str = <-keyboard
 		if str == "true" || str == "yes" {

@@ -3,6 +3,7 @@ package convert
 import (
 	"errors"
 	"strconv"
+	"strings"
 
 	"github.com/bitfinexcom/bitfinex-api-go/v2"
 
@@ -22,26 +23,28 @@ func OrderNewTypeFromFIX42NewOrderSingle(nos fix42nos.NewOrderSingle) (string, e
 	tif, _ := nos.GetTimeInForce()
 	ei, _ := nos.GetExecInst()
 
-	pref := "EXCHANGE "
-
 	if ei == enum.ExecInst_ALL_OR_NONE {
 		return "", errors.New("all or none execution instruction unsupported")
 	}
 
 	// map AON & IOC => FOK
-	if tif == enum.TimeInForce_FILL_OR_KILL || ei == enum.ExecInst_ALL_OR_NONE && tif == enum.TimeInForce_IMMEDIATE_OR_CANCEL {
-		return pref + "FOK", nil
+	if tif == enum.TimeInForce_FILL_OR_KILL || tif == enum.TimeInForce_IMMEDIATE_OR_CANCEL {
+		return bitfinex.OrderTypeExchangeFOK, nil
 	}
 
 	switch ot {
 	case enum.OrdType_MARKET:
-		return pref + "MARKET", nil
+		return bitfinex.OrderTypeExchangeMarket, nil
 	case enum.OrdType_LIMIT:
-		return pref + "LIMIT", nil
+		return bitfinex.OrderTypeExchangeLimit, nil
 	case enum.OrdType_STOP:
-		return pref + "STOP", nil
+		execInst, err := nos.GetExecInst()
+		if err == nil && strings.Contains(string(execInst), string(enum.ExecInst_PRIMARY_PEG)) {
+			return bitfinex.OrderTypeExchangeTrailingStop, nil
+		}
+		return bitfinex.OrderTypeExchangeStop, nil
 	case enum.OrdType_STOP_LIMIT:
-		return "STOP LIMIT", nil
+		return bitfinex.OrderTypeStopLimit, nil
 	default:
 		return "", nil
 	}
@@ -127,18 +130,18 @@ func OrderNewFromFIX42NewOrderSingle(nos fix42nos.NewOrderSingle, symbology symb
 	}
 
 	// hidden
-	hidden, err := nos.GetBool(tag.DisplayMethod)
-	if err == nil && hidden {
+	displayMethod, err := nos.GetString(tag.DisplayMethod)
+	if err == nil && enum.DisplayMethod(displayMethod) == enum.DisplayMethod_UNDISCLOSED {
 		on.Hidden = true
 	}
 	execInst, err := nos.GetExecInst()
 	// post only
-	if err == nil && execInst == enum.ExecInst_PARTICIPANT_DONT_INITIATE {
+	if err == nil && strings.Contains(string(execInst), string(enum.ExecInst_PARTICIPANT_DONT_INITIATE)) {
 		on.PostOnly = true
 	}
 	// trailing stop
-	if t == enum.OrdType_STOP || t == enum.OrdType_STOP_LIMIT {
-		if err == nil && execInst == enum.ExecInst_PRIMARY_PEG {
+	if t == enum.OrdType_STOP {
+		if err == nil && strings.Contains(string(execInst), string(enum.ExecInst_PRIMARY_PEG)) {
 			trail, err := nos.GetPegDifference()
 			if err != nil {
 				return nil, err // trailing stop needs a peg

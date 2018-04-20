@@ -319,13 +319,14 @@ func (f *FIX) OnFIX42OrderStatusRequest(msg osr.OrderStatusRequest, sID quickfix
 	}
 	orderID := strconv.FormatInt(order.ID, 10)
 	clOrdID := strconv.FormatInt(order.CID, 10)
-	tif := convert.TimeInForceToFIX(order.Type)
+	ordtype := bitfinex.OrderType(order.Type)
+	tif := convert.TimeInForceToFIX(ordtype)
 	cached, err2 := peer.LookupByOrderID(orderID)
 	if err2 != nil {
-		cached = peer.AddOrder(clOrdID, order.Price, order.PriceAuxLimit, order.PriceTrailing, order.Amount, order.Symbol, peer.BfxUserID(), convert.SideToFIX(order.Amount), convert.OrdTypeToFIX(order.Type), tif, int(order.Flags))
+		cached = peer.AddOrder(clOrdID, order.Price, order.PriceAuxLimit, order.PriceTrailing, order.Amount, order.Symbol, peer.BfxUserID(), convert.SideToFIX(order.Amount), convert.OrdTypeToFIX(ordtype), tif, int(order.Flags))
 	}
 	status := convert.OrdStatusToFIX(order.Status)
-	er := convert.FIX42ExecutionReportFromOrder(order, peer.BfxUserID(), enum.ExecType_ORDER_STATUS, cached.FilledQty(), status, "", f.Symbology, sID.TargetCompID)
+	er := convert.FIX42ExecutionReportFromOrder(order, peer.BfxUserID(), enum.ExecType_ORDER_STATUS, cached.FilledQty(), status, "", f.Symbology, sID.TargetCompID, cached.Flags, cached.Stop, cached.Trail)
 	quickfix.SendToTarget(er, sID)
 
 	return nil

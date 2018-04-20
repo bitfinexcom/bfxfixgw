@@ -82,25 +82,29 @@ func AvgPxToFIX(priceAvg float64) field.AvgPxField {
 	return field.NewAvgPx(d, 2)
 }
 
-func OrdTypeToFIX(ordtype string) enum.OrdType {
+func OrdTypeToFIX(ordtype bitfinex.OrderType) enum.OrdType {
 	switch ordtype {
-	case "EXCHANGE LIMIT":
+	case bitfinex.OrderTypeExchangeLimit:
 		fallthrough
-	case "LIMIT":
+	case bitfinex.OrderTypeLimit:
 		return enum.OrdType_LIMIT
-	case "EXCHANGE MARKET":
+	case bitfinex.OrderTypeExchangeMarket:
 		fallthrough
-	case "MARKET":
+	case bitfinex.OrderTypeMarket:
 		return enum.OrdType_MARKET
-	case "STOP":
+	case bitfinex.OrderTypeStop:
 		fallthrough
-	case "EXCHANGE STOP":
+	case bitfinex.OrderTypeTrailingStop:
+		fallthrough
+	case bitfinex.OrderTypeExchangeTrailingStop:
+		fallthrough
+	case bitfinex.OrderTypeExchangeStop:
 		return enum.OrdType_STOP
-	case "STOP LIMIT":
+	case bitfinex.OrderTypeStopLimit:
 		return enum.OrdType_STOP_LIMIT
-	case "FOK":
+	case bitfinex.OrderTypeFOK:
 		fallthrough
-	case "EXCHANGE FOK":
+	case bitfinex.OrderTypeExchangeFOK:
 		return enum.OrdType_LIMIT
 	}
 	return enum.OrdType_MARKET
@@ -116,12 +120,33 @@ func BookActionToFIX(action bitfinex.BookAction) enum.MDUpdateAction {
 	return enum.MDUpdateAction_NEW
 }
 
-func TimeInForceToFIX(ordtype string) enum.TimeInForce {
+func TimeInForceToFIX(ordtype bitfinex.OrderType) enum.TimeInForce {
 	switch ordtype {
-	case "FOK":
+	case bitfinex.OrderTypeFOK:
 		fallthrough
-	case "EXCHANGE FOK":
+	case bitfinex.OrderTypeExchangeFOK:
 		return enum.TimeInForce_FILL_OR_KILL
 	}
 	return enum.TimeInForce_GOOD_TILL_CANCEL // GTC default
+}
+
+func ExecInstToFIX(ordtype bitfinex.OrderType, flags int) (enum.ExecInst, bool) {
+	execInst := ""
+	switch ordtype {
+	case bitfinex.OrderTypeTrailingStop:
+		fallthrough
+	case bitfinex.OrderTypeExchangeTrailingStop:
+		execInst = string(enum.ExecInst_PRIMARY_PEG)
+	}
+	if flags&bitfinex.OrderFlagPostOnly != 0 {
+		execInst = execInst + string(enum.ExecInst_PARTICIPANT_DONT_INITIATE)
+	}
+	return enum.ExecInst(execInst), execInst != "" // helps determining if ExecInst should be set
+}
+
+func DisplayMethodToFIX(flags int) (enum.DisplayMethod, bool) {
+	if flags&bitfinex.OrderFlagHidden != 0 {
+		return enum.DisplayMethod_UNDISCLOSED, true
+	}
+	return "", false
 }

@@ -194,13 +194,12 @@ For a trailing stop order:
 
 <sup>*</sup> The trailing stop price should be in the same units as a Price (44) or StopPx (99).
 
-e.g. For a trailing stop limit order where the limit price is $1660.00 and the stop should trail the market by $5.25, the following FIX tags should be set:
+e.g. For a trailing stop order where the stop should trail the market by $5.25, the following FIX tags should be set:
 
 | Field				| Tag	| Value		|
 |-------------------|-------|-----------|
 | OrdType			| 40	| 4			|
 | ExecInst			| 18	| R			|
-| Price				| 44	| 1660.00	|
 | PegOffsetValue	| 211	| 5.25		|
 
 ### Examples
@@ -318,3 +317,7 @@ To preserve fee information, `tu` API messages are used to populate execution re
 ## Immediate or Cancel collapses into Fill or Kill time in force
 
 If an order is sent with an Immediate or Cancel time in force, the order will be mapped as a Bitfinex fill or kill limit order. Corresponding execution reports will indicate the order was placed as a fill or kill limit and not an IOC limit order.
+
+## Unsolicited trailing stop Execution Report missing trailing peg
+
+If a trailing stop order was placed outside of the FIX session, a `39=0 NEW` Execution Report will be missing the trailing stop peg price.  The Bitfinex API currently does not return trailing stop peg prices on order new notification acknowledgements, but instead lists the calculated stop price, which is included in tag `99 StopPx` on the `39=0 NEW` ExecutionReport.  Subsequent ExecutionReports related to the unsolicited trailing stop may also be missing the peg price until the gateway's cache is updated from the Bitfinex API.

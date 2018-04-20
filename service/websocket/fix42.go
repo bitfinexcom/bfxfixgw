@@ -11,6 +11,7 @@ import (
 	"github.com/quickfixgo/quickfix"
 	"github.com/shopspring/decimal"
 	"go.uber.org/zap"
+	"strings"
 )
 
 // Handle Bitfinex messages and process them as FIX42 downstream.
@@ -99,8 +100,9 @@ func (w *Websocket) FIX42TradeExecutionUpdateHandler(t *bitfinex.TradeExecutionU
 		orderID := strconv.FormatInt(os.ID, 10)
 		clOrdID := strconv.FormatInt(os.CID, 10)
 		// update everything at the same time
-		tif := convert.TimeInForceToFIX(os.Type)
-		p.AddOrder(clOrdID, os.Price, os.PriceAuxLimit, os.PriceTrailing, os.Amount, os.Symbol, p.BfxUserID(), convert.SideToFIX(t.ExecAmount), convert.OrdTypeToFIX(os.Type), tif, int(os.Flags))
+		ordtype := bitfinex.OrderType(os.Type)
+		tif := convert.TimeInForceToFIX(ordtype)
+		p.AddOrder(clOrdID, os.Price, os.PriceAuxLimit, os.PriceTrailing, os.Amount, os.Symbol, p.BfxUserID(), convert.SideToFIX(t.ExecAmount), convert.OrdTypeToFIX(ordtype), tif, int(os.Flags))
 		cached, err = p.UpdateOrder(clOrdID, orderID)
 		if err != nil {
 			w.logger.Warn("could not update order", zap.Error(err))
@@ -194,18 +196,34 @@ func (w *Websocket) FIX42NotificationHandler(d *bitfinex.Notification, sID quick
 			_, err := p.UpdateOrder(clOrdID, orderID)
 			if err != nil {
 				w.logger.Warn("adding unknown order (entered outside session)", zap.String("ClOrdID", clOrdID), zap.String("OrderID", orderID))
-				tif := convert.TimeInForceToFIX(order.Type)
-				cache := p.AddOrder(clOrdID, order.Price, order.PriceAuxLimit, order.PriceTrailing, order.Amount, order.Symbol, p.BfxUserID(), convert.SideToFIX(order.Amount), convert.OrdTypeToFIX(order.Type), tif, int(order.Flags))
+				ordtype := bitfinex.OrderType(order.Type)
+				tif := convert.TimeInForceToFIX(ordtype)
+				cache := p.AddOrder(clOrdID, order.Price, order.PriceAuxLimit, order.PriceTrailing, order.Amount, order.Symbol, p.BfxUserID(), convert.SideToFIX(order.Amount), convert.OrdTypeToFIX(ordtype), tif, int(order.Flags))
 				cache.OrderID = orderID
 			}
 			ordStatus = enum.OrdStatus_NEW
 			execType = enum.ExecType_NEW
 		}
-		quickfix.SendToTarget(convert.FIX42ExecutionReportFromOrder(&order, p.BfxUserID(), execType, 0, ordStatus, text, w.Symbology, sID.TargetCompID), sID)
-		// market order ack
+		// oddly order new acks don't include order flags, so we can reference the original order to include these flags
+		flags := int(o.Flags) // always empty
+		orig, err := p.LookupByClOrdID(strconv.FormatInt(order.CID, 10))
+		if err == nil {
+			flags = orig.Flags
+		}
+		// notification ack doesn't include the peg price, but the price the order is currently sitting at (goes into 99 StopPx)
+		peg := 0.0
+		stop := o.PriceAuxLimit
+		if strings.Contains(o.Type, "TRAILING") {
+			// ref original order
+			orig, err := p.LookupByClOrdID(strconv.FormatInt(o.CID, 10))
+			if err == nil {
+				peg = orig.Trail
+			}
+			stop = o.Price
+		}
+		quickfix.SendToTarget(convert.FIX42ExecutionReportFromOrder(&order, p.BfxUserID(), execType, 0, ordStatus, text, w.Symbology, sID.TargetCompID, flags, stop, peg), sID)
 
 		return
-		// TODO other types
 	default:
 		w.logger.Warn("unhandled notify info object", zap.Any("msg", d.NotifyInfo))
 		return
@@ -216,8 +234,9 @@ func (w *Websocket) FIX42OrderSnapshotHandler(os *bitfinex.OrderSnapshot, sID qu
 	peer, ok := w.FindPeer(sID.String())
 	if ok {
 		for _, order := range os.Snapshot {
-			tif := convert.TimeInForceToFIX(order.Type)
-			cache := peer.AddOrder(strconv.FormatInt(order.CID, 10), order.Price, order.PriceAuxLimit, order.PriceTrailing, order.Amount, order.Symbol, peer.BfxUserID(), convert.SideToFIX(order.Amount), convert.OrdTypeToFIX(order.Type), tif, int(order.Flags))
+			ordtype := bitfinex.OrderType(order.Type)
+			tif := convert.TimeInForceToFIX(ordtype)
+			cache := peer.AddOrder(strconv.FormatInt(order.CID, 10), order.Price, order.PriceAuxLimit, order.PriceTrailing, order.Amount, order.Symbol, peer.BfxUserID(), convert.SideToFIX(order.Amount), convert.OrdTypeToFIX(ordtype), tif, int(order.Flags))
 			cache.OrderID = strconv.FormatInt(order.ID, 10)
 		}
 	}
@@ -243,7 +262,16 @@ func (w *Websocket) FIX42OrderUpdateHandler(o *bitfinex.OrderUpdate, sID quickfi
 	ord := bitfinex.Order(*o)
 	ordStatus := convert.OrdStatusToFIX(o.Status)
 	execType := convert.ExecTypeToFIX(o.Status)
-	quickfix.SendToTarget(convert.FIX42ExecutionReportFromOrder(&ord, p.BfxUserID(), execType, 0.0, ordStatus, "", w.Symbology, sID.TargetCompID), sID)
+	peg := o.PriceTrailing
+	stop := o.PriceAuxLimit
+	if strings.Contains(ord.Type, "TRAILING") && peg <= 0 {
+		// attempt to lookup peg
+		cache, err := p.LookupByClOrdID(strconv.FormatInt(ord.CID, 10))
+		if err == nil {
+			peg = cache.Trail
+		}
+	}
+	quickfix.SendToTarget(convert.FIX42ExecutionReportFromOrder(&ord, p.BfxUserID(), execType, 0.0, ordStatus, "", w.Symbology, sID.TargetCompID, int(o.Flags), stop, peg), sID)
 	return
 }
 
@@ -268,6 +296,6 @@ func (w *Websocket) FIX42OrderCancelHandler(o *bitfinex.OrderCancel, sID quickfi
 	if ordStatus == enum.OrdStatus_FILLED || ordStatus == enum.OrdStatus_PARTIALLY_FILLED {
 		return // do not publish duplicate execution report--tu/te will have more information (fees, etc.) for this event
 	}
-	quickfix.SendToTarget(convert.FIX42ExecutionReportFromOrder(&ord, p.BfxUserID(), execType, cached.FilledQty(), ordStatus, string(ord.Status), w.Symbology, sID.TargetCompID), sID)
+	quickfix.SendToTarget(convert.FIX42ExecutionReportFromOrder(&ord, p.BfxUserID(), execType, cached.FilledQty(), ordStatus, string(ord.Status), w.Symbology, sID.TargetCompID, cached.Flags, 0.0, cached.Trail), sID)
 	return
 }

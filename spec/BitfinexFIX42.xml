@@ -428,6 +428,7 @@
    <field name='DiscretionOffset' required='N' />
    <field name='ClearingFirm' required='N' />
    <field name='ClearingAccount' required='N' />
+   <field name='DisplayMethod' required='N' />
   </message>
   <message name='NewOrderList' msgtype='E' msgcat='app'>
    <field name='ListID' required='Y' />
@@ -1112,6 +1113,7 @@
    <field name='Text' required='N' />
    <field name='EncodedTextLen' required='N' />
    <field name='EncodedText' required='N' />
+   <field name='MDRequestType' required='N' />
   </message>
   <message name='QuoteCancel' msgtype='Z' msgcat='app'>
    <field name='QuoteReqID' required='N' />
@@ -2746,9 +2748,11 @@
   <field number='444' name='ListStatusText' type='STRING' />
   <field number='445' name='EncodedListStatusTextLen' type='LENGTH' />
   <field number='446' name='EncodedListStatusText' type='DATA' />
+  <field number='1084' name='DisplayMethod' type='CHAR' /> <!--Borrowed from FIX 4.4-->
   <field number='20000' name='BfxApiKey' type='STRING' />
   <field number='20001' name='BfxApiSecret' type='STRING' />
   <field number='20002' name='BfxUserID' type='STRING' />
   <field number='20003' name='PricePrecision' type='STRING' />
+  <field number='20004' name='MDRequestType' type='STRING' />
  </fields>
 </fix>

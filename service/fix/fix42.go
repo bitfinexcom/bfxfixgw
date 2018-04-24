@@ -8,7 +8,6 @@ import (
 	"github.com/bitfinexcom/bfxfixgw/convert"
 
 	"go.uber.org/zap"
-	lg "log"
 
 	//er "github.com/quickfixgo/quickfix/fix42/executionreport"
 	mdr "github.com/quickfixgo/fix42/marketdatarequest"
@@ -22,10 +21,13 @@ import (
 	"github.com/quickfixgo/field"
 	"github.com/quickfixgo/quickfix"
 
+	lg "log"
+
 	bitfinex "github.com/bitfinexcom/bitfinex-api-go/v2"
 )
 
 const (
+	// PricePrecision is the FIX tag to specify a book subscription price precision
 	PricePrecision quickfix.Tag = 20003
 )
 
@@ -40,23 +42,32 @@ func (f *FIX) OnFIX42NewOrderSingle(msg nos.NewOrderSingle, sID quickfix.Session
 		return quickfix.NewMessageRejectError("could not find established peer for session ID", rejectReasonOther, nil)
 	}
 
-	bo, err := convert.OrderNewFromFIX42NewOrderSingle(msg)
+	bo, err := convert.OrderNewFromFIX42NewOrderSingle(msg, f.Symbology, sID.TargetCompID)
 	if err != nil {
 		return err
 	}
 
-	lg.Printf("submit order %p", p.Ws)
-
 	ordtype, _ := msg.GetOrdType()
 	clordid, _ := msg.GetClOrdID()
 	side, _ := msg.GetSide()
-	p.AddOrder(clordid, bo.Price, bo.Amount, bo.Symbol, p.BfxUserID(), side, ordtype)
+	tif, err := msg.GetTimeInForce()
+	if err != nil {
+		tif = enum.TimeInForce_GOOD_TILL_CANCEL // default TIF
+	}
+
+	flags := 0
+	if bo.Hidden {
+		flags = flags | convert.FlagHidden
+	}
+	if bo.PostOnly {
+		flags = flags | convert.FlagPostOnly
+	}
+	p.AddOrder(clordid, bo.Price, bo.PriceAuxLimit, bo.PriceTrailing, bo.Amount, bo.Symbol, p.BfxUserID(), side, ordtype, tif, flags)
 
 	e := p.Ws.SubmitOrder(context.Background(), bo)
 	if e != nil {
 		f.logger.Warn("could not submit order", zap.Error(e))
-	} else {
-
+		return reject(e)
 	}
 
 	return nil
@@ -122,6 +133,9 @@ func (f *FIX) OnFIX42MarketDataRequest(msg mdr.MarketDataRequest, sID quickfix.S
 	if depth < 0 {
 		return rejectError(fmt.Sprintf("invalid market depth for market data request: %d", depth))
 	}
+	if 0 == depth {
+		depth = 100
+	}
 
 	var precision bitfinex.BookPrecision
 	var overridePrecision bool
@@ -129,18 +143,26 @@ func (f *FIX) OnFIX42MarketDataRequest(msg mdr.MarketDataRequest, sID quickfix.S
 	if err != nil {
 		precision = bitfinex.Precision0
 	} else {
-		var ok bool
 		precision, overridePrecision = validatePrecision(fixPrecision)
-		if !ok {
+		if !overridePrecision {
 			return rejectError(fmt.Sprintf("invalid precision for market data request: %s", fixPrecision))
 		}
 	}
 
 	for i := 0; i < relSym.Len(); i++ {
 
-		symbol, err := relSym.Get(i).GetSymbol()
+		fixSymbol, err := relSym.Get(i).GetSymbol()
 		if err != nil {
 			return err
+		}
+		translated, err2 := f.Symbology.ToBitfinex(fixSymbol, sID.TargetCompID)
+		var symbol string
+		if err2 == nil {
+			lg.Printf("translate FIX %s to %s", fixSymbol, translated)
+			symbol = translated
+		} else {
+			lg.Printf("could not translate FIX %s: %s", fixSymbol, err2.Error())
+			symbol = fixSymbol
 		}
 
 		// XXX: The following could most likely be abtracted to work both for 4.2 and 4.4.
@@ -158,25 +180,25 @@ func (f *FIX) OnFIX42MarketDataRequest(msg mdr.MarketDataRequest, sID quickfix.S
 			if err != nil {
 				return reject(err)
 			}
-			fix := convert.FIX42MarketDataFullRefreshFromBookSnapshot(mdReqID, bookSnapshot, f.Symbology, sID.SenderCompID)
+			fix := convert.FIX42MarketDataFullRefreshFromBookSnapshot(mdReqID, bookSnapshot, f.Symbology, sID.TargetCompID)
 			quickfix.SendToTarget(fix, sID)
 			tradeSnapshot, err := p.Rest.Trades.All(symbol)
 			if err != nil {
 				return reject(err)
 			}
-			fix = convert.FIX42MarketDataFullRefreshFromTradeSnapshot(mdReqID, tradeSnapshot, f.Symbology, sID.SenderCompID)
+			fix = convert.FIX42MarketDataFullRefreshFromTradeSnapshot(mdReqID, tradeSnapshot, f.Symbology, sID.TargetCompID)
 			quickfix.SendToTarget(fix, sID)
 
 		case enum.SubscriptionRequestType_SNAPSHOT_PLUS_UPDATES:
 			p.MapSymbolToReqID(symbol, mdReqID)
 
-			prec := bitfinex.PrecisionRawBook
+			prec := bitfinex.Precision0
 			if overridePrecision {
 				prec = precision
 			} else {
-				aggregate, _ := msg.GetAggregatedBook() // aggregate by price (most granular by default) if no precision override is given
-				if aggregate {
-					prec = bitfinex.Precision0
+				aggregate, err := msg.GetAggregatedBook() // aggregate by price (most granular by default) if no precision override is given
+				if err == nil && !aggregate {
+					prec = bitfinex.PrecisionRawBook
 				}
 			}
 			bookReqID, err := p.Ws.SubscribeBook(context.Background(), symbol, prec, bitfinex.FrequencyRealtime, depth)
@@ -211,7 +233,6 @@ func (f *FIX) OnFIX42OrderCancelRequest(msg ocr.OrderCancelRequest, sID quickfix
 	}
 
 	cid, _ := msg.GetClOrdID()
-
 	id, _ := msg.GetOrderID()
 
 	// The spec says that a quantity and side are also required but the bitfinex API does not
@@ -261,12 +282,11 @@ func (f *FIX) OnFIX42OrderCancelRequest(msg ocr.OrderCancelRequest, sID quickfix
 		d := txnT.Format("2006-01-02")
 		oc.CIDDate = d
 	}
-	if p.Ws.IsConnected() {
-		p.Ws.Send(context.Background(), oc)
-	} else {
-		// TODO still getting heartbeats, where is this connection??
-		// ord vs. market data host?
-		f.logger.Error("not logged onto websocket", zap.String("SessionID", sID.String()))
+
+	err2 := p.Ws.Send(context.Background(), oc)
+	if err2 != nil {
+		f.logger.Error("not logged onto websocket", zap.String("SessionID", sID.String()), zap.Error(err))
+		return reject(err2)
 	}
 
 	return nil
@@ -292,17 +312,18 @@ func (f *FIX) OnFIX42OrderStatusRequest(msg osr.OrderStatusRequest, sID quickfix
 
 	order, nerr := peer.Rest.Orders.Status(oidi)
 	if nerr != nil {
-		r := quickfix.NewBusinessMessageRejectError(nerr.Error(), 0 /*OTHER*/, nil)
-		return r
+		return reject(nerr)
 	}
 	orderID := strconv.FormatInt(order.ID, 10)
 	clOrdID := strconv.FormatInt(order.CID, 10)
+	ordtype := bitfinex.OrderType(order.Type)
+	tif := convert.TimeInForceToFIX(ordtype)
 	cached, err2 := peer.LookupByOrderID(orderID)
 	if err2 != nil {
-		cached = peer.AddOrder(clOrdID, order.Price, order.Amount, order.Symbol, peer.BfxUserID(), convert.SideToFIX(order.Amount), convert.OrdTypeToFIX(order.Type))
+		cached = peer.AddOrder(clOrdID, order.Price, order.PriceAuxLimit, order.PriceTrailing, order.Amount, order.Symbol, peer.BfxUserID(), convert.SideToFIX(order.Amount), convert.OrdTypeToFIX(ordtype), tif, int(order.Flags))
 	}
 	status := convert.OrdStatusToFIX(order.Status)
-	er := convert.FIX42ExecutionReportFromOrder(order, peer.BfxUserID(), enum.ExecType_ORDER_STATUS, cached.FilledQty(), status, "", f.Symbology, sID.SenderCompID)
+	er := convert.FIX42ExecutionReportFromOrder(order, peer.BfxUserID(), enum.ExecType_ORDER_STATUS, cached.FilledQty(), status, "", f.Symbology, sID.TargetCompID, cached.Flags, cached.Stop, cached.Trail)
 	quickfix.SendToTarget(er, sID)
 
 	return nil

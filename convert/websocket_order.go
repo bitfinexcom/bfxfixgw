@@ -1,187 +1,58 @@
 package convert
 
 import (
+	"errors"
 	"strconv"
+	"strings"
 
 	"github.com/bitfinexcom/bitfinex-api-go/v2"
-	uuid "github.com/satori/go.uuid"
 
 	"github.com/quickfixgo/enum"
-	"github.com/quickfixgo/field"
 	"github.com/quickfixgo/quickfix"
-	"github.com/shopspring/decimal"
+	"github.com/quickfixgo/tag"
 
-	fix44er "github.com/quickfixgo/fix44/executionreport"
-	//fix44mdsfr "github.com/quickfixgo/quickfix/fix44/marketdatasnapshotfullrefresh"
-	fix44nos "github.com/quickfixgo/fix44/newordersingle"
-
-	fix42er "github.com/quickfixgo/fix42/executionreport"
+	"github.com/bitfinexcom/bfxfixgw/service/symbol"
 	fix42nos "github.com/quickfixgo/fix42/newordersingle"
 )
-
-func FIX44ExecutionReportRejectUnknown(oid, cid string) fix44er.ExecutionReport {
-	uid, err := uuid.NewV4()
-	execID := ""
-	if err != nil {
-		execID = uid.String()
-	}
-	e := fix44er.New(
-		field.NewOrderID(oid),
-		field.NewExecID(execID), // XXX: Can we just take a random ID here?
-		field.NewExecType(enum.ExecType_ORDER_STATUS),
-		field.NewOrdStatus(enum.OrdStatus_REJECTED),
-		field.NewSide(enum.Side_UNDISCLOSED),
-		field.NewLeavesQty(decimal.NewFromFloat(0.0), 2),
-		field.NewCumQty(decimal.NewFromFloat(0.0), 2),
-		field.NewAvgPx(decimal.NewFromFloat(0.0), 2),
-	)
-
-	e.SetClOrdID(cid)
-	e.SetOrdRejReason(enum.OrdRejReason_UNKNOWN_ORDER)
-
-	return e
-}
-
-func FIX42ExecutionReportRejectUnknown(oid, cid string) fix42er.ExecutionReport {
-	uid, err := uuid.NewV4()
-	execID := ""
-	if err != nil {
-		execID = uid.String()
-	}
-	e := fix42er.New(
-		field.NewOrderID(oid),
-		field.NewExecID(execID), // XXX: Can we just take a random ID here?
-		field.NewExecTransType(enum.ExecTransType_STATUS),
-		field.NewExecType(enum.ExecType_ORDER_STATUS),
-
-		field.NewOrdStatus(enum.OrdStatus_REJECTED),
-		field.NewSymbol(""),
-		field.NewSide(enum.Side_UNDISCLOSED),
-		field.NewLeavesQty(decimal.NewFromFloat(0.0), 2),
-		field.NewCumQty(decimal.NewFromFloat(0.0), 2),
-		field.NewAvgPx(decimal.NewFromFloat(0.0), 2),
-	)
-
-	e.SetClOrdID(cid)
-	e.SetOrdRejReason(enum.OrdRejReason_UNKNOWN_ORDER)
-
-	return e
-}
-
-// OrderNewTypeFromFIX44NewOrderSingle takes a FIX44 NewOrderSingle and tries to extract enough information
-// to figure out the appropriate type for the bitfinex order.
-// XXX: Only works for EXCHANGE orders at the moment, i.e. automatically adds EXCHANGE prefix.
-func OrderNewTypeFromFIX44NewOrderSingle(nos fix44nos.NewOrderSingle) string {
-	ot, _ := nos.GetOrdType()
-	tif, _ := nos.GetTimeInForce()
-	ei, _ := nos.GetExecInst()
-
-	pref := "EXCHANGE "
-
-	switch {
-	case ot == enum.OrdType_MARKET:
-		return pref + "MARKET"
-	case ot == enum.OrdType_LIMIT:
-		return pref + "LIMIT"
-	case ot == enum.OrdType_STOP:
-		return pref + "STOP"
-	case ot == enum.OrdType_STOP_LIMIT:
-		return "STOP LIMIT"
-	case tif == enum.TimeInForce_FILL_OR_KILL:
-		return pref + "FOK"
-	case ei == enum.ExecInst_ALL_OR_NONE && tif == enum.TimeInForce_IMMEDIATE_OR_CANCEL:
-		return pref + "FOK"
-	default:
-		return ""
-	}
-}
 
 // OrderNewTypeFromFIX42NewOrderSingle takes a FIX42 NewOrderSingle and tries to extract enough information
 // to figure out the appropriate type for the bitfinex order.
 // XXX: Only works for EXCHANGE orders at the moment, i.e. automatically adds EXCHANGE prefix.
-func OrderNewTypeFromFIX42NewOrderSingle(nos fix42nos.NewOrderSingle) string {
+func OrderNewTypeFromFIX42NewOrderSingle(nos fix42nos.NewOrderSingle) (string, error) {
 	ot, _ := nos.GetOrdType()
 	tif, _ := nos.GetTimeInForce()
 	ei, _ := nos.GetExecInst()
 
-	pref := "EXCHANGE "
-
-	switch {
-	case ot == enum.OrdType_MARKET:
-		return pref + "MARKET"
-	case ot == enum.OrdType_LIMIT:
-		return pref + "LIMIT"
-	case ot == enum.OrdType_STOP:
-		return pref + "STOP"
-	case ot == enum.OrdType_STOP_LIMIT:
-		return "STOP LIMIT"
-	case tif == enum.TimeInForce_FILL_OR_KILL:
-		return pref + "FOK"
-	case ei == enum.ExecInst_ALL_OR_NONE && tif == enum.TimeInForce_IMMEDIATE_OR_CANCEL:
-		return pref + "FOK"
-	default:
-		return ""
+	if ei == enum.ExecInst_ALL_OR_NONE {
+		return "", errors.New("all or none execution instruction unsupported")
 	}
-}
 
-// OrderNewFromFIX44NewOrderSingle converts a NewOrderSingle into a new order for the
-// bitfinex websocket API, as best as it can.
-func OrderNewFromFIX44NewOrderSingle(nos fix44nos.NewOrderSingle) (*bitfinex.OrderNewRequest, quickfix.MessageRejectError) {
-	on := &bitfinex.OrderNewRequest{}
-
-	on.GID = 0
-	cidstr, err := nos.GetClOrdID()
-	if err != nil {
-		return nil, err
+	// map AON & IOC => FOK
+	if tif == enum.TimeInForce_FILL_OR_KILL || tif == enum.TimeInForce_IMMEDIATE_OR_CANCEL {
+		return bitfinex.OrderTypeExchangeFOK, nil
 	}
-	cid, perr := strconv.ParseInt(cidstr, 10, 64)
-	if perr != nil {
-		cid = 0
-	}
-	on.CID = cid
 
-	on.Type = OrderNewTypeFromFIX44NewOrderSingle(nos)
-
-	s, err := nos.GetSymbol()
-	if err != nil {
-		return nil, err
-	}
-	on.Symbol = s
-
-	qd, err := nos.GetOrderQty()
-	if err != nil {
-		return nil, err
-	}
-	q, _ := qd.Float64()
-	on.Amount = q
-
-	t, _ := nos.GetOrdType()
-	switch t {
+	switch ot {
+	case enum.OrdType_MARKET:
+		return bitfinex.OrderTypeExchangeMarket, nil
 	case enum.OrdType_LIMIT:
-		pd, err := nos.GetPrice()
-		if err != nil {
-			return nil, err
+		return bitfinex.OrderTypeExchangeLimit, nil
+	case enum.OrdType_STOP:
+		execInst, err := nos.GetExecInst()
+		if err == nil && strings.Contains(string(execInst), string(enum.ExecInst_PRIMARY_PEG)) {
+			return bitfinex.OrderTypeExchangeTrailingStop, nil
 		}
-		on.Price, _ = pd.Float64()
+		return bitfinex.OrderTypeExchangeStop, nil
+	case enum.OrdType_STOP_LIMIT:
+		return bitfinex.OrderTypeExchangeStopLimit, nil
+	default:
+		return "", nil
 	}
-
-	side, err := nos.GetSide()
-	if err != nil {
-		return nil, err
-	}
-
-	if side == enum.Side_SELL {
-		on.Amount = -q
-	} else if side == enum.Side_BUY {
-		on.Amount = q
-	}
-
-	return on, nil
 }
 
 // OrderNewFromFIX42NewOrderSingle converts a NewOrderSingle into a new order for the
 // bitfinex websocket API, as best as it can.
-func OrderNewFromFIX42NewOrderSingle(nos fix42nos.NewOrderSingle) (*bitfinex.OrderNewRequest, quickfix.MessageRejectError) {
+func OrderNewFromFIX42NewOrderSingle(nos fix42nos.NewOrderSingle, symbology symbol.Symbology, counterparty string) (*bitfinex.OrderNewRequest, quickfix.MessageRejectError) {
 	on := &bitfinex.OrderNewRequest{}
 
 	on.GID = 0
@@ -195,13 +66,24 @@ func OrderNewFromFIX42NewOrderSingle(nos fix42nos.NewOrderSingle) (*bitfinex.Ord
 	}
 	on.CID = cid
 
-	on.Type = OrderNewTypeFromFIX42NewOrderSingle(nos)
+	var er error
+	on.Type, er = OrderNewTypeFromFIX42NewOrderSingle(nos)
+	if er != nil {
+		return nil, quickfix.NewMessageRejectError(er.Error(), 0, nil)
+	}
 
 	s, err := nos.GetSymbol()
 	if err != nil {
 		return nil, err
 	}
-	on.Symbol = s //fmt.Sprintf("t%s", s)
+	translated, err2 := symbology.ToBitfinex(s, counterparty)
+	var sym string
+	if err2 == nil {
+		sym = translated
+	} else {
+		sym = s
+	}
+	on.Symbol = sym
 
 	qd, err := nos.GetOrderQty()
 	if err != nil {
@@ -217,6 +99,23 @@ func OrderNewFromFIX42NewOrderSingle(nos fix42nos.NewOrderSingle) (*bitfinex.Ord
 			return nil, err
 		}
 		on.Price, _ = pd.Float64()
+	case enum.OrdType_STOP:
+		pd, err := nos.GetStopPx()
+		if err != nil {
+			return nil, err
+		}
+		on.Price, _ = pd.Float64()
+	case enum.OrdType_STOP_LIMIT:
+		lm, err := nos.GetPrice()
+		if err != nil {
+			return nil, err
+		}
+		on.Price, _ = lm.Float64()
+		pd, err := nos.GetStopPx()
+		if err != nil {
+			return nil, err
+		}
+		on.PriceAuxLimit, _ = pd.Float64()
 	}
 
 	side, err := nos.GetSide()
@@ -228,6 +127,27 @@ func OrderNewFromFIX42NewOrderSingle(nos fix42nos.NewOrderSingle) (*bitfinex.Ord
 		on.Amount = -q
 	} else if side == enum.Side_BUY {
 		on.Amount = q
+	}
+
+	// hidden
+	displayMethod, err := nos.GetString(tag.DisplayMethod)
+	if err == nil && enum.DisplayMethod(displayMethod) == enum.DisplayMethod_UNDISCLOSED {
+		on.Hidden = true
+	}
+	execInst, err := nos.GetExecInst()
+	// post only
+	if err == nil && strings.Contains(string(execInst), string(enum.ExecInst_PARTICIPANT_DONT_INITIATE)) {
+		on.PostOnly = true
+	}
+	// trailing stop
+	if t == enum.OrdType_STOP {
+		if err == nil && strings.Contains(string(execInst), string(enum.ExecInst_PRIMARY_PEG)) {
+			trail, err := nos.GetPegDifference()
+			if err != nil {
+				return nil, err // trailing stop needs a peg
+			}
+			on.PriceTrailing, _ = trail.Float64()
+		}
 	}
 
 	return on, nil

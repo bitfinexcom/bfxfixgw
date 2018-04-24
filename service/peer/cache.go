@@ -2,10 +2,11 @@ package peer
 
 import (
 	"fmt"
-	"github.com/quickfixgo/enum"
-	"go.uber.org/zap"
 	"log"
 	"sync"
+
+	"github.com/quickfixgo/enum"
+	"go.uber.org/zap"
 )
 
 type execution struct {
@@ -20,25 +21,31 @@ type CachedCancel struct {
 
 // details BFX might not return back to us, which we need to populate in execution reports.
 type CachedOrder struct {
-	Symbol, Account  string
-	ClOrdID, OrderID string
-	Px, Qty          float64 // original px & qty
-	Executions       []execution
-	lock             sync.Mutex
-	Side             enum.Side
-	OrderType        enum.OrdType
+	Symbol, Account      string
+	ClOrdID, OrderID     string
+	Px, Stop, Trail, Qty float64 // original pxs & qty
+	Executions           []execution
+	lock                 sync.Mutex
+	Side                 enum.Side
+	OrderType            enum.OrdType
+	TimeInForce          enum.TimeInForce
+	Flags                int
 }
 
-func newOrder(clordid string, px, qty float64, symbol, account string, side enum.Side, ordType enum.OrdType) *CachedOrder {
+func newOrder(clordid string, px, stop, trail, qty float64, symbol, account string, side enum.Side, ordType enum.OrdType, tif enum.TimeInForce, flags int) *CachedOrder {
 	return &CachedOrder{
-		ClOrdID:    clordid,
-		Px:         px,
-		Qty:        qty,
-		Executions: make([]execution, 0),
-		Symbol:     symbol,
-		Account:    account,
-		Side:       side,
-		OrderType:  ordType,
+		ClOrdID:     clordid,
+		Px:          px,
+		Stop:        stop,
+		Trail:       trail,
+		Qty:         qty,
+		Executions:  make([]execution, 0),
+		Symbol:      symbol,
+		Account:     account,
+		Side:        side,
+		OrderType:   ordType,
+		TimeInForce: tif,
+		Flags:       flags,
 	}
 }
 
@@ -59,12 +66,13 @@ func (o *CachedOrder) AvgFillPx() float64 {
 
 func (o *CachedOrder) avgFillPx() float64 {
 	tot := 0.0
-	n := len(o.Executions)
+	qty := 0.0
 	for _, e := range o.Executions {
-		tot = tot + e.Px
+		tot = tot + (e.Px * e.Qty)
+		qty = qty + e.Qty
 	}
-	if n > 0 {
-		return tot / float64(n)
+	if qty > 0 {
+		return tot / qty
 	}
 	return 0
 }
@@ -143,14 +151,25 @@ func (c *cache) LookupAPIReqIDs(fixReqID string) (string, string, bool) {
 	return ids.marketDataID, ids.tradeID, true
 }
 
+func (c *cache) ReverseLookupAPIReqIDs(bfxReqID string) (string, bool) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	for fixReqID, ids := range c.mdReqIDs {
+		if ids.marketDataID == bfxReqID || ids.tradeID == bfxReqID {
+			return fixReqID, true
+		}
+	}
+	return "", false
+}
+
 // add when receiving a NewOrderSingle over FIX
-func (c *cache) AddOrder(clordid string, px, qty float64, symbol, account string, side enum.Side, ordType enum.OrdType) *CachedOrder {
+func (c *cache) AddOrder(clordid string, px, stop, trail, qty float64, symbol, account string, side enum.Side, ordType enum.OrdType, tif enum.TimeInForce, flags int) *CachedOrder {
 	if qty < 0 {
 		qty = -qty
 	}
 	c.lock.Lock()
 	c.log.Info("added order to cache", zap.String("ClOrdID", clordid), zap.Float64("Px", px), zap.Float64("Qty", qty))
-	order := newOrder(clordid, px, qty, symbol, account, side, ordType)
+	order := newOrder(clordid, px, stop, trail, qty, symbol, account, side, ordType, tif, flags)
 	c.orders[clordid] = order
 	c.lock.Unlock()
 	return order

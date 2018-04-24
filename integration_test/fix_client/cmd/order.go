@@ -13,7 +13,7 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-func buildFixOrder(clordid, symbol string, px, qty float64, side enum.Side, ordType enum.OrdType) fix.Messagable {
+func buildFixOrder(clordid, symbol string, px, stop, qty float64, side enum.Side, ordType enum.OrdType) *nos.NewOrderSingle {
 	ord := nos.New(field.NewClOrdID(clordid),
 		field.NewHandlInst(enum.HandlInst_MANUAL_ORDER_BEST_EXECUTION),
 		field.NewSymbol(symbol), field.NewSide(side),
@@ -24,10 +24,13 @@ func buildFixOrder(clordid, symbol string, px, qty float64, side enum.Side, ordT
 	switch ordType {
 	case enum.OrdType_LIMIT:
 		ord.SetPrice(decimal.NewFromFloat(px), 4)
+	case enum.OrdType_STOP_LIMIT:
+		ord.SetPrice(decimal.NewFromFloat(px), 4)
+		fallthrough
 	case enum.OrdType_STOP:
-		ord.SetStopPx(decimal.NewFromFloat(px), 4)
+		ord.SetStopPx(decimal.NewFromFloat(stop), 4)
 	}
-	return ord
+	return &ord
 }
 
 type Order struct {
@@ -51,11 +54,17 @@ func (o *Order) Execute(keyboard <-chan string, publisher FIXPublisher) {
 	if str == "stop" {
 		ordtype = enum.OrdType_STOP
 	}
+	if str == "stop limit" {
+		ordtype = enum.OrdType_STOP_LIMIT
+	}
 	var err error
-	var px float64
-	if ordtype == enum.OrdType_MARKET {
+	var px, stop float64
+	switch ordtype {
+	case enum.OrdType_MARKET:
 		// no-op
-	} else {
+	case enum.OrdType_STOP_LIMIT:
+		fallthrough
+	case enum.OrdType_LIMIT:
 		log.Print("Enter px: ")
 		str = <-keyboard
 		px, err = strconv.ParseFloat(str, 64)
@@ -63,6 +72,29 @@ func (o *Order) Execute(keyboard <-chan string, publisher FIXPublisher) {
 			log.Printf("could not read px: %s", err.Error())
 			return
 		}
+	}
+	peg := 0.0
+	if ordtype == enum.OrdType_STOP {
+		log.Print("trailing stop?")
+		str = <-keyboard
+		if str == "true" || str == "yes" {
+			log.Print("Enter stop peg: ")
+			str = <-keyboard
+			peg, err = strconv.ParseFloat(str, 64)
+			if err != nil {
+				log.Print("could not parse stop peg")
+				return
+			}
+		} else {
+			log.Print("Enter stop px: ")
+			str = <-keyboard
+			stop, err = strconv.ParseFloat(str, 64)
+			if err != nil {
+				log.Printf("could not read stop px: %s", err.Error())
+				return
+			}
+		}
+
 	}
 	log.Print("Enter qty: ")
 	str = <-keyboard
@@ -80,7 +112,24 @@ func (o *Order) Execute(keyboard <-chan string, publisher FIXPublisher) {
 	if str == "sell" {
 		side = enum.Side_SELL
 	}
-	nos := buildFixOrder(clordid, symbol, px, qty, side, ordtype)
+	nos := buildFixOrder(clordid, symbol, px, stop, qty, side, ordtype)
+
+	log.Print("Options? (hidden, postonly, fok): ")
+	str = <-keyboard
+	if str == "hidden" {
+		nos.SetString(tag.DisplayMethod, string(enum.DisplayMethod_UNDISCLOSED))
+	}
+	if str == "postonly" {
+		nos.SetExecInst(enum.ExecInst_PARTICIPANT_DONT_INITIATE)
+	}
+	if str == "fok" {
+		nos.SetTimeInForce(enum.TimeInForce_FILL_OR_KILL)
+	}
+	if peg != 0 {
+		nos.SetExecInst(enum.ExecInst_PRIMARY_PEG)
+		nos.SetPegDifference(decimal.NewFromFloat(peg), 4)
+	}
+
 	publisher.SendFIX(nos)
 }
 

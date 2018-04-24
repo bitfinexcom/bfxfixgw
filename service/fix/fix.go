@@ -1,6 +1,8 @@
 package fix
 
 import (
+	"sync"
+
 	"github.com/bitfinexcom/bfxfixgw/log"
 	"github.com/bitfinexcom/bfxfixgw/service/peer"
 	"github.com/bitfinexcom/bfxfixgw/service/symbol"
@@ -11,17 +13,8 @@ import (
 	fix42nos "github.com/quickfixgo/fix42/newordersingle"
 	fix42ocr "github.com/quickfixgo/fix42/ordercancelrequest"
 	fix42osr "github.com/quickfixgo/fix42/orderstatusrequest"
-	/*
-		fix44mdr "github.com/quickfixgo/fix44/marketdatarequest"
-		fix44nos "github.com/quickfixgo/fix44/newordersingle"
-		fix44ocr "github.com/quickfixgo/fix44/ordercancelrequest"
-		fix44osr "github.com/quickfixgo/fix44/orderstatusrequest"
-	*/
 	"github.com/quickfixgo/quickfix"
 )
-
-// send messages to FIX clients (global w/ session ID)
-// send messages to websocket (peer map)
 
 // FIX types, defined in BitfinexFIX42.xml
 var msgTypeLogon = string([]byte("A"))
@@ -45,11 +38,13 @@ type FIX struct {
 
 	acc    *quickfix.Acceptor
 	logger *zap.Logger
+
+	lastMsgType string
+	msgTypeLock sync.RWMutex
 }
 
 func (f *FIX) OnCreate(sID quickfix.SessionID) {
 	log.Logger.Info("FIX.OnCreate", zap.Any("SessionID", sID))
-	//f.Peers.AddPeer(sID)
 }
 
 func (f *FIX) OnLogon(sID quickfix.SessionID) {
@@ -96,7 +91,16 @@ func (f *FIX) FromAdmin(msg *quickfix.Message, sID quickfix.SessionID) quickfix.
 
 func (f *FIX) FromApp(msg *quickfix.Message, sID quickfix.SessionID) quickfix.MessageRejectError {
 	f.logger.Info("FIX.FromApp", zap.Any("msg", msg))
+	f.msgTypeLock.Lock()
+	f.lastMsgType, _ = msg.Header.GetString(quickfix.Tag(35))
+	f.msgTypeLock.Unlock()
 	return f.Route(msg, sID)
+}
+
+func (f *FIX) LastMsgType() string {
+	f.msgTypeLock.RLock()
+	defer f.msgTypeLock.RUnlock()
+	return f.lastMsgType
 }
 
 // New creates a new FIX acceptor & associated services
@@ -108,13 +112,6 @@ func New(s *quickfix.Settings, peers peer.Peers, serviceType FIXServiceType, sym
 		Symbology:     symbology,
 	}
 
-	/*
-		// TODO FIX44
-		f.AddRoute(fix44mdr.Route(f.OnFIX44MarketDataRequest))
-		f.AddRoute(fix44nos.Route(f.OnFIX44NewOrderSingle))
-		f.AddRoute(fix44ocr.Route(f.OnFIX44OrderCancelRequest))
-		f.AddRoute(fix44osr.Route(f.OnFIX44OrderStatusRequest))
-	*/
 	var storeFactory quickfix.MessageStoreFactory
 	logFactory, err := quickfix.NewFileLogFactory(s)
 	if err != nil {

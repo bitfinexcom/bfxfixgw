@@ -2,12 +2,13 @@ package main
 
 import (
 	"flag"
-	"github.com/bitfinexcom/bfxfixgw/service/fix"
 	"log"
 	"os"
 	"os/signal"
 	"strings"
 	"syscall"
+
+	"github.com/bitfinexcom/bfxfixgw/service/fix"
 
 	"github.com/quickfixgo/quickfix"
 
@@ -35,9 +36,6 @@ func listenSignal(sig chan os.Signal, exit chan int) {
 // standalone FIX client
 func main() {
 	cfg := flag.String("cfg", "conf/integration_test/client/orders_fix42.cfg", "config path")
-	key := flag.String("key", "U83q9jkML2GVj1fVxFJOAXQeDGaXIzeZ6PwNPQLEXt4", "API key")
-	secret := flag.String("secret", "77SWIRggvw0rCOJUgk9GVcxbldjTxOJP5WLCjWBFIVc", "API Secret")
-	bfxUser := flag.String("user", "connamara", "BFX user ID")
 	flag.Parse()
 
 	// setup mocks
@@ -52,14 +50,26 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	apiKey, err := settings.GlobalSettings().Setting("ApiKey")
+	if err != nil {
+		log.Fatal("Please provide an 'ApiKey' setting in your FIX global configuration settings")
+	}
+	apiSecret, err := settings.GlobalSettings().Setting("ApiSecret")
+	if err != nil {
+		log.Fatal("Please provide an 'ApiSecret' setting in your FIX global configuration settings")
+	}
+	bfxUser, err := settings.GlobalSettings().Setting("BfxUserID")
+	if err != nil {
+		log.Fatal("Please provide an 'BfxUserID' setting in your FIX global configuration settings")
+	}
 	control := newControl(client)
 	control.cmds["nos"] = &cmd.Order{}
 	control.cmds["md"] = &cmd.MarketData{}
 	control.cmds["cxl"] = &cmd.Cancel{}
 	client.MessageHandler = control
-	client.ApiKey = *key
-	client.ApiSecret = *secret
-	client.BfxUserID = *bfxUser
+	client.ApiKey = apiKey
+	client.ApiSecret = apiSecret
+	client.BfxUserID = bfxUser
 	client.Start()
 
 	go control.run()

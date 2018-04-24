@@ -3,21 +3,22 @@
 package convert
 
 import (
-	"github.com/bitfinexcom/bfxfixgw/service/symbol"
 	"strconv"
+
+	"github.com/bitfinexcom/bfxfixgw/service/symbol"
 
 	"github.com/bitfinexcom/bitfinex-api-go/v2"
 	uuid "github.com/satori/go.uuid"
 
 	"github.com/quickfixgo/enum"
 	"github.com/quickfixgo/field"
+	"github.com/quickfixgo/tag"
 	"github.com/shopspring/decimal"
 
 	fix42er "github.com/quickfixgo/fix42/executionreport"
 	fix42mdir "github.com/quickfixgo/fix42/marketdataincrementalrefresh"
 	fix42mdsfr "github.com/quickfixgo/fix42/marketdatasnapshotfullrefresh"
 	ocj "github.com/quickfixgo/fix42/ordercancelreject"
-	lg "log"
 	//fix42nos "github.com/quickfixgo/quickfix/fix42/newordersingle"
 )
 
@@ -32,13 +33,12 @@ func FIX42MarketDataFullRefreshFromTradeSnapshot(mdReqID string, snapshot *bitfi
 	}
 	message := fix42mdsfr.New(field.NewSymbol(sym))
 	message.SetMDReqID(mdReqID)
-	message.SetSymbol(first.Pair)
-	message.SetSecurityID(first.Pair)
+	message.SetSymbol(sym)
+	message.SetSecurityID(sym)
 	message.SetIDSource(enum.IDSource_EXCHANGE_SYMBOL)
 	// MDStreamID?
 	group := fix42mdsfr.NewNoMDEntriesRepeatingGroup()
 	for _, update := range snapshot.Snapshot {
-		lg.Printf("update: %#v", update)
 		entry := group.Add()
 		entry.SetMDEntryType(enum.MDEntryType_TRADE)
 		entry.SetMDEntryPx(decimal.NewFromFloat(update.Price), 4)
@@ -63,13 +63,12 @@ func FIX42MarketDataFullRefreshFromBookSnapshot(mdReqID string, snapshot *bitfin
 	}
 	message := fix42mdsfr.New(field.NewSymbol(sym))
 	message.SetMDReqID(mdReqID)
-	message.SetSymbol(first.Symbol)
-	message.SetSecurityID(first.Symbol)
+	message.SetSymbol(sym)
+	message.SetSecurityID(sym)
 	message.SetIDSource(enum.IDSource_EXCHANGE_SYMBOL)
 	// MDStreamID?
 	group := fix42mdsfr.NewNoMDEntriesRepeatingGroup()
 	for _, update := range snapshot.Snapshot {
-		lg.Printf("update: %#v", update)
 		entry := group.Add()
 		var t enum.MDEntryType
 		switch update.Side {
@@ -90,33 +89,41 @@ func FIX42MarketDataFullRefreshFromBookSnapshot(mdReqID string, snapshot *bitfin
 	return &message
 }
 
-func FIX42MarketDataIncrementalRefreshFromTrade(mdReqID string, trade *bitfinex.Trade) *fix42mdir.MarketDataIncrementalRefresh {
+func FIX42MarketDataIncrementalRefreshFromTrade(mdReqID string, trade *bitfinex.Trade, symbology symbol.Symbology, counterparty string) *fix42mdir.MarketDataIncrementalRefresh {
+	symbol, err := symbology.FromBitfinex(trade.Pair, counterparty)
+	if err != nil {
+		symbol = trade.Pair
+	}
+
 	message := fix42mdir.New()
 	message.SetMDReqID(mdReqID)
 	// MDStreamID?
-	lg.Printf("trade: %#v", trade)
 	group := fix42mdir.NewNoMDEntriesRepeatingGroup()
 	entry := group.Add()
 	entry.SetMDEntryType(enum.MDEntryType_TRADE)
 	entry.SetMDUpdateAction(enum.MDUpdateAction_NEW)
 	entry.SetMDEntryPx(decimal.NewFromFloat(trade.Price), 4)
-	entry.SetSecurityID(trade.Pair)
+	entry.SetSecurityID(symbol)
 	entry.SetIDSource(enum.IDSource_EXCHANGE_SYMBOL)
 	amt := trade.Amount
 	if amt < 0 {
 		amt = -amt
 	}
 	entry.SetMDEntrySize(decimal.NewFromFloat(amt), 4)
-	entry.SetSymbol(trade.Pair)
+	entry.SetSymbol(symbol)
 	message.SetNoMDEntries(group)
 	return &message
 }
 
-func FIX42MarketDataIncrementalRefreshFromBookUpdate(mdReqID string, update *bitfinex.BookUpdate) *fix42mdir.MarketDataIncrementalRefresh {
+func FIX42MarketDataIncrementalRefreshFromBookUpdate(mdReqID string, update *bitfinex.BookUpdate, symbology symbol.Symbology, counterparty string) *fix42mdir.MarketDataIncrementalRefresh {
+	symbol, err := symbology.FromBitfinex(update.Symbol, counterparty)
+	if err != nil {
+		symbol = update.Symbol
+	}
+
 	message := fix42mdir.New()
 	message.SetMDReqID(mdReqID)
 	// MDStreamID?
-	lg.Printf("update: %#v", update)
 	group := fix42mdir.NewNoMDEntriesRepeatingGroup()
 	entry := group.Add()
 	var t enum.MDEntryType
@@ -126,22 +133,25 @@ func FIX42MarketDataIncrementalRefreshFromBookUpdate(mdReqID string, update *bit
 	case bitfinex.Ask:
 		t = enum.MDEntryType_OFFER
 	}
+	action := BookActionToFIX(update.Action)
 	entry.SetMDEntryType(t)
-	entry.SetMDUpdateAction(enum.MDUpdateAction_NEW)
+	entry.SetMDUpdateAction(action)
 	entry.SetMDEntryPx(decimal.NewFromFloat(update.Price), 4)
-	entry.SetSecurityID(update.Symbol)
+	entry.SetSecurityID(symbol)
 	entry.SetIDSource(enum.IDSource_EXCHANGE_SYMBOL)
 	amt := update.Amount
 	if amt < 0 {
 		amt = -amt
 	}
-	entry.SetMDEntrySize(decimal.NewFromFloat(amt), 4)
-	entry.SetSymbol(update.Symbol)
+	if action != enum.MDUpdateAction_DELETE {
+		entry.SetMDEntrySize(decimal.NewFromFloat(amt), 4)
+	}
+	entry.SetSymbol(symbol)
 	message.SetNoMDEntries(group)
 	return &message
 }
 
-func FIX42ExecutionReport(symbol, clOrdID, orderID, account string, execType enum.ExecType, side enum.Side, origQty, thisQty, cumQty, avgPx float64, ordStatus enum.OrdStatus, ordType enum.OrdType, text string, symbology symbol.Symbology, counterparty string) fix42er.ExecutionReport {
+func FIX42ExecutionReport(symbol, clOrdID, orderID, account string, execType enum.ExecType, side enum.Side, origQty, thisQty, cumQty, px, stop, trail, avgPx float64, ordStatus enum.OrdStatus, ordType enum.OrdType, tif enum.TimeInForce, text string, symbology symbol.Symbology, counterparty string, flags int) fix42er.ExecutionReport {
 	uid, err := uuid.NewV4()
 	execID := ""
 	if err == nil {
@@ -155,6 +165,20 @@ func FIX42ExecutionReport(symbol, clOrdID, orderID, account string, execType enu
 
 	// remaining to be executed
 	remaining := amt.Sub(cumAmt)
+	switch ordStatus {
+	case enum.OrdStatus_CANCELED:
+		fallthrough
+	case enum.OrdStatus_DONE_FOR_DAY:
+		fallthrough
+	case enum.OrdStatus_EXPIRED:
+		fallthrough
+	case enum.OrdStatus_REPLACED:
+		fallthrough
+	case enum.OrdStatus_STOPPED:
+		fallthrough
+	case enum.OrdStatus_SUSPENDED:
+		remaining = decimal.Zero
+	}
 
 	// this execution
 	lastShares := decimal.NewFromFloat(thisQty)
@@ -186,31 +210,54 @@ func FIX42ExecutionReport(symbol, clOrdID, orderID, account string, execType enu
 	}
 	e.SetOrdType(ordType)
 	e.SetClOrdID(clOrdID)
+
+	switch ordType {
+	case enum.OrdType_LIMIT:
+		if px != 0 {
+			e.SetPrice(decimal.NewFromFloat(px), 4)
+		}
+	case enum.OrdType_STOP_LIMIT:
+		if px != 0 {
+			e.SetPrice(decimal.NewFromFloat(px), 4)
+		}
+		if stop != 0 {
+			e.SetStopPx(decimal.NewFromFloat(stop), 4)
+		}
+	case enum.OrdType_STOP:
+		if stop != 0 {
+			e.SetStopPx(decimal.NewFromFloat(stop), 4)
+		}
+	}
+
+	execInst := ""
+	if trail != 0 {
+		execInst = string(enum.ExecInst_PRIMARY_PEG)
+		e.SetPegDifference(decimal.NewFromFloat(trail), 4)
+	}
+	if flags&FlagHidden != 0 {
+		e.SetString(tag.DisplayMethod, string(enum.DisplayMethod_UNDISCLOSED))
+	}
+	if flags&FlagPostOnly != 0 {
+		execInst = execInst + string(enum.ExecInst_PARTICIPANT_DONT_INITIATE)
+	}
+	if execInst != "" {
+		e.SetExecInst(enum.ExecInst(execInst))
+	}
+	e.SetTimeInForce(tif)
+
 	return e
 }
 
-// used for oc-req notifications where only a cancel's CID is provided
-func FIX42ExecutionReportFromCancelWithDetails(c *bitfinex.OrderCancel, account string, execType enum.ExecType, cumQty float64, ordStatus enum.OrdStatus, ordType enum.OrdType, text, symbol, clOrdID, orderID string, side enum.Side, qty, avgPx float64, symbology symbol.Symbology, counterparty string) fix42er.ExecutionReport {
-	e := FIX42ExecutionReport(symbol, clOrdID, orderID, account, execType, side, qty, 0.0, cumQty, avgPx, ordStatus, ordType, text, symbology, counterparty)
-	// additional cxl details?
-	return e
-}
-
-func FIX42ExecutionReportFromOrder(o *bitfinex.Order, account string, execType enum.ExecType, cumQty float64, ordStatus enum.OrdStatus, text string, symbology symbol.Symbology, counterparty string) fix42er.ExecutionReport {
+func FIX42ExecutionReportFromOrder(o *bitfinex.Order, account string, execType enum.ExecType, cumQty float64, ordStatus enum.OrdStatus, text string, symbology symbol.Symbology, counterparty string, flags int, stop, peg float64) fix42er.ExecutionReport {
 	orderID := strconv.FormatInt(o.ID, 10)
 	// total order qty
 	fAmt := o.Amount
 	if fAmt < 0 {
 		fAmt = -fAmt
 	}
-	e := FIX42ExecutionReport(o.Symbol, strconv.FormatInt(o.CID, 10), orderID, account, execType, SideToFIX(o.Amount), fAmt, 0.0, cumQty, o.PriceAvg, ordStatus, OrdTypeToFIX(o.Type), text, symbology, counterparty)
-	switch o.Type {
-	case bitfinex.OrderTypeLimit:
-		e.SetPrice(decimal.NewFromFloat(o.Price), 4)
-	case bitfinex.OrderTypeStopLimit:
-		e.SetPrice(decimal.NewFromFloat(o.Price), 4)
-		//e.SetStopPx(decimal.NewFromFloat(o.PriceAuxLimit), 4) // ??
-	}
+	ordtype := OrdTypeToFIX(bitfinex.OrderType(o.Type))
+	tif := TimeInForceToFIX(bitfinex.OrderType(o.Type)) // support FOK
+	e := FIX42ExecutionReport(o.Symbol, strconv.FormatInt(o.CID, 10), orderID, account, execType, SideToFIX(o.Amount), fAmt, 0.0, cumQty, o.Price, stop, peg, o.PriceAvg, ordStatus, ordtype, tif, text, symbology, counterparty, flags)
 	if text != "" {
 		e.SetText(text)
 	}
@@ -218,7 +265,7 @@ func FIX42ExecutionReportFromOrder(o *bitfinex.Order, account string, execType e
 	return e
 }
 
-func FIX42ExecutionReportFromTradeExecutionUpdate(t *bitfinex.TradeExecutionUpdate, account, clOrdID string, origQty, totalFillQty, avgFillPx float64, symbology symbol.Symbology, counterparty string) fix42er.ExecutionReport {
+func FIX42ExecutionReportFromTradeExecutionUpdate(t *bitfinex.TradeExecutionUpdate, account, clOrdID string, origQty, totalFillQty, origPx, stopPx, trailPx, avgFillPx float64, symbology symbol.Symbology, counterparty string, flags int) fix42er.ExecutionReport {
 	orderID := strconv.FormatInt(t.OrderID, 10)
 	var execType enum.ExecType
 	var ordStatus enum.OrdStatus
@@ -233,14 +280,18 @@ func FIX42ExecutionReportFromTradeExecutionUpdate(t *bitfinex.TradeExecutionUpda
 	if execAmt < 0 {
 		execAmt = -execAmt
 	}
-	er := FIX42ExecutionReport(t.Pair, clOrdID, orderID, account, execType, SideToFIX(t.ExecAmount), origQty, execAmt, totalFillQty, avgFillPx, ordStatus, OrdTypeToFIX(t.OrderType), "", symbology, counterparty)
+	tif := TimeInForceToFIX(bitfinex.OrderType(t.OrderType)) // support FOK
+	er := FIX42ExecutionReport(t.Pair, clOrdID, orderID, account, execType, SideToFIX(t.ExecAmount), origQty, execAmt, totalFillQty, origPx, stopPx, trailPx, avgFillPx, ordStatus, OrdTypeToFIX(bitfinex.OrderType(t.OrderType)), tif, "", symbology, counterparty, flags)
 	f := t.Fee
 	if f < 0 {
 		f = -f
 	}
+
+	// trade-specific
 	fee := decimal.NewFromFloat(f)
 	er.SetCommission(fee, 4)
 	er.SetCommType(enum.CommType_ABSOLUTE)
+	er.SetLastPx(decimal.NewFromFloat(t.ExecPrice), 4)
 	return er
 }
 
@@ -262,6 +313,7 @@ func FIX42OrderCancelRejectFromCancel(o *bitfinex.OrderCancel, account, orderID,
 	)
 	r.SetCxlRejReason(rejectReasonFromText(text))
 	r.SetAccount(account)
+	r.SetText(text)
 	return r
 }
 

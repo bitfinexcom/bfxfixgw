@@ -3,6 +3,7 @@ package symbol
 import (
 	"bufio"
 	"fmt"
+	"log"
 	"os"
 	"strings"
 	"sync"
@@ -80,6 +81,7 @@ func (f *FileSymbology) ToBitfinex(symbol, counterparty string) (string, error) 
 	defer f.lock.Unlock()
 	symset, ok := f.counterparties[counterparty]
 	if !ok {
+		log.Printf("could not find counterparty: %s", counterparty)
 		return "", fmt.Errorf("could not find counterparty: %s", counterparty)
 	}
 	if symset.passthrough {
@@ -90,6 +92,7 @@ func (f *FileSymbology) ToBitfinex(symbol, counterparty string) (string, error) 
 			return bfx, nil
 		}
 	}
+	log.Printf("could not find Bitfinex symbol mapping \"%s\" for counterparty \"%s\"", symbol, counterparty)
 	return "", fmt.Errorf("could not find Bitfinex symbol mapping \"%s\" for counterparty \"%s\"", symbol, counterparty)
 }
 

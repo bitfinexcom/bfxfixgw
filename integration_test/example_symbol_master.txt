@@ -8,3 +8,6 @@ tETHUSD=ETH
 
 [CounterpartyC]
 passthrough=true
+
+[EXORG_MD]
+tBTCUSD=XBT

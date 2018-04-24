@@ -44,7 +44,7 @@ func OrderNewTypeFromFIX42NewOrderSingle(nos fix42nos.NewOrderSingle) (string, e
 		}
 		return bitfinex.OrderTypeExchangeStop, nil
 	case enum.OrdType_STOP_LIMIT:
-		return bitfinex.OrderTypeStopLimit, nil
+		return bitfinex.OrderTypeExchangeStopLimit, nil
 	default:
 		return "", nil
 	}

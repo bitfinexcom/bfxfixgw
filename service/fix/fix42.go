@@ -67,8 +67,7 @@ func (f *FIX) OnFIX42NewOrderSingle(msg nos.NewOrderSingle, sID quickfix.Session
 	e := p.Ws.SubmitOrder(context.Background(), bo)
 	if e != nil {
 		f.logger.Warn("could not submit order", zap.Error(e))
-	} else {
-
+		return reject(e)
 	}
 
 	return nil
@@ -283,12 +282,11 @@ func (f *FIX) OnFIX42OrderCancelRequest(msg ocr.OrderCancelRequest, sID quickfix
 		d := txnT.Format("2006-01-02")
 		oc.CIDDate = d
 	}
-	if p.Ws.IsConnected() {
-		p.Ws.Send(context.Background(), oc)
-	} else {
-		// TODO still getting heartbeats, where is this connection??
-		// ord vs. market data host?
-		f.logger.Error("not logged onto websocket", zap.String("SessionID", sID.String()))
+
+	err2 := p.Ws.Send(context.Background(), oc)
+	if err2 != nil {
+		f.logger.Error("not logged onto websocket", zap.String("SessionID", sID.String()), zap.Error(err))
+		return reject(err2)
 	}
 
 	return nil
@@ -314,8 +312,7 @@ func (f *FIX) OnFIX42OrderStatusRequest(msg osr.OrderStatusRequest, sID quickfix
 
 	order, nerr := peer.Rest.Orders.Status(oidi)
 	if nerr != nil {
-		r := quickfix.NewBusinessMessageRejectError(nerr.Error(), 0 /*OTHER*/, nil)
-		return r
+		return reject(nerr)
 	}
 	orderID := strconv.FormatInt(order.ID, 10)
 	clOrdID := strconv.FormatInt(order.CID, 10)

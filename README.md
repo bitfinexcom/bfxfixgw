@@ -302,13 +302,11 @@ Ensure the correct endpoint is configured for use. (i.e. MarketDataRequests shou
 
 # Issues
 
-## Average price on restart
+## Average prices & working quantities for out-of-session working orders
 
-The gateway calculates average fill price based on executions the gateway has received and stored in working memory.
+Orders placed outside of the FIX trading session may sometimes have incorrect filled quantities (FIX tag 14 `CumQty`), remaining quantities (FIX tag 151 `LeavesQty`), and/or average prices (FIX tag 6 `AvgPx`). The gateway uses an order's individual executions to calculate average prices, filled quantities, and remaining quantities on demand. The gateway does not receive working order execution details in order snapshots on client logon.  Therefore, the gateway will attempt to go out-of-band, using the authenticated REST API, to fetch execution details for working orders.  Out of band requests use the same API key as the orders websocket connection, and may suffer from internet routing race conditions.  Occasionally the order trades endpoint will unexpectedly return an empty set, therefore execution details may not always be available to the gateway.
 
-If the gateway is restarted while a client's order is partially filled, but still working, the average fill prices will only reflect fills subsequent to the gateway's restart.
-
-To fix this issue, the gateway should fetch execution information for each order in the order snapshot received when logging a user onto the Bitfinex API, which it currently does not do.
+Internet routing race conditions could be solved with a future enhancement to the gateway to use yet another (third) API key for authenticated out-of-band REST requests.
 
 ## Execution reports out of order
 

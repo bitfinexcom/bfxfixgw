@@ -129,7 +129,7 @@ func (d *defaultClientFactory) NewRest() *rest.Client {
 	if d.RestURL == "" {
 		return rest.NewClient()
 	}
-	return rest.NewClientWithURL(d.RestURL)
+	return rest.NewClientWithURLNonce(d.RestURL, peer.NewMultikeyNonceGenerator())
 }
 
 func main() {

@@ -112,13 +112,6 @@ func New(s *quickfix.Settings, peers peer.Peers, serviceType FIXServiceType, sym
 		Symbology:     symbology,
 	}
 
-	/*
-		// TODO FIX44
-		f.AddRoute(fix44mdr.Route(f.OnFIX44MarketDataRequest))
-		f.AddRoute(fix44nos.Route(f.OnFIX44NewOrderSingle))
-		f.AddRoute(fix44ocr.Route(f.OnFIX44OrderCancelRequest))
-		f.AddRoute(fix44osr.Route(f.OnFIX44OrderStatusRequest))
-	*/
 	var storeFactory quickfix.MessageStoreFactory
 	logFactory, err := quickfix.NewFileLogFactory(s)
 	if err != nil {

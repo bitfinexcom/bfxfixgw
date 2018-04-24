@@ -236,8 +236,30 @@ func (w *Websocket) FIX42OrderSnapshotHandler(os *bitfinex.OrderSnapshot, sID qu
 		for _, order := range os.Snapshot {
 			ordtype := bitfinex.OrderType(order.Type)
 			tif := convert.TimeInForceToFIX(ordtype)
+
+			// add order to cache
 			cache := peer.AddOrder(strconv.FormatInt(order.CID, 10), order.Price, order.PriceAuxLimit, order.PriceTrailing, order.Amount, order.Symbol, peer.BfxUserID(), convert.SideToFIX(order.Amount), convert.OrdTypeToFIX(ordtype), tif, int(order.Flags))
+
+			// need to fetch executions for this order to fill cache execution details
+			snapshot, err := peer.Rest.Orders.OrderTrades(order.Symbol, order.ID)
+			if err != nil {
+				w.logger.Warn("could not find executions for open order", zap.Int64("OrderID", order.ID), zap.Error(err))
+				continue
+			}
+			if snapshot == nil {
+				w.logger.Info("empty order trade snapshot", zap.Int64("OrderID", order.ID))
+			} else {
+				for _, tu := range snapshot.Snapshot {
+					ordid := strconv.FormatInt(tu.OrderID, 10)
+					execid := strconv.FormatInt(tu.ID, 10)
+					peer.AddExecution(ordid, execid, tu.ExecPrice, tu.ExecAmount)
+					w.logger.Info("mapped execution to working order", zap.String("OrderID", ordid), zap.String("ExecID", execid))
+				}
+			}
 			cache.OrderID = strconv.FormatInt(order.ID, 10)
+			er := convert.FIX42ExecutionReportFromOrder(order, peer.BfxUserID(), enum.ExecType_NEW, cache.FilledQty(), enum.OrdStatus_NEW, string(order.Status), w.Symbology, sID.TargetCompID, int(order.Flags), order.PriceAuxLimit, order.PriceTrailing)
+			er.SetAvgPx(decimal.NewFromFloat(cache.AvgFillPx()), 4)
+			quickfix.SendToTarget(er, sID)
 		}
 	}
 	return

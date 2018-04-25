@@ -106,11 +106,17 @@ FIX session information must be obtained prior to a FIX client establishing a co
 
 Once sessions are configured, a FIX client can authenticate by adding the Bitfinex User ID, API key, and API secret into the FIX `35=A Logon` message body:
 
-| Field 		| FIX Tag # | Description 		|
-|---------------|-----------|-------------------|
-| BfxApiKey 	| 20000		| User's API Key	|
-| BfxApiSecret 	| 20001		| User's API Secret	|
-| BfxUserID 	| 20002		| User's Bfx ID		|
+| Field 				| FIX Tag # | Description 		|
+|-----------------------|-----------|-------------------|
+| BfxApiKey 			| 20000		| User's API Key	|
+| BfxApiSecret 			| 20001		| User's API Secret	|
+| BfxUserID 			| 20002		| User's Bfx ID		|
+
+Optionally, a user can request all session-level orders be canceled when the FIX session is disconnected by setting the following FIX tag `8013=Y`:
+
+| Field 				| FIX Tag # | Description 		|
+|-----------------------|-----------|-------------------|
+| CancelOnDisconnect	| 8013		| Cancel session orders on FIX disconnect |
 
 ---
 **Note:**

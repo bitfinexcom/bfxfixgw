@@ -21,6 +21,7 @@ var msgTypeLogon = string([]byte("A"))
 var tagBfxAPIKey = quickfix.Tag(20000)
 var tagBfxAPISecret = quickfix.Tag(20001)
 var tagBfxUserID = quickfix.Tag(20002)
+var tagCancelOnDisconnect = quickfix.Tag(8013)
 
 type FIXServiceType byte
 
@@ -81,7 +82,8 @@ func (f *FIX) FromAdmin(msg *quickfix.Message, sID quickfix.SessionID) quickfix.
 			return err
 		}
 		if p, ok := f.FindPeer(sID.String()); ok {
-			p.Logon(apiKey, apiSecret, bfxUserID)
+			cod, _ := msg.Body.GetBool(tagCancelOnDisconnect)
+			p.Logon(apiKey, apiSecret, bfxUserID, cod)
 		} else {
 			f.logger.Warn("could not find peer", zap.String("SessionID", sID.String()))
 		}

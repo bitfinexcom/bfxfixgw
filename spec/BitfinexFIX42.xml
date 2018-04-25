@@ -268,6 +268,7 @@
    <field name='BfxApiKey' required='N' />
    <field name='BfxApiSecret' required='N' />
    <field name='BfxUserID' required='N' />
+   <field name='CancelOnDisconnect' required='N' />
   </message>
   <message name='News' msgtype='B' msgcat='app'>
    <field name='OrigTime' required='N' />
@@ -2754,5 +2755,6 @@
   <field number='20002' name='BfxUserID' type='STRING' />
   <field number='20003' name='PricePrecision' type='STRING' />
   <field number='20004' name='MDRequestType' type='STRING' />
+  <field number='8013' name='CancelOnDisconnect' type='BOOLEAN' />
  </fields>
 </fix>

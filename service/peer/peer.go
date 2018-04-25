@@ -1,12 +1,13 @@
 package peer
 
 import (
+	"log"
+
 	bfxlog "github.com/bitfinexcom/bfxfixgw/log"
 	"github.com/bitfinexcom/bitfinex-api-go/v2/rest"
 	"github.com/bitfinexcom/bitfinex-api-go/v2/websocket"
 	"github.com/quickfixgo/quickfix"
 	"go.uber.org/zap"
-	"log"
 )
 
 type ClientFactory interface {
@@ -63,9 +64,12 @@ func New(factory ClientFactory, fixSessionID quickfix.SessionID, toParent chan<-
 }
 
 // Logon establishes a websocket connection and attempts to authenticate with the given apiKey and apiSecret
-func (p *Peer) Logon(apiKey, apiSecret, bfxUserID string) error {
+func (p *Peer) Logon(apiKey, apiSecret, bfxUserID string, cancelOnDisconnect bool) error {
 	p.Rest.Credentials(apiKey, apiSecret)
 	p.Ws.Credentials(apiKey, apiSecret)
+	if cancelOnDisconnect {
+		p.Ws.CancelOnDisconnect(true)
+	}
 	p.bfxUserID = bfxUserID
 	log.Printf("peer connect %p", p.Ws)
 	err := p.Ws.Connect()

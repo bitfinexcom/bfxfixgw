@@ -38,6 +38,7 @@ type TestFixClient struct {
 	MessageHandler
 
 	ApiKey, ApiSecret, BfxUserID, name string
+	CancelOnDisconnect                 bool
 }
 
 func (t *TestFixClient) Handle(msg *fix.Message) {
@@ -222,9 +223,12 @@ func (m *TestFixClient) ToAdmin(msg *fix.Message, sessionID fix.SessionID) {
 		return
 	}
 	if "A" == msgType {
-		msg.Header.SetString(fix.Tag(20000), m.ApiKey)
-		msg.Header.SetString(fix.Tag(20001), m.ApiSecret)
-		msg.Header.SetString(fix.Tag(20002), m.BfxUserID)
+		msg.Body.SetString(fix.Tag(20000), m.ApiKey)
+		msg.Body.SetString(fix.Tag(20001), m.ApiSecret)
+		msg.Body.SetString(fix.Tag(20002), m.BfxUserID)
+		if m.CancelOnDisconnect {
+			msg.Body.SetBool(fix.Tag(8013), true)
+		}
 	}
 	log.Printf("[FIX %s] MockFix.ToAdmin (outgoing): %s", m.name, fixString(msg))
 	return

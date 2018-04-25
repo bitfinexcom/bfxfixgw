@@ -36,6 +36,7 @@ func listenSignal(sig chan os.Signal, exit chan int) {
 // standalone FIX client
 func main() {
 	cfg := flag.String("cfg", "conf/integration_test/client/orders_fix42.cfg", "config path")
+	cod := flag.Bool("cod", true, "cancel on disconnect")
 	flag.Parse()
 
 	// setup mocks
@@ -70,6 +71,7 @@ func main() {
 	client.ApiKey = apiKey
 	client.ApiSecret = apiSecret
 	client.BfxUserID = bfxUser
+	client.CancelOnDisconnect = *cod
 	client.Start()
 
 	go control.run()

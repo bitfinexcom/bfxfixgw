@@ -199,12 +199,18 @@ func (f *FIX) OnFIX42MarketDataRequest(msg mdr.MarketDataRequest, sID quickfix.S
 		}
 		// business logic has accepted message. after this return type-specific reject (MarketDataRequestReject)
 
-		// symbol mapped?
-		if _, has := p.LookupMDReqID(symbol); has {
+		if p.MDReqIDExists(mdReqID) {
 			rej := mdrr.New(field.NewMDReqID(mdReqID))
 			rej.SetText(err.Error())
 			rej.SetMDReqRejReason(enum.MDReqRejReason_DUPLICATE_MDREQID)
 			f.logger.Warn("duplicate MDReqID by session: " + mdReqID)
+			quickfix.SendToTarget(rej, sID)
+			return nil
+		}
+		if _, has := p.LookupMDReqID(symbol); has {
+			rej := mdrr.New(field.NewMDReqID(mdReqID))
+			rej.SetText("duplicate symbol subscription for \"" + symbol + "\", one subscription per symbol allowed")
+			f.logger.Warn("duplicate symbol subscription by session: " + mdReqID)
 			quickfix.SendToTarget(rej, sID)
 			return nil
 		}

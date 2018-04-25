@@ -135,6 +135,17 @@ func (c *cache) LookupMDReqID(symbol string) (string, bool) {
 	return id, ok
 }
 
+func (c *cache) MDReqIDExists(mdReqID string) bool {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	for _, reqID := range c.symbolToReqID {
+		if reqID == mdReqID {
+			return true
+		}
+	}
+	return false
+}
+
 func (c *cache) MapMDReqIDs(fixReqID, bookReqID, tradeReqID string) {
 	c.lock.Lock()
 	defer c.lock.Unlock()

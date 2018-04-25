@@ -303,7 +303,11 @@ func rejectReasonFromText(text string) enum.CxlRejReason {
 	return enum.CxlRejReason_OTHER
 }
 
-func FIX42OrderCancelRejectFromCancel(o *bitfinex.OrderCancel, account, orderID, origClOrdID, cxlClOrdID, text string) ocj.OrderCancelReject {
+func FIX42OrderCancelReject(account, orderID, origClOrdID, cxlClOrdID, text string) ocj.OrderCancelReject {
+	rejReason := rejectReasonFromText(text)
+	if rejReason == enum.CxlRejReason_UNKNOWN_ORDER {
+		orderID = "NONE" // FIX spec tag 37 in 35=9: If CxlRejReason="Unknown order", specify "NONE".
+	}
 	r := ocj.New(
 		field.NewOrderID(orderID),
 		field.NewClOrdID(cxlClOrdID),
@@ -311,7 +315,7 @@ func FIX42OrderCancelRejectFromCancel(o *bitfinex.OrderCancel, account, orderID,
 		field.NewOrdStatus(enum.OrdStatus_REJECTED),
 		field.NewCxlRejResponseTo(enum.CxlRejResponseTo_ORDER_CANCEL_REQUEST),
 	)
-	r.SetCxlRejReason(rejectReasonFromText(text))
+	r.SetCxlRejReason(rejReason)
 	r.SetAccount(account)
 	r.SetText(text)
 	return r

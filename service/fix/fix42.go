@@ -35,6 +35,35 @@ const (
 
 var rejectReasonOther = 0
 
+func requestToOrder(o *bitfinex.OrderNewRequest) *bitfinex.Order {
+	flags := 0
+	if o.PostOnly {
+		flags = flags | bitfinex.OrderFlagPostOnly
+	}
+	if o.Hidden {
+		flags = flags | bitfinex.OrderFlagHidden
+	}
+	return &bitfinex.Order{
+		GID:           o.GID,
+		CID:           o.CID,
+		Type:          o.Type,
+		Symbol:        o.Symbol,
+		Amount:        o.Amount,
+		Price:         o.Price,
+		PriceTrailing: o.PriceTrailing,
+		PriceAuxLimit: o.PriceAuxLimit,
+		Hidden:        o.Hidden,
+		Flags:         int64(flags),
+	}
+}
+
+func requestToCxl(o *bitfinex.OrderCancelRequest) *bitfinex.OrderCancel {
+	return &bitfinex.OrderCancel{
+		ID:  o.ID,
+		CID: o.CID,
+	}
+}
+
 func (f *FIX) OnFIX42NewOrderSingle(msg nos.NewOrderSingle, sID quickfix.SessionID) quickfix.MessageRejectError {
 	p, ok := f.FindPeer(sID.String())
 	if !ok {
@@ -63,11 +92,15 @@ func (f *FIX) OnFIX42NewOrderSingle(msg nos.NewOrderSingle, sID quickfix.Session
 		flags = flags | convert.FlagPostOnly
 	}
 	p.AddOrder(clordid, bo.Price, bo.PriceAuxLimit, bo.PriceTrailing, bo.Amount, bo.Symbol, p.BfxUserID(), side, ordtype, tif, flags)
+	// order has been accepted by business logic in gateway, no more 35=j
 
 	e := p.Ws.SubmitOrder(context.Background(), bo)
 	if e != nil {
+		// should be an ER
+		o := requestToOrder(bo)
+		er := convert.FIX42ExecutionReportFromOrder(o, p.BfxUserID(), enum.ExecType_REJECTED, 0.0, enum.OrdStatus_REJECTED, e.Error(), f.Symbology, sID.TargetCompID, flags, bo.PriceAuxLimit, bo.PriceTrailing)
 		f.logger.Warn("could not submit order", zap.Error(e))
-		return reject(e)
+		quickfix.SendToTarget(er, sID)
 	}
 
 	return nil
@@ -164,6 +197,23 @@ func (f *FIX) OnFIX42MarketDataRequest(msg mdr.MarketDataRequest, sID quickfix.S
 			lg.Printf("could not translate FIX %s: %s", fixSymbol, err2.Error())
 			symbol = fixSymbol
 		}
+		// business logic has accepted message. after this return type-specific reject (MarketDataRequestReject)
+
+		if p.MDReqIDExists(mdReqID) {
+			rej := mdrr.New(field.NewMDReqID(mdReqID))
+			rej.SetText(err.Error())
+			rej.SetMDReqRejReason(enum.MDReqRejReason_DUPLICATE_MDREQID)
+			f.logger.Warn("duplicate MDReqID by session: " + mdReqID)
+			quickfix.SendToTarget(rej, sID)
+			return nil
+		}
+		if _, has := p.LookupMDReqID(symbol); has {
+			rej := mdrr.New(field.NewMDReqID(mdReqID))
+			rej.SetText("duplicate symbol subscription for \"" + symbol + "\", one subscription per symbol allowed")
+			f.logger.Warn("duplicate symbol subscription by session: " + mdReqID)
+			quickfix.SendToTarget(rej, sID)
+			return nil
+		}
 
 		// XXX: The following could most likely be abtracted to work both for 4.2 and 4.4.
 		switch subType {
@@ -178,15 +228,13 @@ func (f *FIX) OnFIX42MarketDataRequest(msg mdr.MarketDataRequest, sID quickfix.S
 			p.MapSymbolToReqID(symbol, mdReqID)
 			bookSnapshot, err := p.Rest.Book.All(symbol, precision, depth)
 			if err != nil {
-				return reject(err)
+				rej := mdrr.New(field.NewMDReqID(mdReqID))
+				rej.SetText(err.Error())
+				f.logger.Warn("could not get book snapshot: " + err.Error())
+				quickfix.SendToTarget(rej, sID)
+				return nil
 			}
 			fix := convert.FIX42MarketDataFullRefreshFromBookSnapshot(mdReqID, bookSnapshot, f.Symbology, sID.TargetCompID)
-			quickfix.SendToTarget(fix, sID)
-			tradeSnapshot, err := p.Rest.Trades.All(symbol)
-			if err != nil {
-				return reject(err)
-			}
-			fix = convert.FIX42MarketDataFullRefreshFromTradeSnapshot(mdReqID, tradeSnapshot, f.Symbology, sID.TargetCompID)
 			quickfix.SendToTarget(fix, sID)
 
 		case enum.SubscriptionRequestType_SNAPSHOT_PLUS_UPDATES:
@@ -203,12 +251,20 @@ func (f *FIX) OnFIX42MarketDataRequest(msg mdr.MarketDataRequest, sID quickfix.S
 			}
 			bookReqID, err := p.Ws.SubscribeBook(context.Background(), symbol, prec, bitfinex.FrequencyRealtime, depth)
 			if err != nil {
-				return reject(err)
+				rej := mdrr.New(field.NewMDReqID(mdReqID))
+				rej.SetText(err.Error())
+				f.logger.Warn("could not subscribe to book: " + err.Error())
+				quickfix.SendToTarget(rej, sID)
+				return nil
 			}
 			tradeReqID, err := p.Ws.SubscribeTrades(context.Background(), symbol)
 			if err != nil {
 				p.Ws.Unsubscribe(context.Background(), bookReqID) // remove book subscription
-				return reject(err)
+				rej := mdrr.New(field.NewMDReqID(mdReqID))
+				rej.SetText(err.Error())
+				f.logger.Warn("could not subscribe to trades: " + err.Error())
+				quickfix.SendToTarget(rej, sID)
+				return nil
 			}
 			f.logger.Info("mapping FIX->API request ID", zap.String("MDReqID", mdReqID), zap.String("BookReqID", bookReqID), zap.String("TradeReqID", tradeReqID))
 			p.MapMDReqIDs(mdReqID, bookReqID, tradeReqID)
@@ -218,8 +274,12 @@ func (f *FIX) OnFIX42MarketDataRequest(msg mdr.MarketDataRequest, sID quickfix.S
 				f.logger.Info("unsubscribe from API", zap.String("MDReqID", mdReqID), zap.String("BookReqID", bookReqID), zap.String("TradeReqID", tradeReqID))
 				p.Ws.Unsubscribe(context.Background(), bookReqID)
 				p.Ws.Unsubscribe(context.Background(), tradeReqID)
+				return nil
 			}
-			return rejectError(fmt.Sprintf("could not find subscription with ID \"%s\"", mdReqID))
+			rej := mdrr.New(field.NewMDReqID(mdReqID))
+			rej.SetText("could not find subscription for MDReqID: " + mdReqID)
+			f.logger.Warn("could not find subscription for MDReqID: " + mdReqID)
+			quickfix.SendToTarget(rej, sID)
 		}
 	}
 
@@ -286,7 +346,8 @@ func (f *FIX) OnFIX42OrderCancelRequest(msg ocr.OrderCancelRequest, sID quickfix
 	err2 := p.Ws.Send(context.Background(), oc)
 	if err2 != nil {
 		f.logger.Error("not logged onto websocket", zap.String("SessionID", sID.String()), zap.Error(err))
-		return reject(err2)
+		ocr := convert.FIX42OrderCancelReject(p.BfxUserID(), id, ocid, cid, err2.Error())
+		quickfix.SendToTarget(ocr, sID)
 	}
 
 	return nil

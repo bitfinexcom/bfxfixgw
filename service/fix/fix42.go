@@ -299,7 +299,7 @@ func (f *FIX) OnFIX42OrderCancelRequest(msg ocr.OrderCancelRequest, sID quickfix
 		return err
 	}
 
-	cid, _ := msg.GetClOrdID()
+	cid, _ := msg.GetClOrdID() // required
 	id, _ := msg.GetOrderID()
 
 	// The spec says that a quantity and side are also required but the bitfinex API does not
@@ -314,7 +314,7 @@ func (f *FIX) OnFIX42OrderCancelRequest(msg ocr.OrderCancelRequest, sID quickfix
 		return quickfix.NewMessageRejectError("could not find established peer for session ID", rejectReasonOther, nil)
 	}
 
-	if id != "" {
+	if id != "" { // cancel by server-assigned ID
 		idi, err := strconv.ParseInt(id, 10, 64)
 		if err != nil { // bitfinex uses int IDs so we can reject right away.
 			r := ocj.New(
@@ -325,12 +325,13 @@ func (f *FIX) OnFIX42OrderCancelRequest(msg ocr.OrderCancelRequest, sID quickfix
 				field.NewCxlRejResponseTo(enum.CxlRejResponseTo_ORDER_CANCEL_REQUEST),
 			)
 			r.SetCxlRejReason(enum.CxlRejReason_UNKNOWN_ORDER)
+			r.SetText(err.Error())
 			r.SetAccount(p.BfxUserID())
 			quickfix.SendToTarget(r, sID)
 			return nil
 		}
 		oc.ID = idi
-	} else {
+	} else { // cancel by client-assigned ID
 		ocidi, err := strconv.ParseInt(ocid, 10, 64)
 		if err != nil {
 			r := ocj.New(
@@ -348,6 +349,10 @@ func (f *FIX) OnFIX42OrderCancelRequest(msg ocr.OrderCancelRequest, sID quickfix
 		oc.CID = ocidi
 		d := txnT.Format("2006-01-02")
 		oc.CIDDate = d
+		cache, err := p.LookupByClOrdID(ocid)
+		if err == nil {
+			id = cache.OrderID
+		}
 	}
 
 	err2 := p.Ws.Send(context.Background(), oc)

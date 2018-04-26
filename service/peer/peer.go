@@ -19,7 +19,7 @@ type ClientFactory interface {
 type Peers interface {
 	FindPeer(id string) (*Peer, bool)
 	RemovePeer(id string) bool
-	AddPeer(id quickfix.SessionID)
+	AddPeer(id quickfix.SessionID) *Peer
 }
 
 type Message struct {
@@ -29,11 +29,12 @@ type Message struct {
 
 // Peer represents a FIX-websocket peer user
 type Peer struct {
-	Ws       *websocket.Client
-	Rest     *rest.Client
-	toParent chan<- *Message
-	exit     chan struct{}
-	started  bool
+	Ws         *websocket.Client
+	Rest       *rest.Client
+	toParent   chan<- *Message
+	exit       chan struct{}
+	disconnect chan bool
+	started    bool
 
 	logger *zap.Logger
 
@@ -52,15 +53,21 @@ type subscription struct {
 func New(factory ClientFactory, fixSessionID quickfix.SessionID, toParent chan<- *Message) *Peer {
 	log.Printf("created peer for %s", fixSessionID)
 	return &Peer{
-		Ws:        factory.NewWs(),
-		Rest:      factory.NewRest(),
-		logger:    bfxlog.Logger,
-		sessionID: fixSessionID,
-		toParent:  toParent,
-		exit:      make(chan struct{}),
-		cache:     newCache(bfxlog.Logger),
-		started:   false,
+		Ws:         factory.NewWs(),
+		Rest:       factory.NewRest(),
+		logger:     bfxlog.Logger,
+		sessionID:  fixSessionID,
+		toParent:   toParent,
+		exit:       make(chan struct{}),
+		disconnect: make(chan bool),
+		cache:      newCache(bfxlog.Logger),
+		started:    false,
 	}
+}
+
+// ListenDisconnect provides a channel for a caller to block on until this peer disconnects, sending a true value on this channel.
+func (p *Peer) ListenDisconnect() <-chan bool {
+	return p.disconnect
 }
 
 // Logon establishes a websocket connection and attempts to authenticate with the given apiKey and apiSecret
@@ -85,6 +92,7 @@ func (p *Peer) listen() {
 	for msg := range p.Ws.Listen() {
 		p.toParent <- &Message{Data: msg, Peer: p}
 	}
+	p.disconnect <- true
 	close(p.exit)
 }
 
@@ -102,4 +110,5 @@ func (p *Peer) Close() {
 		p.Ws.Close()
 		<-p.exit
 	}
+	close(p.disconnect)
 }

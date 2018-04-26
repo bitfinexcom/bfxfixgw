@@ -105,6 +105,9 @@ func setupWithClientCheck(t *testing.T, port int, settings mockFixSettings, chec
 	wsService.Start()
 	params := websocket.NewDefaultParameters()
 	params.URL = "ws://localhost:6001"
+	params.AutoReconnect = true
+	params.ReconnectAttempts = 5
+	params.ReconnectInterval = time.Millisecond * 250 // 1.25s
 	httpDo := func(_ *http.Client, req *http.Request) (*http.Response, error) {
 		msg := "" // TODO http request handling (book snapshots?)
 		resp := http.Response{

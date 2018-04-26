@@ -59,10 +59,12 @@ func (s *Service) Stop() {
 	s.lock.Unlock()
 }
 
-func (s *Service) AddPeer(fixSessionID quickfix.SessionID) {
+func (s *Service) AddPeer(fixSessionID quickfix.SessionID) *peer.Peer {
+	p := peer.New(s.factory, fixSessionID, s.inbound)
 	s.lock.Lock()
-	s.peers[fixSessionID.String()] = peer.New(s.factory, fixSessionID, s.inbound)
+	s.peers[fixSessionID.String()] = p
 	s.lock.Unlock()
+	return p
 }
 
 func (s *Service) FindPeer(fixSessionID string) (*peer.Peer, bool) {

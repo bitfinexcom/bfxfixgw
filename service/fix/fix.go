@@ -64,8 +64,15 @@ func (f *FIX) FromAdmin(msg *quickfix.Message, sID quickfix.SessionID) quickfix.
 	f.logger.Info("FIX.FromAdmin", zap.Any("msg", msg))
 
 	if msg.IsMsgTypeOf(msgTypeLogon) {
-		f.Peers.AddPeer(sID)
-
+		peer := f.Peers.AddPeer(sID)
+		go func() {
+			select {
+			case dc := <-peer.ListenDisconnect():
+				if dc {
+					logout("downstream disconnect", sID)
+				}
+			}
+		}()
 		apiKey, err := msg.Body.GetString(tagBfxAPIKey)
 		if err != nil || apiKey == "" {
 			f.logger.Warn("received Logon without BfxApiKey (20000)", zap.Error(err))

@@ -10,6 +10,7 @@ import (
 	"go.uber.org/zap"
 
 	//er "github.com/quickfixgo/quickfix/fix42/executionreport"
+	lgout "github.com/quickfixgo/fix42/logout"
 	mdr "github.com/quickfixgo/fix42/marketdatarequest"
 	mdrr "github.com/quickfixgo/fix42/marketdatarequestreject"
 	nos "github.com/quickfixgo/fix42/newordersingle"
@@ -62,6 +63,12 @@ func requestToCxl(o *bitfinex.OrderCancelRequest) *bitfinex.OrderCancel {
 		ID:  o.ID,
 		CID: o.CID,
 	}
+}
+
+func logout(message string, sID quickfix.SessionID) {
+	msg := lgout.New()
+	msg.SetText(message)
+	quickfix.SendToTarget(msg, sID)
 }
 
 func (f *FIX) OnFIX42NewOrderSingle(msg nos.NewOrderSingle, sID quickfix.SessionID) quickfix.MessageRejectError {

@@ -128,9 +128,12 @@ func (m *TestFixClient) ReceivedCount(sessionID string) int {
 }
 
 func (m *TestFixClient) WaitForMessage(sessionID string, seqnum int) (string, error) {
+	return m.WaitForMessageWithWait(sessionID, seqnum, time.Second*4)
+}
+
+func (m *TestFixClient) WaitForMessageWithWait(sessionID string, seqnum int, wait time.Duration) (string, error) {
 	if s, ok := m.Sessions[sessionID]; ok {
-		wait := time.Duration(time.Second * 4)
-		loops := 5
+		loops := 25
 		delay := wait / time.Duration(loops)
 		for i := 0; i < loops; i++ {
 			s.m.Lock()

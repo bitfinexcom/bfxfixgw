@@ -90,7 +90,10 @@ func (f *FIX) FromAdmin(msg *quickfix.Message, sID quickfix.SessionID) quickfix.
 		}
 		if p, ok := f.FindPeer(sID.String()); ok {
 			cod, _ := msg.Body.GetBool(tagCancelOnDisconnect)
-			p.Logon(apiKey, apiSecret, bfxUserID, cod)
+			err := p.Logon(apiKey, apiSecret, bfxUserID, cod)
+			if err != nil {
+				logout(err.Error(), sID)
+			}
 		} else {
 			f.logger.Warn("could not find peer", zap.String("SessionID", sID.String()))
 		}

@@ -4,22 +4,24 @@ The Bitfinex FIX gateway uses [QuickFix/go](https://github.com/quickfixgo/quickf
 
 ## Build
 
-First obtain all sources:
+### Go Environment
+
+If one does not already exist, install a Go environment by following [these instructions](https://golang.org/doc/install).  If GOPATH is set to ~/go and the bfxfixgw repository is cloned to ~/go/src/github.com/bitfinexcom/bfxfixgw, then the following simple go command is all that is needed if issued from the ~/go directory.  Both bfxfixgw and fix_client will be installed to ~/go/bin after issuing the command.
+
+Obtain all additional sources, build, and install:
 
 ```bash
 go get ./...
 ```
 
+### Building Source Changes
+
+Local bfxfixgw source changes can be built by issuing the following commands from the ~/go/src/github.com/bitfinexcom/bfxfixgw directory.  The install command will copy the latest version of bfxfixgw and fix_client to ~/go/bin.
+
 Build:
 
 ```bash
 go build ./...
-```
-
-Run tests:
-
-```bash
-go test ./...
 ```
 
 And install binaries:
@@ -92,12 +94,12 @@ DefaultApplVerID=FIX.4.2
 HeartBtInt=30
 ```
 
-### Startup
+### Gateway Startup
 
-To startup the gateway with both order routing and market data endpoints (staging configuration):
+To startup the gateway in verbose mode (-v) with both order routing and market data endpoints (staging configuration) run the following command:
 
 ```bash
-FIX_SETTINGS_DIRECTORY=conf/integration_test/service/ bfxfixgw.exe -orders -ordcfg orders_fix42.cfg -md -mdcfg marketdata_fix42.cfg -ws wss://dev-prdn.bitfinex.com:2998/ws/2 -rest https://dev-prdn.bitfinex.com:2998/v2/
+FIX_SETTINGS_DIRECTORY=~/go/src/github.com/bitfinexcom/bfxfixgw/conf/integration_test/service ~/go/bin/bfxfixgw -v -orders -ordcfg "orders_fix42.cfg" -md -mdcfg "marketdata_fix42.cfg" -rest "https://dev-prdn.bitfinex.com:2998/v2/" -ws "wss://dev-prdn.bitfinex.com:2998/ws/2"
 ```
 
 ## Authentication
@@ -129,6 +131,43 @@ These tags are supported by the gateway's default [data dictionary](spec/Bitfine
 ```
 8=FIX.4.2|9=186|35=A|34=1|49=EXORG_ORD|52=20180416-18:27:47.541|56=BFXFIX|20000=U83q9jkML2GVj1fVxFJOAXQeDGaXIzeZ6PwNPQLEXt4|20001=77SWIRggvw0rCOJUgk9GVcxbldjTxOJP5WLCjWBFIVc|20002=connamara|98=0|108=30|10=117|
 ```
+
+## Testing using fix_client
+
+The project includes a test client utility called fix_client.  fix_client is a simple gateway client that demonstrates a subset of gateway functionality.  The client currently supports sending and canceling orders via the gateway.  Simply run the client, issue a root command (either nos or cxl), and then provide additional request parameters as prompted.
+
+### Configuring fix_client
+
+The fix_client takes a quickfix configuration file located here ~/go/src/github.com/bitfinexcom/bfxfixgw/conf/integration_test/client/orders_fix42.cfg.  To successfully connect to BFX using the gateway, you must change the following parameters to match the API access of your account.  Please note the security risk of adding credentials to this file in plain text.  You may want to remove these values after you are done with testing using fix_client
+
+```
+ApiKey=[User's API Key]  
+ApiSecret=[User's API Secret]  
+BfxUserID=[User's Bfx ID]  
+```
+
+### Running fix_client Example
+
+Here is an example of using fix_client to place a market order.  All outgoing and incoming FIX traffic is logged.  You can decode the FIX manually or using your favorite FIX parser.  Please be careful to avoid sending FIX logs that contain private keys to online parsers.  Some logging has be stripped out for clarity and user input is **bold**.  
+
+>**./fix_client -cfg ../src/github.com/bitfinexcom/bfxfixgw/conf/integration_test/client/orders_fix42.cfg**  
+Enter command:  
+**nos**  
+-> New Order Single  
+Enter ClOrdID (integer):  
+**1**  
+Enter symbol:  
+**tBTCUSD**  
+Enter order type:  
+**market**  
+Enter qty:  
+**0.05**  
+Enter side:  
+**buy**  
+Options? (hidden, postonly, fok): [FIX Client] MockFix.ToApp (outgoing): 8=FIX.4.2|9=126|35=D|34=547|49=EXORG_ORD|52=20180504-16:45:04.697|56=BFXFIX|11=1|21=3|38=0.0500|40=1|54=1|55=tBTCUSD|60=20180504-16:45:03.518|10=249|  
+[FIX Client] MockFix.FromApp (incoming): 8=FIX.4.2|9=221|35=8|34=550|49=BFXFIX|52=20180504-16:45:04.804|56=EXORG_ORD|1=connamara|6=0.00|11=1|14=0.0000|17=43a98b1d-0312-41cf-9678-33e268e9bff9|20=3|32=0.0000|37=1149703695|38=0.0500|39=0|40=1|54=1|55=tBTCUSD|59=1|150=0|151=0.0500|10=007|  
+<2018-05-04 16:45:05.823298994 +0000 UTC, FIX.4.2:EXORG_ORD->BFXFIX, incoming>  
+[FIX Client] MockFix.FromApp (incoming): 8=FIX.4.2|9=250|35=8|34=551|49=BFXFIX|52=20180504-16:45:05.818|56=EXORG_ORD|1=connamara|6=850.00|11=1|12=0.0001|13=3|14=0.0500|17=1cfb00fc-9ea6-4dca-8d9f-a5cce1cc0959|20=3|31=850.0000|32=0.0500|37=1149703695|38=0.0500|39=2|40=1|54=1|55=tBTCUSD|59=1|150=2|151=0.0000|10=182  
 
 ## Market Data Distribution
 

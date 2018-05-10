@@ -99,7 +99,7 @@ HeartBtInt=30
 To startup the gateway in verbose mode (-v) with both order routing and market data endpoints (staging configuration) run the following command:
 
 ```bash
-FIX_SETTINGS_DIRECTORY=~/go/src/github.com/bitfinexcom/bfxfixgw/conf/integration_test/service ~/go/bin/bfxfixgw -v -orders -ordcfg "orders_fix42.cfg" -md -mdcfg "marketdata_fix42.cfg" -rest "https://dev-prdn.bitfinex.com:2998/v2/" -ws "wss://dev-prdn.bitfinex.com:2998/ws/2"
+FIX_SETTINGS_DIRECTORY=~/go/src/github.com/bitfinexcom/bfxfixgw/conf/integration_test/service ~/go/bin/bfxfixgw -v -orders -ordcfg "orders_fix42.cfg" -md -mdcfg "marketdata_fix42.cfg" -rest "https://api.bitfinex.com/v2/" -ws "wss://api.bitfinex.com/ws/2"
 ```
 
 ## Authentication
@@ -148,7 +148,7 @@ BfxUserID=[User's Bfx ID]
 
 ### Running fix_client Example
 
-Here is an example of using fix_client to place a market order.  All outgoing and incoming FIX traffic is logged.  You can decode the FIX manually or using your favorite FIX parser.  Please be careful to avoid sending FIX logs that contain private keys to online parsers.  Some logging has be stripped out for clarity and user input is **bold**.  
+Here is an example of using fix_client to place a market order.  All outgoing and incoming FIX traffic is logged.  You can decode the FIX manually or using your favorite FIX parser.  Please be careful to avoid sending FIX logs that contain private keys to online parsers.  Some logging has been stripped out for clarity and user input is **bold**.  
 
 >**./fix_client -cfg ../src/github.com/bitfinexcom/bfxfixgw/conf/integration_test/client/orders_fix42.cfg**  
 Enter command:  

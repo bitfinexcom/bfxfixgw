@@ -153,7 +153,7 @@ func (s *MockWs) Received(clientNum int, msgNum int) (string, error) {
 func (s *MockWs) DumpRecv() {
 	i := 0
 	for c := range s.clients {
-		log.Printf("received for client %d:\n", i, c.ID)
+		log.Printf("received for client %d:\n", c.ID)
 		for j, m := range c.received {
 			log.Printf("%2d: %s", j, m)
 		}

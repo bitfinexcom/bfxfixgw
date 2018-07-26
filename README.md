@@ -1,4 +1,4 @@
-[![Build Status](https://api.travis-ci.org/jvatianou/bfxfixgw?branch=master)](https://travis-ci.org/jvatianou/bfxfixgw)
+[![Build Status](https://api.travis-ci.org/jvatianou/bfxfixgw.png?branch=master)](https://travis-ci.org/jvatianou/bfxfixgw.svg?branch=master)
 
 # Bitfinex FIX Gateway
 

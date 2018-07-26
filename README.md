@@ -1,3 +1,5 @@
+[![Build Status](https://api.travis-ci.org/jvatianou/bfxfixgw?branch=master)](https://travis-ci.org/jvatianou/bfxfixgw)
+
 # Bitfinex FIX Gateway
 
 The Bitfinex FIX gateway uses [QuickFix/go](https://github.com/quickfixgo/quickfix) to implement FIX connectivity. [The Bitfinex Go API](https://github.com/bitfinexcom/bitfinex-api-go) is used to manage the [Bitfinex API websocket](https://bitfinex.readme.io/docs) connection, which ultimately uses [Gorilla](https://github.com/gorilla/websocket).

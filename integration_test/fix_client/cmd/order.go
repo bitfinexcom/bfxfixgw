@@ -33,9 +33,11 @@ func buildFixOrder(clordid, symbol string, px, stop, qty float64, side enum.Side
 	return &ord
 }
 
+//Order is a FIX message builder for Order messages
 type Order struct {
 }
 
+//Execute builds FIX order messages
 func (o *Order) Execute(keyboard <-chan string, publisher FIXPublisher) {
 	log.Print("-> New Order Single")
 	log.Printf("Enter ClOrdID (integer): ")
@@ -133,6 +135,7 @@ func (o *Order) Execute(keyboard <-chan string, publisher FIXPublisher) {
 	publisher.SendFIX(nos)
 }
 
+//Handle processes order messages
 func (o *Order) Handle(msg *fix.Message) {
 	msgtype, _ := msg.Header.GetString(tag.MsgType)
 	if msgtype == "8" {

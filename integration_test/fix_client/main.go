@@ -68,8 +68,8 @@ func main() {
 	control.cmds["md"] = &cmd.MarketData{}
 	control.cmds["cxl"] = &cmd.Cancel{}
 	client.MessageHandler = control
-	client.ApiKey = apiKey
-	client.ApiSecret = apiSecret
+	client.APIKey = apiKey
+	client.APISecret = apiSecret
 	client.BfxUserID = bfxUser
 	client.CancelOnDisconnect = *cod
 	client.Start()

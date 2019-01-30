@@ -15,9 +15,11 @@ func buildFixCancel(cancelClOrdID, clOrdID, symbol string, side enum.Side) fix.M
 	return cxl.New(field.NewOrigClOrdID(cancelClOrdID), field.NewClOrdID(clOrdID), field.NewSymbol(symbol), field.NewSide(side), field.NewTransactTime(time.Now()))
 }
 
+//Cancel is a FIX message builder for Cancels
 type Cancel struct {
 }
 
+//Execute builds an Order Cancel FIX message
 func (c *Cancel) Execute(keyboard <-chan string, publisher FIXPublisher) {
 	log.Print("-> Cancel")
 	log.Printf("Enter ClOrdID to cancel (integer): ")
@@ -39,6 +41,7 @@ func (c *Cancel) Execute(keyboard <-chan string, publisher FIXPublisher) {
 	publisher.SendFIX(cancel)
 }
 
+//Handle processes the Cancel FIX message
 func (c *Cancel) Handle(msg *fix.Message) {
 	msgtype, _ := msg.Header.GetString(tag.MsgType)
 	if msgtype == "8" {

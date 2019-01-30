@@ -34,6 +34,7 @@ func objEq(expected, actual interface{}) bool {
 
 }
 
+// AssertSlice checks equality of a slice
 func AssertSlice(t *testing.T, expected, actual interface{}) {
 	if objEq(expected, actual) {
 		t.Logf("%s OK", reflect.TypeOf(actual))
@@ -56,7 +57,7 @@ func AssertSlice(t *testing.T, expected, actual interface{}) {
 	t.Fatal()
 }
 
-// does not work on slices
+// Assert checks for equality, but does not work on slices
 func Assert(t *testing.T, expected interface{}, actual interface{}) {
 
 	prexp := reflect.ValueOf(expected)

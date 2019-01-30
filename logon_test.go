@@ -38,7 +38,7 @@ type testNonceFactory struct {
 }
 
 func (t *testNonceFactory) New() utils.NonceGenerator {
-	return &mock.MockNonceGenerator{}
+	return &mock.NonceGenerator{}
 }
 
 type testClientFactory struct {
@@ -94,7 +94,7 @@ func checkFixTags(fix string, tags ...string) error {
 	return nil
 }
 
-func setupWithClientCheck(t *testing.T, port int, settings mockFixSettings, checkClient bool) (*mock.TestFixClient, *mock.TestFixClient, *mock.MockWs, *Gateway) {
+func setupWithClientCheck(t *testing.T, port int, settings mockFixSettings, checkClient bool) (*mock.TestFixClient, *mock.TestFixClient, *mock.Ws, *Gateway) {
 	err := attemptRemove()
 	if err != nil {
 		t.Fatal(err)
@@ -139,8 +139,8 @@ func setupWithClientCheck(t *testing.T, port int, settings mockFixSettings, chec
 	if err != nil {
 		t.Fatal(err)
 	}
-	clientMDFix.ApiKey = settings.APIKey
-	clientMDFix.ApiSecret = settings.APISecret
+	clientMDFix.APIKey = settings.APIKey
+	clientMDFix.APISecret = settings.APISecret
 	clientMDFix.BfxUserID = settings.BfxUserID
 	if err != nil {
 		t.Fatalf("could not create FIX md client: %s", err.Error())
@@ -155,8 +155,8 @@ func setupWithClientCheck(t *testing.T, port int, settings mockFixSettings, chec
 
 	clientOrdSettings := loadSettings(fmt.Sprintf("conf/integration_test/client/orders_%s.cfg", settings.FixVersion))
 	clientOrdFix, err := mock.NewTestFixClient(clientOrdSettings, quickfix.NewFileStoreFactory(clientOrdSettings), "Orders")
-	clientOrdFix.ApiKey = settings.APIKey
-	clientOrdFix.ApiSecret = settings.APISecret
+	clientOrdFix.APIKey = settings.APIKey
+	clientOrdFix.APISecret = settings.APISecret
 	clientOrdFix.BfxUserID = settings.BfxUserID
 	if err != nil {
 		t.Fatalf("could not create FIX ord client: %s", err.Error())
@@ -176,7 +176,7 @@ func setupWithClientCheck(t *testing.T, port int, settings mockFixSettings, chec
 	return clientMDFix, clientOrdFix, wsService, gateway
 }
 
-func setup(t *testing.T, port int, settings mockFixSettings) (*mock.TestFixClient, *mock.TestFixClient, *mock.MockWs, *Gateway) {
+func setup(t *testing.T, port int, settings mockFixSettings) (*mock.TestFixClient, *mock.TestFixClient, *mock.Ws, *Gateway) {
 	return setupWithClientCheck(t, port, settings, true)
 }
 

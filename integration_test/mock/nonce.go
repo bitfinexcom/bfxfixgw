@@ -4,16 +4,19 @@ import (
 	"fmt"
 )
 
-type MockNonceGenerator struct {
+//NonceGenerator generates a mocked nonce generator
+type NonceGenerator struct {
 	nonce string
 	inc   int
 }
 
-func (m *MockNonceGenerator) Next(nonce string) {
+//Next assigns the nonce
+func (m *NonceGenerator) Next(nonce string) {
 	m.nonce = nonce
 }
 
-func (m *MockNonceGenerator) GetNonce() string {
+//GetNonce generates a new nonce
+func (m *NonceGenerator) GetNonce() string {
 	if m.nonce == "" {
 		m.inc++
 		return fmt.Sprintf("nonce%d", m.inc)

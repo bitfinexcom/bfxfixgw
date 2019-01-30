@@ -14,6 +14,7 @@ import (
 	"github.com/quickfixgo/tag"
 )
 
+//FixPricePrecision is the FIX tag for price precision
 const FixPricePrecision fix.Tag = 20003
 
 func newMdRequest(reqID, symbol string, depth int, precision string) *mdr.MarketDataRequest {
@@ -42,9 +43,11 @@ func buildFixMdRequests(symbols []string, depth int, raw bool, precLevel string)
 	return reqs
 }
 
+//MarketData is a FIX message builder for Market Data messages
 type MarketData struct {
 }
 
+//Execute builds Market Data messages
 func (m *MarketData) Execute(keyboard <-chan string, publisher FIXPublisher) {
 	log.Print("-> Market Data Request")
 	log.Print("Enter symbol: ")
@@ -73,6 +76,7 @@ func (m *MarketData) Execute(keyboard <-chan string, publisher FIXPublisher) {
 	}
 }
 
+//Handle processes Market Data messages
 func (m *MarketData) Handle(msg *fix.Message) {
 	msgtype, _ := msg.Header.GetString(tag.MsgType)
 	if msgtype == "X" || msgtype == "W" {

@@ -10,7 +10,7 @@ import (
 	fix "github.com/quickfixgo/quickfix"
 )
 
-// key = SessionID
+// Session corresponds to key = SessionID
 type Session struct {
 	ID       fix.SessionID
 	LoggedOn bool
@@ -20,10 +20,12 @@ type Session struct {
 	wg       sync.WaitGroup
 }
 
+// Send emits a FIX message
 func (s *Session) Send(msg fix.Messagable) {
 	fix.SendToTarget(msg, s.ID)
 }
 
+// TestFixClient is a FIX client for testing purposes
 type TestFixClient struct {
 	initiator *fix.Initiator
 	settings  *fix.Settings
@@ -37,34 +39,39 @@ type TestFixClient struct {
 	OmitLogMessages bool
 	MessageHandler
 
-	ApiKey, ApiSecret, BfxUserID, name string
+	APIKey, APISecret, BfxUserID, name string
 	CancelOnDisconnect                 bool
 }
 
-func (t *TestFixClient) Handle(msg *fix.Message) {
+// Handle processes a FIX message
+func (m *TestFixClient) Handle(msg *fix.Message) {
 	// no-op
 }
 
+//MessageHandler is a generic FIX message handler
 type MessageHandler interface {
 	Handle(msg *fix.Message)
 }
 
-func (t *TestFixClient) SetMessageHandler(handler MessageHandler) {
-	t.MessageHandler = handler
+//SetMessageHandler assigns a message handler
+func (m *TestFixClient) SetMessageHandler(handler MessageHandler) {
+	m.MessageHandler = handler
 }
 
-func (t *TestFixClient) Send(msg fix.Messagable) error {
-	err := fix.SendToTarget(msg, t.last.ID)
+//Send emits a FIX message
+func (m *TestFixClient) Send(msg fix.Messagable) error {
+	err := fix.SendToTarget(msg, m.last.ID)
 	soh := byte(0x1)
 	str := strings.Replace(msg.ToMessage().String(), string([]byte{soh}), "|", -1)
-	log.Printf("[-> %s]: %s", t.last.ID.String(), str)
+	log.Printf("[-> %s]: %s", m.last.ID.String(), str)
 	return err
 }
 
-func (t *TestFixClient) WaitForSession(sid string) error {
+//WaitForSession tries to find a FIX session
+func (m *TestFixClient) WaitForSession(sid string) error {
 	found := false
 	for i := 0; i < 20; i++ {
-		if session, ok := t.Sessions[sid]; ok {
+		if session, ok := m.Sessions[sid]; ok {
 			if session.LoggedOn {
 				log.Printf("found session %s", sid)
 				return nil
@@ -73,7 +80,7 @@ func (t *TestFixClient) WaitForSession(sid string) error {
 		}
 		time.Sleep(time.Millisecond * 250)
 	}
-	for _, s := range t.Sessions {
+	for _, s := range m.Sessions {
 		log.Printf("test fix client session: %s", s.ID.String())
 	}
 	if found {
@@ -82,19 +89,22 @@ func (t *TestFixClient) WaitForSession(sid string) error {
 	return fmt.Errorf("could not find session: %s", sid)
 }
 
-func (t *TestFixClient) LastSession() *Session {
-	return t.last
+//LastSession returns the last FIX session
+func (m *TestFixClient) LastSession() *Session {
+	return m.last
 }
 
-func (t *TestFixClient) SendFIX(msg fix.Messagable) {
-	if len(t.Sessions) > 0 {
-		for _, s := range t.Sessions {
+//SendFIX emits a FIX message
+func (m *TestFixClient) SendFIX(msg fix.Messagable) {
+	if len(m.Sessions) > 0 {
+		for _, s := range m.Sessions {
 			s.Send(msg)
 			return
 		}
 	}
 }
 
+//NewTestFixClient creates a new testing FIX client
 func NewTestFixClient(settings *fix.Settings, msgStore fix.MessageStoreFactory, name string) (*TestFixClient, error) {
 	f := &TestFixClient{
 		router:   fix.NewMessageRouter(),
@@ -118,6 +128,7 @@ func NewTestFixClient(settings *fix.Settings, msgStore fix.MessageStoreFactory, 
 	return f, nil
 }
 
+//ReceivedCount finds the messages received per session
 func (m *TestFixClient) ReceivedCount(sessionID string) int {
 	if s, ok := m.Sessions[sessionID]; ok {
 		s.m.Lock()
@@ -127,10 +138,12 @@ func (m *TestFixClient) ReceivedCount(sessionID string) int {
 	return 0
 }
 
+//WaitForMessage waits for a message at the specified sequence number
 func (m *TestFixClient) WaitForMessage(sessionID string, seqnum int) (string, error) {
 	return m.WaitForMessageWithWait(sessionID, seqnum, time.Second*4)
 }
 
+//WaitForMessageWithWait waits for a session message with the given timeout
 func (m *TestFixClient) WaitForMessageWithWait(sessionID string, seqnum int, wait time.Duration) (string, error) {
 	if s, ok := m.Sessions[sessionID]; ok {
 		loops := 25
@@ -150,6 +163,7 @@ func (m *TestFixClient) WaitForMessageWithWait(sessionID string, seqnum int, wai
 	return "", fmt.Errorf("could not find session %s", sessionID)
 }
 
+//DumpRcvFIX prints out the messages for a given session
 func (m *TestFixClient) DumpRcvFIX(sid string) {
 	log.Printf("Messages for %s:\n", sid)
 	if s, ok := m.Sessions[sid]; ok {
@@ -159,10 +173,12 @@ func (m *TestFixClient) DumpRcvFIX(sid string) {
 	}
 }
 
+//Start begins the initiator
 func (m *TestFixClient) Start() error {
 	return m.initiator.Start()
 }
 
+//Stop stops the initiator
 func (m *TestFixClient) Stop() {
 	m.initiator.Stop()
 	for _, s := range m.Sessions {
@@ -187,12 +203,14 @@ func (m *TestFixClient) Stop() {
 	}
 }
 
+//OnLogout logs out of the specified session
 func (m *TestFixClient) OnLogout(sessionID fix.SessionID) {
 	log.Printf("[FIX %s] MockFix.OnLogout: %s", m.name, sessionID)
 	m.Sessions[sessionID.String()].LoggedOn = false
 	return
 }
 
+//SendOnLogon sets the logon messages
 func (m *TestFixClient) SendOnLogon(msgs []fix.Messagable) {
 	m.sendOnLogon = msgs
 }
@@ -208,6 +226,7 @@ func (m *TestFixClient) onLogon(sessionID fix.SessionID) {
 	}()
 }
 
+//OnLogon handles a session ID logon
 func (m *TestFixClient) OnLogon(sessionID fix.SessionID) {
 	log.Printf("[FIX %s] MockFix.OnLogon: %s", m.name, sessionID)
 	m.Sessions[sessionID.String()].LoggedOn = true
@@ -219,15 +238,15 @@ func fixString(msg fix.Messagable) string {
 	return strings.Replace(msg.ToMessage().String(), string([]byte{0x1}), "|", -1)
 }
 
-// outgoing admin
+// ToAdmin handles outgoing admin
 func (m *TestFixClient) ToAdmin(msg *fix.Message, sessionID fix.SessionID) {
 	msgType, err := msg.MsgType()
 	if err != nil {
 		return
 	}
 	if "A" == msgType {
-		msg.Body.SetString(fix.Tag(20000), m.ApiKey)
-		msg.Body.SetString(fix.Tag(20001), m.ApiSecret)
+		msg.Body.SetString(fix.Tag(20000), m.APIKey)
+		msg.Body.SetString(fix.Tag(20001), m.APISecret)
 		msg.Body.SetString(fix.Tag(20002), m.BfxUserID)
 		if m.CancelOnDisconnect {
 			msg.Body.SetBool(fix.Tag(8013), true)
@@ -237,7 +256,7 @@ func (m *TestFixClient) ToAdmin(msg *fix.Message, sessionID fix.SessionID) {
 	return
 }
 
-// incoming admin
+// FromAdmin handles incoming admin
 func (m *TestFixClient) FromAdmin(msg *fix.Message, sID fix.SessionID) fix.MessageRejectError {
 	log.Printf("[FIX %s] MockFix.FromAdmin (incoming): %s", m.name, fixString(msg))
 	s := m.Sessions[sID.String()]
@@ -251,7 +270,7 @@ func (m *TestFixClient) FromAdmin(msg *fix.Message, sID fix.SessionID) fix.Messa
 	return nil
 }
 
-// outgoing app
+// ToApp handles outgoing app
 func (m *TestFixClient) ToApp(msg *fix.Message, sID fix.SessionID) error {
 	if !m.OmitLogMessages {
 		log.Printf("[FIX %s] MockFix.ToApp (outgoing): %s", m.name, fixString(msg))
@@ -265,7 +284,7 @@ func (m *TestFixClient) ToApp(msg *fix.Message, sID fix.SessionID) error {
 	return nil
 }
 
-// incoming app
+// FromApp handles incoming app
 func (m *TestFixClient) FromApp(msg *fix.Message, sID fix.SessionID) fix.MessageRejectError {
 	if !m.OmitLogMessages {
 		log.Printf("[FIX %s] MockFix.FromApp (incoming): %s", m.name, fixString(msg))
@@ -282,6 +301,7 @@ func (m *TestFixClient) FromApp(msg *fix.Message, sID fix.SessionID) fix.Message
 	return nil
 }
 
+//OnCreate handles session creation
 func (m *TestFixClient) OnCreate(sessionID fix.SessionID) {
 	log.Printf("[FIX %s] MockFix.OnCreate: %s", m.name, sessionID)
 	s := &Session{

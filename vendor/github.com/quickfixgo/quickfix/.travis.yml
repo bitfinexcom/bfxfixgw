@@ -1,0 +1,27 @@
+language: go
+sudo: false
+
+go:
+  - 1.8
+  - tip
+
+env:
+  - FIX_TEST=
+  - FIX_TEST=fix40
+  - FIX_TEST=fix41
+  - FIX_TEST=fix42
+  - FIX_TEST=fix43
+  - FIX_TEST=fix44
+  - FIX_TEST=fix50
+  - FIX_TEST=fix50sp1
+  - FIX_TEST=fix50sp2
+
+matrix:
+  allow_failures:
+    - go: tip
+
+install:
+  - go get -u github.com/kardianos/govendor
+  - govendor sync
+
+script: if [ -z "$FIX_TEST" ]; then make generate && make build && make; else make build_accept && make $FIX_TEST; fi

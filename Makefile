@@ -1,7 +1,7 @@
 all: lint check build install
 
 lint:
-	golint -set_exit_status ./...
+	golint -set_exit_status $(go list ./... | grep -v /vendor/)
 
 check:
 	go test -v ./...

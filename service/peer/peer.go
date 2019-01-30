@@ -10,6 +10,7 @@ import (
 	"go.uber.org/zap"
 )
 
+// ClientFactory is an interface to create new REST and WS clients
 type ClientFactory interface {
 	NewRest() *rest.Client
 	NewWs() *websocket.Client
@@ -22,6 +23,7 @@ type Peers interface {
 	AddPeer(id quickfix.SessionID) *Peer
 }
 
+// Message is a raw data container with an associated peer
 type Message struct {
 	Data interface{}
 	*Peer
@@ -101,10 +103,12 @@ func (p *Peer) BfxUserID() string {
 	return p.bfxUserID
 }
 
+// FIXSessionID is an immutable accessor to the FIX session ID
 func (p *Peer) FIXSessionID() quickfix.SessionID {
 	return p.sessionID
 }
 
+// Close quits out of the associated websocket if started
 func (p *Peer) Close() {
 	if p.started {
 		p.Ws.Close()

@@ -23,10 +23,13 @@ var tagBfxAPISecret = quickfix.Tag(20001)
 var tagBfxUserID = quickfix.Tag(20002)
 var tagCancelOnDisconnect = quickfix.Tag(8013)
 
-type FIXServiceType byte
+// ServiceType is the package service type
+type ServiceType byte
 
 const (
-	MarketDataService FIXServiceType = iota
+	// MarketDataService defines a MD service
+	MarketDataService ServiceType = iota
+	// OrderRoutingService defines an Order Routing service
 	OrderRoutingService
 )
 
@@ -44,22 +47,31 @@ type FIX struct {
 	msgTypeLock sync.RWMutex
 }
 
+// OnCreate handles FIX session creation
 func (f *FIX) OnCreate(sID quickfix.SessionID) {
 	log.Logger.Info("FIX.OnCreate", zap.Any("SessionID", sID))
 }
 
+// OnLogon handles FIX session logon
 func (f *FIX) OnLogon(sID quickfix.SessionID) {
 	log.Logger.Info("FIX.OnLogon", zap.Error(nil))
 }
 
+// OnLogout handles FIX session logout
 func (f *FIX) OnLogout(sID quickfix.SessionID) {
 	log.Logger.Info("logging off websocket peer", zap.String("SessionID", sID.String()))
 	f.RemovePeer(sID.String())
 }
+
+// ToAdmin handles FIX admin message delivery
 func (f *FIX) ToAdmin(msg *quickfix.Message, sID quickfix.SessionID) {
 	f.logger.Info("FIX.ToAdmin", zap.Any("msg", msg))
 }
+
+// ToApp handles FIX app message delivery
 func (f *FIX) ToApp(msg *quickfix.Message, sID quickfix.SessionID) error { return nil }
+
+// FromAdmin handles FIX admin message processing
 func (f *FIX) FromAdmin(msg *quickfix.Message, sID quickfix.SessionID) quickfix.MessageRejectError {
 	f.logger.Info("FIX.FromAdmin", zap.Any("msg", msg))
 
@@ -101,6 +113,7 @@ func (f *FIX) FromAdmin(msg *quickfix.Message, sID quickfix.SessionID) quickfix.
 	return nil
 }
 
+// FromApp handles FIX application message processing
 func (f *FIX) FromApp(msg *quickfix.Message, sID quickfix.SessionID) quickfix.MessageRejectError {
 	f.logger.Info("FIX.FromApp", zap.Any("msg", msg))
 	f.msgTypeLock.Lock()
@@ -109,6 +122,7 @@ func (f *FIX) FromApp(msg *quickfix.Message, sID quickfix.SessionID) quickfix.Me
 	return f.Route(msg, sID)
 }
 
+// LastMsgType retrieves the last message type
 func (f *FIX) LastMsgType() string {
 	f.msgTypeLock.RLock()
 	defer f.msgTypeLock.RUnlock()
@@ -116,7 +130,7 @@ func (f *FIX) LastMsgType() string {
 }
 
 // New creates a new FIX acceptor & associated services
-func New(s *quickfix.Settings, peers peer.Peers, serviceType FIXServiceType, symbology symbol.Symbology) (*FIX, error) {
+func New(s *quickfix.Settings, peers peer.Peers, serviceType ServiceType, symbology symbol.Symbology) (*FIX, error) {
 	f := &FIX{
 		MessageRouter: quickfix.NewMessageRouter(),
 		logger:        log.Logger,

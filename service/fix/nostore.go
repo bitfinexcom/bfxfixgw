@@ -6,7 +6,8 @@ import (
 	fix "github.com/quickfixgo/quickfix"
 )
 
-func NewNoStoreFactory() *noStoreFactory {
+// NewNoStoreFactory returns a new NoStoreFactory
+func NewNoStoreFactory() fix.MessageStoreFactory {
 	return &noStoreFactory{}
 }
 

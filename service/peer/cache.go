@@ -14,12 +14,13 @@ type execution struct {
 	Px, Qty        float64
 }
 
+// CachedCancel details BFX might not return back to us, which we need to populate in execution reports
 type CachedCancel struct {
 	OriginalOrderID, Symbol, Account, ClOrdID string
 	Side                                      enum.Side
 }
 
-// details BFX might not return back to us, which we need to populate in execution reports.
+// CachedOrder details BFX might not return back to us, which we need to populate in execution reports
 type CachedOrder struct {
 	Symbol, Account      string
 	ClOrdID, OrderID     string
@@ -58,6 +59,7 @@ func newCancel(origclordid, symbol, account, clordid string) *CachedCancel {
 	}
 }
 
+// AvgFillPx returns the average fill price of all executions in the order
 func (o *CachedOrder) AvgFillPx() float64 {
 	o.lock.Lock()
 	defer o.lock.Unlock()
@@ -77,6 +79,7 @@ func (o *CachedOrder) avgFillPx() float64 {
 	return 0
 }
 
+// FilledQty returns the fill quantity of all executions in the order
 func (o *CachedOrder) FilledQty() float64 {
 	o.lock.Lock()
 	defer o.lock.Unlock()

@@ -71,6 +71,7 @@ func logout(message string, sID quickfix.SessionID) {
 	quickfix.SendToTarget(msg, sID)
 }
 
+// OnFIX42NewOrderSingle handles a New Order Single FIX message
 func (f *FIX) OnFIX42NewOrderSingle(msg nos.NewOrderSingle, sID quickfix.SessionID) quickfix.MessageRejectError {
 	p, ok := f.FindPeer(sID.String())
 	if !ok {
@@ -137,6 +138,7 @@ func validatePrecision(prec string) (bitfinex.BookPrecision, bool) {
 	return bitfinex.Precision0, false
 }
 
+// OnFIX42MarketDataRequest handles a Market Data Request FIX message
 func (f *FIX) OnFIX42MarketDataRequest(msg mdr.MarketDataRequest, sID quickfix.SessionID) quickfix.MessageRejectError {
 
 	p, ok := f.FindPeer(sID.String())
@@ -293,6 +295,7 @@ func (f *FIX) OnFIX42MarketDataRequest(msg mdr.MarketDataRequest, sID quickfix.S
 	return nil
 }
 
+// OnFIX42OrderCancelRequest handles an Order Cancel message
 func (f *FIX) OnFIX42OrderCancelRequest(msg ocr.OrderCancelRequest, sID quickfix.SessionID) quickfix.MessageRejectError {
 	ocid, err := msg.GetOrigClOrdID() // Required
 	if err != nil {
@@ -365,6 +368,7 @@ func (f *FIX) OnFIX42OrderCancelRequest(msg ocr.OrderCancelRequest, sID quickfix
 	return nil
 }
 
+// OnFIX42OrderStatusRequest handles a FIX order status request
 func (f *FIX) OnFIX42OrderStatusRequest(msg osr.OrderStatusRequest, sID quickfix.SessionID) quickfix.MessageRejectError {
 	oid, err := msg.GetOrderID()
 	if err != nil {

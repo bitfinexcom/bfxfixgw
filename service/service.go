@@ -18,13 +18,14 @@ import (
 	"sync"
 )
 
+// TagMDRequestType is the tag used for market data request type
 const TagMDRequestType quickfix.Tag = 20004
 
-// LogicalService connects a logical FIX endpoint with a logical websocket connection
+// Service connects a logical FIX endpoint with a logical websocket connection
 type Service struct {
 	factory     peer.ClientFactory
 	peers       map[string]*peer.Peer
-	serviceType fix.FIXServiceType
+	serviceType fix.ServiceType
 	*fix.FIX
 	*websocket.Websocket
 	lock    sync.Mutex
@@ -32,7 +33,8 @@ type Service struct {
 	inbound chan *peer.Message
 }
 
-func New(factory peer.ClientFactory, settings *quickfix.Settings, srvType fix.FIXServiceType, symbology symbol.Symbology) (*Service, error) {
+// New creates a new service
+func New(factory peer.ClientFactory, settings *quickfix.Settings, srvType fix.ServiceType, symbology symbol.Symbology) (*Service, error) {
 	service := &Service{factory: factory, log: lg.Logger, peers: make(map[string]*peer.Peer), inbound: make(chan *peer.Message), serviceType: srvType}
 	var err error
 	service.FIX, err = fix.New(settings, service, srvType, symbology)
@@ -44,11 +46,13 @@ func New(factory peer.ClientFactory, settings *quickfix.Settings, srvType fix.FI
 	return service, nil
 }
 
+// Start commences service operation
 func (s *Service) Start() error {
 	go s.listen()
 	return s.FIX.Up()
 }
 
+// Stop ceases service operation
 func (s *Service) Stop() {
 	s.FIX.Down()
 	s.lock.Lock()
@@ -59,6 +63,7 @@ func (s *Service) Stop() {
 	s.lock.Unlock()
 }
 
+// AddPeer adds a FIX session to the current peer cache
 func (s *Service) AddPeer(fixSessionID quickfix.SessionID) *peer.Peer {
 	p := peer.New(s.factory, fixSessionID, s.inbound)
 	s.lock.Lock()
@@ -67,6 +72,7 @@ func (s *Service) AddPeer(fixSessionID quickfix.SessionID) *peer.Peer {
 	return p
 }
 
+// FindPeer finds a FIX session in the current peer cache
 func (s *Service) FindPeer(fixSessionID string) (*peer.Peer, bool) {
 	s.lock.Lock()
 	p, ok := s.peers[fixSessionID]
@@ -74,6 +80,7 @@ func (s *Service) FindPeer(fixSessionID string) (*peer.Peer, bool) {
 	return p, ok
 }
 
+// RemovePeer removes a FIX session from the current peer cache
 func (s *Service) RemovePeer(fixSessionID string) bool {
 	s.lock.Lock()
 	defer s.lock.Unlock()

@@ -10,10 +10,12 @@ import (
 var ts, nonce uint64
 var m sync.Mutex
 
+// MultikeyNonceGenerator generates a nonce for the process space
 type MultikeyNonceGenerator struct {
 }
 
-// API key must be exlusively used in this process space.
+// GetNonce makes a new nonce
+// API key must be exclusively used in this process space.
 // Atomic counter per-time.Now() update supporting up to 999 operations per tick
 func (u *MultikeyNonceGenerator) GetNonce() string {
 	m.Lock()
@@ -29,6 +31,7 @@ func (u *MultikeyNonceGenerator) GetNonce() string {
 	return s
 }
 
+// NewMultikeyNonceGenerator returns a new nonce generator
 func NewMultikeyNonceGenerator() utils.NonceGenerator {
 	return &MultikeyNonceGenerator{}
 }

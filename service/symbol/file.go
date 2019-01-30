@@ -9,7 +9,7 @@ import (
 	"sync"
 )
 
-// index is the bitfinex symbol
+// symbolset is the bitfinex symbol
 type symbolset struct {
 	symbols     map[string]string
 	passthrough bool
@@ -61,6 +61,7 @@ func (f *FileSymbology) parse(line string) {
 	}
 }
 
+// NewFileSymbology creates a new file symbology object from a given path
 func NewFileSymbology(path string) (*FileSymbology, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -76,6 +77,7 @@ func NewFileSymbology(path string) (*FileSymbology, error) {
 	return s, nil
 }
 
+// ToBitfinex converts symbol to Bitfinex form
 func (f *FileSymbology) ToBitfinex(symbol, counterparty string) (string, error) {
 	f.lock.Lock()
 	defer f.lock.Unlock()
@@ -96,6 +98,7 @@ func (f *FileSymbology) ToBitfinex(symbol, counterparty string) (string, error) 
 	return "", fmt.Errorf("could not find Bitfinex symbol mapping \"%s\" for counterparty \"%s\"", symbol, counterparty)
 }
 
+// FromBitfinex converts symbol from Bitfinex form
 func (f *FileSymbology) FromBitfinex(symbol, counterparty string) (string, error) {
 	f.lock.Lock()
 	defer f.lock.Unlock()

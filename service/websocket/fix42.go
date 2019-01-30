@@ -36,6 +36,7 @@ func (w *Websocket) FIX42Handler(o interface{}, sID quickfix.SessionID) {
 }
 */
 
+// FIX42HandleAuth handles a websocket auth event
 func (w *Websocket) FIX42HandleAuth(auth *websocket.AuthEvent, sID quickfix.SessionID) {
 	if auth.Status == "FAILED" {
 		logout := logout.New()
@@ -44,7 +45,7 @@ func (w *Websocket) FIX42HandleAuth(auth *websocket.AuthEvent, sID quickfix.Sess
 	}
 }
 
-// public trades
+// FIX42TradeHandler handles public trades
 func (w *Websocket) FIX42TradeHandler(t *bitfinex.Trade, sID quickfix.SessionID) {
 	p, ok := w.FindPeer(sID.String())
 	if !ok {
@@ -59,6 +60,7 @@ func (w *Websocket) FIX42TradeHandler(t *bitfinex.Trade, sID quickfix.SessionID)
 	}
 }
 
+// FIX42TradeSnapshotHandler handles trade snapshots
 func (w *Websocket) FIX42TradeSnapshotHandler(s *bitfinex.TradeSnapshot, sID quickfix.SessionID) {
 	p, ok := w.FindPeer(sID.String())
 	if !ok {
@@ -77,6 +79,7 @@ func (w *Websocket) FIX42TradeSnapshotHandler(s *bitfinex.TradeSnapshot, sID qui
 	} // else no-op
 }
 
+// FIX42TradeExecutionUpdateHandler handles trade snapshots
 func (w *Websocket) FIX42TradeExecutionUpdateHandler(t *bitfinex.TradeExecutionUpdate, sID quickfix.SessionID) {
 	p, ok := w.FindPeer(sID.String())
 	if !ok {
@@ -112,6 +115,7 @@ func (w *Websocket) FIX42TradeExecutionUpdateHandler(t *bitfinex.TradeExecutionU
 	quickfix.SendToTarget(convert.FIX42ExecutionReportFromTradeExecutionUpdate(t, p.BfxUserID(), cached.ClOrdID, cached.Qty, totalFillQty, cached.Px, cached.Stop, cached.Trail, avgFillPx, w.Symbology, sID.TargetCompID, cached.Flags), sID)
 }
 
+// FIX42BookSnapshot handles a book update snapshot
 func (w *Websocket) FIX42BookSnapshot(s *bitfinex.BookUpdateSnapshot, sID quickfix.SessionID) {
 	p, ok := w.FindPeer(sID.String())
 	if !ok {
@@ -127,9 +131,9 @@ func (w *Websocket) FIX42BookSnapshot(s *bitfinex.BookUpdateSnapshot, sID quickf
 			w.logger.Warn("could not find MDReqID for symbol", zap.String("MDReqID", mdReqID))
 		}
 	}
-
 }
 
+// FIX42BookUpdate handles a book update
 func (w *Websocket) FIX42BookUpdate(u *bitfinex.BookUpdate, sID quickfix.SessionID) {
 	p, ok := w.FindPeer(sID.String())
 	if !ok {
@@ -144,6 +148,7 @@ func (w *Websocket) FIX42BookUpdate(u *bitfinex.BookUpdate, sID quickfix.Session
 	}
 }
 
+// FIX42NotificationHandler handles a bitfinex notification
 func (w *Websocket) FIX42NotificationHandler(d *bitfinex.Notification, sID quickfix.SessionID) {
 	p, ok := w.FindPeer(sID.String())
 	if !ok {
@@ -230,6 +235,7 @@ func (w *Websocket) FIX42NotificationHandler(d *bitfinex.Notification, sID quick
 	}
 }
 
+// FIX42OrderSnapshotHandler handles an incoming order snapshot
 func (w *Websocket) FIX42OrderSnapshotHandler(os *bitfinex.OrderSnapshot, sID quickfix.SessionID) {
 	peer, ok := w.FindPeer(sID.String())
 	if ok {
@@ -265,7 +271,7 @@ func (w *Websocket) FIX42OrderSnapshotHandler(os *bitfinex.OrderSnapshot, sID qu
 	return
 }
 
-// for working orders after notification 'ack'
+// FIX42OrderNewHandler is for working orders after notification 'ack'
 func (w *Websocket) FIX42OrderNewHandler(o *bitfinex.OrderNew, sID quickfix.SessionID) {
 	// order new notification is sent prior to this message and is translated into a NEW ER.
 	// this message is received is a limit order is resting on the book after submission,
@@ -274,7 +280,7 @@ func (w *Websocket) FIX42OrderNewHandler(o *bitfinex.OrderNew, sID quickfix.Sess
 	// no-op.
 }
 
-// for working orders after notification 'ack'
+// FIX42OrderUpdateHandler is for working orders after notification 'ack'
 func (w *Websocket) FIX42OrderUpdateHandler(o *bitfinex.OrderUpdate, sID quickfix.SessionID) {
 	p, ok := w.FindPeer(sID.String())
 	if !ok {
@@ -297,6 +303,7 @@ func (w *Websocket) FIX42OrderUpdateHandler(o *bitfinex.OrderUpdate, sID quickfi
 	return
 }
 
+//FIX42OrderCancelHandler handles order cancels
 //[0,"oc",[1149698616,null,57103053041,"tBTCUSD",1523634703091,1523634703127,0,0.1,"EXCHANGE LIMIT",null,null,null,0,"EXECUTED @ 1662.9(0.05): was PARTIALLY FILLED @ 1661.5(0.05)",null,null,1670,1662.2,null,null,null,null,null,0,0,0,null,null,"API>BFX",null,null,null]]
 func (w *Websocket) FIX42OrderCancelHandler(o *bitfinex.OrderCancel, sID quickfix.SessionID) {
 	p, ok := w.FindPeer(sID.String())

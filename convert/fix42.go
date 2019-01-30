@@ -22,6 +22,7 @@ import (
 	//fix42nos "github.com/quickfixgo/quickfix/fix42/newordersingle"
 )
 
+// FIX42MarketDataFullRefreshFromTradeSnapshot generates a market data full refresh
 func FIX42MarketDataFullRefreshFromTradeSnapshot(mdReqID string, snapshot *bitfinex.TradeSnapshot, symbology symbol.Symbology, counterparty string) *fix42mdsfr.MarketDataSnapshotFullRefresh {
 	if len(snapshot.Snapshot) <= 0 {
 		return nil
@@ -52,6 +53,7 @@ func FIX42MarketDataFullRefreshFromTradeSnapshot(mdReqID string, snapshot *bitfi
 	return &message
 }
 
+// FIX42MarketDataFullRefreshFromBookSnapshot generates a market data full refresh
 func FIX42MarketDataFullRefreshFromBookSnapshot(mdReqID string, snapshot *bitfinex.BookUpdateSnapshot, symbology symbol.Symbology, counterparty string) *fix42mdsfr.MarketDataSnapshotFullRefresh {
 	if len(snapshot.Snapshot) <= 0 {
 		return nil
@@ -89,6 +91,7 @@ func FIX42MarketDataFullRefreshFromBookSnapshot(mdReqID string, snapshot *bitfin
 	return &message
 }
 
+// FIX42MarketDataIncrementalRefreshFromTrade makes an incremental refresh entry from a trade
 func FIX42MarketDataIncrementalRefreshFromTrade(mdReqID string, trade *bitfinex.Trade, symbology symbol.Symbology, counterparty string) *fix42mdir.MarketDataIncrementalRefresh {
 	symbol, err := symbology.FromBitfinex(trade.Pair, counterparty)
 	if err != nil {
@@ -115,6 +118,7 @@ func FIX42MarketDataIncrementalRefreshFromTrade(mdReqID string, trade *bitfinex.
 	return &message
 }
 
+// FIX42MarketDataIncrementalRefreshFromBookUpdate makes an incremental refresh entry from a book update
 func FIX42MarketDataIncrementalRefreshFromBookUpdate(mdReqID string, update *bitfinex.BookUpdate, symbology symbol.Symbology, counterparty string) *fix42mdir.MarketDataIncrementalRefresh {
 	symbol, err := symbology.FromBitfinex(update.Symbol, counterparty)
 	if err != nil {
@@ -151,6 +155,7 @@ func FIX42MarketDataIncrementalRefreshFromBookUpdate(mdReqID string, update *bit
 	return &message
 }
 
+// FIX42ExecutionReport generates a FIX execution report from provided order details
 func FIX42ExecutionReport(symbol, clOrdID, orderID, account string, execType enum.ExecType, side enum.Side, origQty, thisQty, cumQty, px, stop, trail, avgPx float64, ordStatus enum.OrdStatus, ordType enum.OrdType, tif enum.TimeInForce, text string, symbology symbol.Symbology, counterparty string, flags int) fix42er.ExecutionReport {
 	uid, err := uuid.NewV4()
 	execID := ""
@@ -248,6 +253,7 @@ func FIX42ExecutionReport(symbol, clOrdID, orderID, account string, execType enu
 	return e
 }
 
+// FIX42ExecutionReportFromOrder generates a FIX execution report from a bitfinex order
 func FIX42ExecutionReportFromOrder(o *bitfinex.Order, account string, execType enum.ExecType, cumQty float64, ordStatus enum.OrdStatus, text string, symbology symbol.Symbology, counterparty string, flags int, stop, peg float64) fix42er.ExecutionReport {
 	orderID := strconv.FormatInt(o.ID, 10)
 	// total order qty
@@ -265,6 +271,7 @@ func FIX42ExecutionReportFromOrder(o *bitfinex.Order, account string, execType e
 	return e
 }
 
+// FIX42ExecutionReportFromTradeExecutionUpdate generates a FIX execution report from a bitfinex trade execution
 func FIX42ExecutionReportFromTradeExecutionUpdate(t *bitfinex.TradeExecutionUpdate, account, clOrdID string, origQty, totalFillQty, origPx, stopPx, trailPx, avgFillPx float64, symbology symbol.Symbology, counterparty string, flags int) fix42er.ExecutionReport {
 	orderID := strconv.FormatInt(t.OrderID, 10)
 	var execType enum.ExecType
@@ -303,6 +310,7 @@ func rejectReasonFromText(text string) enum.CxlRejReason {
 	return enum.CxlRejReason_OTHER
 }
 
+// FIX42OrderCancelReject generates a cancel reject message
 func FIX42OrderCancelReject(account, orderID, origClOrdID, cxlClOrdID, text string) ocj.OrderCancelReject {
 	rejReason := rejectReasonFromText(text)
 	if rejReason == enum.CxlRejReason_UNKNOWN_ORDER {
@@ -321,6 +329,7 @@ func FIX42OrderCancelReject(account, orderID, origClOrdID, cxlClOrdID, text stri
 	return r
 }
 
+// FIX42NoMDEntriesRepeatingGroupFromTradeTicker generates market data entries from ticker data
 func FIX42NoMDEntriesRepeatingGroupFromTradeTicker(data []float64) fix42mdsfr.NoMDEntriesRepeatingGroup {
 	mdEntriesGroup := fix42mdsfr.NewNoMDEntriesRepeatingGroup()
 

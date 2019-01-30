@@ -9,6 +9,7 @@ import (
 // converts messages from FIX to bitfinex
 // Bitfinex types.
 
+// Int64OrZero tries to get an int64 from a generic interface or returns 0
 func Int64OrZero(i interface{}) int64 {
 	if r, ok := i.(int64); ok {
 		return r
@@ -16,6 +17,7 @@ func Int64OrZero(i interface{}) int64 {
 	return 0
 }
 
+// Float64OrZero tries to get a float64 from a generic interface or returns 0
 func Float64OrZero(i interface{}) float64 {
 	if r, ok := i.(float64); ok {
 		return r
@@ -23,6 +25,7 @@ func Float64OrZero(i interface{}) float64 {
 	return 0.0
 }
 
+// BoolOrFalse tries to get a bool from a generic interface or returns false
 func BoolOrFalse(i interface{}) bool {
 	if r, ok := i.(bool); ok {
 		return r
@@ -30,6 +33,7 @@ func BoolOrFalse(i interface{}) bool {
 	return false
 }
 
+// StringOrEmpty tries to get a string from a generic interface or returns an empty string
 func StringOrEmpty(i interface{}) string {
 	if r, ok := i.(string); ok {
 		return r
@@ -37,6 +41,7 @@ func StringOrEmpty(i interface{}) string {
 	return ""
 }
 
+// OrderFromV1Order converts a bitfinex v1 type order to v2
 func OrderFromV1Order(o bfxv1.Order) (*bitfinex.Order, error) {
 	out := &bitfinex.Order{}
 
@@ -70,9 +75,9 @@ func OrderFromV1Order(o bfxv1.Order) (*bitfinex.Order, error) {
 		out.Status = bitfinex.OrderStatusActive
 	}
 
-	var mul float64 = 1.0
+	mul := 1
 	if o.Side == "sell" {
-		mul = -1.0
+		mul = -1
 	}
 	oa, err := strconv.ParseFloat(o.OriginalAmount, 64)
 	if err != nil {
@@ -83,7 +88,7 @@ func OrderFromV1Order(o bfxv1.Order) (*bitfinex.Order, error) {
 	if err != nil {
 		return nil, err
 	}
-	out.Amount = or * mul
+	out.Amount = or * float64(mul)
 
 	switch o.Type {
 	case "market":

@@ -37,6 +37,7 @@ var (
 )
 
 var (
+	//FIXConfigDirectory is the configuration directory for selecting order flow or market data options
 	FIXConfigDirectory = configDirectory()
 )
 
@@ -59,6 +60,7 @@ type Gateway struct {
 	factory peer.ClientFactory
 }
 
+// Start begins gateway operation
 func (g *Gateway) Start() error {
 	var err error
 	if g.MarketData != nil {
@@ -76,6 +78,7 @@ func (g *Gateway) Start() error {
 	return err
 }
 
+// Stop ceases gateway operation
 func (g *Gateway) Stop() {
 	if g.OrderRouting != nil {
 		g.OrderRouting.Stop()
@@ -85,6 +88,7 @@ func (g *Gateway) Stop() {
 	}
 }
 
+// New creates a gateway given the supplied settings
 func New(mdSettings, orderSettings *quickfix.Settings, factory peer.ClientFactory, symbology symbol.Symbology) (*Gateway, error) {
 	g := &Gateway{
 		logger:  log.Logger,
@@ -108,6 +112,7 @@ func New(mdSettings, orderSettings *quickfix.Settings, factory peer.ClientFactor
 	return g, nil
 }
 
+// NonceFactory provides a simple interface for generating nonces
 type NonceFactory interface {
 	Create()
 }

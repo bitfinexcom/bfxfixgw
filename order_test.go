@@ -13,8 +13,8 @@ import (
 //TestNewOrderSingle assures the gateway service will publish an OrderNew websocket message when receiving a FIX42 NewOrderSingle
 func TestNewOrderSingleBuyLimitFill(t *testing.T) {
 	set := mockFixSettings{
-		ApiKey:     "apiKey1",
-		ApiSecret:  "apiSecret2",
+		APIKey:     "apiKey1",
+		APISecret:  "apiSecret2",
 		BfxUserID:  "user123",
 		FixVersion: Fix42,
 	}
@@ -132,8 +132,8 @@ func TestNewOrderSingleBuyLimitFill(t *testing.T) {
 
 func TestNewOrderSingleSellMarketFill(t *testing.T) {
 	set := mockFixSettings{
-		ApiKey:     "apiKey1",
-		ApiSecret:  "apiSecret2",
+		APIKey:     "apiKey1",
+		APISecret:  "apiSecret2",
 		BfxUserID:  "user123",
 		FixVersion: Fix42,
 	}
@@ -263,8 +263,8 @@ func TestNewOrderSingleSellMarketFill(t *testing.T) {
 
 func TestNewOrderSingleRejectBadPrice(t *testing.T) {
 	set := mockFixSettings{
-		ApiKey:     "apiKey1",
-		ApiSecret:  "apiSecret2",
+		APIKey:     "apiKey1",
+		APISecret:  "apiSecret2",
 		BfxUserID:  "user123",
 		FixVersion: Fix42,
 	}
@@ -355,8 +355,8 @@ func TestNewOrderSingleRejectBadPrice(t *testing.T) {
 
 func TestNewOrderSingleRejectBadSymbol(t *testing.T) {
 	set := mockFixSettings{
-		ApiKey:     "apiKey1",
-		ApiSecret:  "apiSecret2",
+		APIKey:     "apiKey1",
+		APISecret:  "apiSecret2",
 		BfxUserID:  "user123",
 		FixVersion: Fix42,
 	}

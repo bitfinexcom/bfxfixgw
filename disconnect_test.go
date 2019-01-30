@@ -7,8 +7,8 @@ import (
 
 func TestDisconnect(t *testing.T) {
 	set := mockFixSettings{
-		ApiKey:     "apiKey1",
-		ApiSecret:  "apiSecret2",
+		APIKey:     "apiKey1",
+		APISecret:  "apiSecret2",
 		BfxUserID:  "user123",
 		FixVersion: Fix42,
 	}

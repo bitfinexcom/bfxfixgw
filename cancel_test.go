@@ -14,8 +14,8 @@ import (
 
 func TestOrderCancelSimple(t *testing.T) {
 	set := mockFixSettings{
-		ApiKey:     "apiKey1",
-		ApiSecret:  "apiSecret2",
+		APIKey:     "apiKey1",
+		APISecret:  "apiSecret2",
 		BfxUserID:  "user123",
 		FixVersion: Fix42,
 	}
@@ -147,8 +147,8 @@ func TestOrderCancelSimple(t *testing.T) {
 
 func TestOrderCancelInFlightFillOK(t *testing.T) {
 	set := mockFixSettings{
-		ApiKey:     "apiKey1",
-		ApiSecret:  "apiSecret2",
+		APIKey:     "apiKey1",
+		APISecret:  "apiSecret2",
 		BfxUserID:  "user123",
 		FixVersion: Fix42,
 	}
@@ -293,8 +293,8 @@ func TestOrderCancelInFlightFillOK(t *testing.T) {
 
 func TestOrderCancelUnknownOrder(t *testing.T) {
 	set := mockFixSettings{
-		ApiKey:     "apiKey1",
-		ApiSecret:  "apiSecret2",
+		APIKey:     "apiKey1",
+		APISecret:  "apiSecret2",
 		BfxUserID:  "user123",
 		FixVersion: Fix42,
 	}
@@ -381,8 +381,8 @@ func TestOrderCancelUnknownOrder(t *testing.T) {
 
 func TestOrderCancelInFlightFillReject(t *testing.T) {
 	set := mockFixSettings{
-		ApiKey:     "apiKey1",
-		ApiSecret:  "apiSecret2",
+		APIKey:     "apiKey1",
+		APISecret:  "apiSecret2",
 		BfxUserID:  "user123",
 		FixVersion: Fix42,
 	}

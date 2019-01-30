@@ -44,7 +44,7 @@ func (t *testNonceFactory) New() utils.NonceGenerator {
 type testClientFactory struct {
 	Params *websocket.Parameters
 	Nonce  *testNonceFactory
-	HttpDo func(c *http.Client, req *http.Request) (*http.Response, error)
+	HTTPDo func(c *http.Client, req *http.Request) (*http.Response, error)
 }
 
 func (m *testClientFactory) NewWs() *websocket.Client {
@@ -52,7 +52,7 @@ func (m *testClientFactory) NewWs() *websocket.Client {
 }
 
 func (m *testClientFactory) NewRest() *rest.Client {
-	return rest.NewClientWithHttpDo(m.HttpDo)
+	return rest.NewClientWithHttpDo(m.HTTPDo)
 }
 
 func loadSettings(file string) *quickfix.Settings {
@@ -68,7 +68,7 @@ func loadSettings(file string) *quickfix.Settings {
 }
 
 type mockFixSettings struct {
-	ApiKey, ApiSecret, BfxUserID string
+	APIKey, APISecret, BfxUserID string
 	FixVersion                   fixVersion
 }
 
@@ -119,7 +119,7 @@ func setupWithClientCheck(t *testing.T, port int, settings mockFixSettings, chec
 	factory := testClientFactory{
 		Params: params,
 		Nonce:  &testNonceFactory{},
-		HttpDo: httpDo,
+		HTTPDo: httpDo,
 	}
 	// create gateway
 	gatewayMdSettings := loadSettings(fmt.Sprintf("conf/integration_test/service/marketdata_%s.cfg", settings.FixVersion))
@@ -139,8 +139,8 @@ func setupWithClientCheck(t *testing.T, port int, settings mockFixSettings, chec
 	if err != nil {
 		t.Fatal(err)
 	}
-	clientMDFix.ApiKey = settings.ApiKey
-	clientMDFix.ApiSecret = settings.ApiSecret
+	clientMDFix.ApiKey = settings.APIKey
+	clientMDFix.ApiSecret = settings.APISecret
 	clientMDFix.BfxUserID = settings.BfxUserID
 	if err != nil {
 		t.Fatalf("could not create FIX md client: %s", err.Error())
@@ -155,8 +155,8 @@ func setupWithClientCheck(t *testing.T, port int, settings mockFixSettings, chec
 
 	clientOrdSettings := loadSettings(fmt.Sprintf("conf/integration_test/client/orders_%s.cfg", settings.FixVersion))
 	clientOrdFix, err := mock.NewTestFixClient(clientOrdSettings, quickfix.NewFileStoreFactory(clientOrdSettings), "Orders")
-	clientOrdFix.ApiKey = settings.ApiKey
-	clientOrdFix.ApiSecret = settings.ApiSecret
+	clientOrdFix.ApiKey = settings.APIKey
+	clientOrdFix.ApiSecret = settings.APISecret
 	clientOrdFix.BfxUserID = settings.BfxUserID
 	if err != nil {
 		t.Fatalf("could not create FIX ord client: %s", err.Error())
@@ -183,8 +183,8 @@ func setup(t *testing.T, port int, settings mockFixSettings) (*mock.TestFixClien
 //TestLogon assures the gateway service will authenticate a websocket connection when receiving a FIX Logon message with valid credentials.
 func TestLogon(t *testing.T) {
 	set := mockFixSettings{
-		ApiKey:     "apiKey1",
-		ApiSecret:  "apiSecret2",
+		APIKey:     "apiKey1",
+		APISecret:  "apiSecret2",
 		BfxUserID:  "user123",
 		FixVersion: Fix42,
 	}

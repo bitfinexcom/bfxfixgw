@@ -42,8 +42,8 @@
   name = "github.com/quickfixgo/fix42"
 
 [[constraint]]
+  branch = "master"
   name = "github.com/quickfixgo/quickfix"
-  version = "0.6.0"
 
 [[constraint]]
   branch = "master"

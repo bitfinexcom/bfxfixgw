@@ -16,6 +16,20 @@
   revision = "5fe2d8e4a58fb44f345ac0cb6f07e6dff3e1f386"
 
 [[projects]]
+  branch = "master"
+  digest = "1:78102ee4d536347316bc42e818340cc50902e45dbd7fdd524c5a1fc0cb07b588"
+  name = "github.com/globalsign/mgo"
+  packages = [
+    ".",
+    "bson",
+    "internal/json",
+    "internal/sasl",
+    "internal/scram",
+  ]
+  pruneopts = "UT"
+  revision = "eeefdecb41b842af6dc652aaea4026e8403e62df"
+
+[[projects]]
   digest = "1:d6a102c4dd15b20131fce54527d14bc0c5cbf728d944d674af7b6342464274a7"
   name = "github.com/gorilla/websocket"
   packages = ["."]
@@ -60,18 +74,17 @@
   revision = "86a4567f1c77d1e24a584caaa04b25762c9af960"
 
 [[projects]]
-  digest = "1:9709b8559df6ffd8cfe9c2b366473e68e03a60042f3a1168f32c7a69c99b282b"
+  branch = "master"
+  digest = "1:22e48938e888d7b69b91a4c867720ce2183b7e255218b62e80e2811e4735ac51"
   name = "github.com/quickfixgo/quickfix"
   packages = [
     ".",
     "config",
     "datadictionary",
-    "enum",
     "internal",
   ]
   pruneopts = "UT"
-  revision = "90abc7fbcb82e4f15f75a593ea947667810c019e"
-  version = "v0.6.0"
+  revision = "5bcdd16d49b0d1d8eaec019f502b7d2949444f0c"
 
 [[projects]]
   branch = "master"
@@ -89,11 +102,12 @@
   revision = "5bf94b69c6b68ee1b541973bb8e1144db23a194b"
 
 [[projects]]
-  digest = "1:c601788614ad0d125720d6f81c436898a9ec7184e0e5633089e30eb0a0e175e0"
+  branch = "master"
+  digest = "1:81e02c4edb639c80559c0650f9401d3e2dcc3256d1fa215382bb7c83c1db9126"
   name = "github.com/shopspring/decimal"
   packages = ["."]
   pruneopts = "UT"
-  revision = "faaed5fca71709f7bb4e0b0e564089c7a4a1b3a8"
+  revision = "cd690d0c9e2447b1ef2a129a6b7b49077da89b8e"
 
 [[projects]]
   digest = "1:777e729b475d3895c7229552aa10076f0d177daf37c0a72258006d046d329960"

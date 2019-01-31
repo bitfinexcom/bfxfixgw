@@ -157,11 +157,6 @@ func FIX42MarketDataIncrementalRefreshFromBookUpdate(mdReqID string, update *bit
 
 // FIX42ExecutionReport generates a FIX execution report from provided order details
 func FIX42ExecutionReport(symbol, clOrdID, orderID, account string, execType enum.ExecType, side enum.Side, origQty, thisQty, cumQty, px, stop, trail, avgPx float64, ordStatus enum.OrdStatus, ordType enum.OrdType, tif enum.TimeInForce, text string, symbology symbol.Symbology, counterparty string, flags int) fix42er.ExecutionReport {
-	uid, err := uuid.NewV4()
-	execID := ""
-	if err == nil {
-		execID = uid.String()
-	}
 	// total order qty
 	amt := decimal.NewFromFloat(origQty)
 
@@ -195,7 +190,7 @@ func FIX42ExecutionReport(symbol, clOrdID, orderID, account string, execType enu
 
 	e := fix42er.New(
 		field.NewOrderID(orderID),
-		field.NewExecID(execID),
+		field.NewExecID(uuid.NewV4().String()),
 		field.NewExecTransType(enum.ExecTransType_STATUS),
 		field.NewExecType(execType),
 		field.NewOrdStatus(ordStatus),

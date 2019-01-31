@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/quickfixgo/quickfix/datadictionary"
-	"github.com/quickfixgo/quickfix/enum"
 )
 
 //Header is first section of a FIX Message
@@ -115,6 +114,22 @@ func NewMessage() *Message {
 	return m
 }
 
+// CopyInto erases the dest messages and copies the curreny message content
+// into it.
+func (m *Message) CopyInto(to *Message) {
+	m.Header.CopyInto(&to.Header.FieldMap)
+	m.Body.CopyInto(&to.Body.FieldMap)
+	m.Trailer.CopyInto(&to.Trailer.FieldMap)
+
+	to.ReceiveTime = m.ReceiveTime
+	to.bodyBytes = make([]byte, len(m.bodyBytes))
+	copy(to.bodyBytes, m.bodyBytes)
+	to.fields = make([]TagValue, len(m.fields))
+	for i := range to.fields {
+		to.fields[i].init(m.fields[i].tag, m.fields[i].value)
+	}
+}
+
 //ParseMessage constructs a Message from a byte slice wrapping a FIX message.
 func ParseMessage(msg *Message, rawMessage *bytes.Buffer) (err error) {
 	return ParseMessageWithDataDictionary(msg, rawMessage, nil, nil)
@@ -140,6 +155,10 @@ func ParseMessageWithDataDictionary(
 		if b == '\001' {
 			fieldCount++
 		}
+	}
+
+	if fieldCount == 0 {
+		return parseError{OrigError: fmt.Sprintf("No Fields detected in %s", string(rawBytes))}
 	}
 
 	if cap(msg.fields) < fieldCount {
@@ -256,16 +275,12 @@ func isTrailerField(tag Tag, dataDict *datadictionary.DataDictionary) bool {
 }
 
 // MsgType returns MsgType (tag 35) field's value
-func (m *Message) MsgType() (enum.MsgType, MessageRejectError) {
-	s, err := m.Header.GetString(tagMsgType)
-	if err != nil {
-		return enum.MsgType(""), err
-	}
-	return enum.MsgType(s), nil
+func (m *Message) MsgType() (string, MessageRejectError) {
+	return m.Header.GetString(tagMsgType)
 }
 
 // IsMsgTypeOf returns true if the Header contains MsgType (tag 35) field and its value is the specified one.
-func (m *Message) IsMsgTypeOf(msgType enum.MsgType) bool {
+func (m *Message) IsMsgTypeOf(msgType string) bool {
 	if v, err := m.MsgType(); err == nil {
 		return v == msgType
 	}
@@ -301,7 +316,7 @@ func (m *Message) reverseRoute() *Message {
 	//tags added in 4.1
 	var beginString FIXString
 	if m.Header.GetField(tagBeginString, &beginString) == nil {
-		if string(beginString) != enum.BeginStringFIX40 {
+		if string(beginString) != BeginStringFIX40 {
 			copy(tagOnBehalfOfLocationID, tagDeliverToLocationID)
 			copy(tagDeliverToLocationID, tagOnBehalfOfLocationID)
 		}

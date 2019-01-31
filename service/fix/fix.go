@@ -76,11 +76,11 @@ func (f *FIX) FromAdmin(msg *quickfix.Message, sID quickfix.SessionID) quickfix.
 	f.logger.Info("FIX.FromAdmin", zap.Any("msg", msg))
 
 	if msg.IsMsgTypeOf(msgTypeLogon) {
-		peer := f.Peers.AddPeer(sID)
-		go func() {
+		peerAdded := f.Peers.AddPeer(sID)
+		go func(session string) {
 			select {
-			case dc := <-peer.ListenDisconnect():
-				if dc {
+			case dc := <-peerAdded.ListenDisconnect():
+				if _, ok := f.FindPeer(session); dc && ok {
 					if errReportDisconnect := logout("downstream disconnect", sID); errReportDisconnect != nil {
 						//If disconnect cannot be reported, we are in unrecoverable state
 						//Best to panic and let the gateway come back online
@@ -88,7 +88,7 @@ func (f *FIX) FromAdmin(msg *quickfix.Message, sID quickfix.SessionID) quickfix.
 					}
 				}
 			}
-		}()
+		}(sID.String())
 		apiKey, err := msg.Body.GetString(tagBfxAPIKey)
 		if err != nil || apiKey == "" {
 			f.logger.Warn("received Logon without BfxApiKey (20000)", zap.Error(err))

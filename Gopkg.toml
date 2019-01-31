@@ -24,6 +24,7 @@
 #   go-tests = true
 #   unused-packages = true
 
+required = ["golang.org/x/lint/golint", "github.com/kisielk/errcheck"]
 
 [[constraint]]
   branch = "master"
@@ -52,7 +53,3 @@
 [prune]
   go-tests = true
   unused-packages = true
-
-[[constraint]]
-  branch = "master"
-  name = "golang.org/x/lint"

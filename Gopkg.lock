@@ -37,6 +37,17 @@
   revision = "3da6ca0cb65383f2b607a677b6b55e8358cacee6"
 
 [[projects]]
+  digest = "1:b472339040c571f1085e429ad08d94218bc3fc7a635c99fd95e3f80382413317"
+  name = "github.com/kisielk/errcheck"
+  packages = [
+    ".",
+    "internal/errcheck",
+  ]
+  pruneopts = "UT"
+  revision = "e14f8d59a22d460d56c5ee92507cd94c78fbf274"
+  version = "v1.2.0"
+
+[[projects]]
   branch = "master"
   digest = "1:a999a78d1aba5ffaa739e06c549ebaec5f7be337662395ba1a095830b0378603"
   name = "github.com/quickfixgo/enum"
@@ -152,13 +163,19 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:003313a2b3fc801360f6c6e437d1200199959370ca6e16816846d4664c33735b"
+  digest = "1:987d9f44d16c3d51b1c233c0f4886eb9c83ff66d14cd531194a88731efa4421b"
   name = "golang.org/x/tools"
   packages = [
     "go/ast/astutil",
     "go/gcexportdata",
+    "go/internal/cgo",
     "go/internal/gcimporter",
+    "go/internal/packagesdriver",
+    "go/packages",
     "go/types/typeutil",
+    "internal/fastwalk",
+    "internal/gopathwalk",
+    "internal/semver",
   ]
   pruneopts = "UT"
   revision = "067a2f313b693f3c2d3c0eb328434c91c7fc9b6b"
@@ -173,6 +190,7 @@
     "github.com/bitfinexcom/bitfinex-api-go/v2/rest",
     "github.com/bitfinexcom/bitfinex-api-go/v2/websocket",
     "github.com/gorilla/websocket",
+    "github.com/kisielk/errcheck",
     "github.com/quickfixgo/enum",
     "github.com/quickfixgo/field",
     "github.com/quickfixgo/fix42/businessmessagereject",

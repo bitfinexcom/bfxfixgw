@@ -189,9 +189,20 @@ func (s *Ws) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s.serveWs(w, r)
 }
 
+//KillConnections closes all active connections
+func (s *Ws) KillConnections() (err error) {
+	for c := range s.clients {
+		log.Printf("killing connection for client %d:\n", c.ID)
+		if err = c.Conn.Close(); err != nil {
+			return
+		}
+	}
+	return
+}
+
 //Stop ceases listening to http
-func (s *Ws) Stop() {
-	s.listener.Close()
+func (s *Ws) Stop() error {
+	return s.listener.Close()
 }
 
 //Start begins listening to http

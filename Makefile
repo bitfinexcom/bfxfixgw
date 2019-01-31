@@ -1,7 +1,8 @@
 all: lint check build install
 
 lint:
-	golint -set_exit_status $(go list ./... | grep -v /vendor/)
+	go run ./vendor/golang.org/x/lint/golint -set_exit_status $(go list ./... | grep -v /vendor/) && \
+	echo hello
 
 check:
 	go test -v ./...

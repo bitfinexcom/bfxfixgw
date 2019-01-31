@@ -139,6 +139,30 @@
   pruneopts = "UT"
   revision = "f85c78b1dd998214c5f2138155b320a4a43fbe36"
 
+[[projects]]
+  branch = "master"
+  digest = "1:395763139fd6f101dd123c1b124d8c4ae614f37b09690a8675e9d523dbb2557f"
+  name = "golang.org/x/lint"
+  packages = [
+    ".",
+    "golint",
+  ]
+  pruneopts = "UT"
+  revision = "8f45f776aaf18cebc8d65861cc70c33c60471952"
+
+[[projects]]
+  branch = "master"
+  digest = "1:003313a2b3fc801360f6c6e437d1200199959370ca6e16816846d4664c33735b"
+  name = "golang.org/x/tools"
+  packages = [
+    "go/ast/astutil",
+    "go/gcexportdata",
+    "go/internal/gcimporter",
+    "go/types/typeutil",
+  ]
+  pruneopts = "UT"
+  revision = "067a2f313b693f3c2d3c0eb328434c91c7fc9b6b"
+
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
@@ -167,6 +191,7 @@
     "github.com/satori/go.uuid",
     "github.com/shopspring/decimal",
     "go.uber.org/zap",
+    "golang.org/x/lint/golint",
   ]
   solver-name = "gps-cdcl"
   solver-version = 1

@@ -1,8 +1,9 @@
 all: lint check build install
 
 lint:
-	go run ./vendor/golang.org/x/lint/golint -set_exit_status $(go list ./... | grep -v /vendor/) && \
-	go run ./vendor/github.com/kisielk/errcheck -ignoretests ./...
+	go build -o ./tmp/golint ./vendor/golang.org/x/lint/golint && go build -o ./tmp/errcheck ./vendor/github.com/kisielk/errcheck && \
+	./tmp/golint -set_exit_status $(go list ./... | grep -v /vendor/) && \
+	./tmp/errcheck -ignoretests ./...
 
 check:
 	go test -v ./...

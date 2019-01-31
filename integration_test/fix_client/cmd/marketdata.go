@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"strconv"
@@ -48,15 +49,15 @@ type MarketData struct {
 }
 
 //Execute builds Market Data messages
-func (m *MarketData) Execute(keyboard <-chan string, publisher FIXPublisher) {
+func (m *MarketData) Execute(keyboard <-chan string, publisher FIXPublisher) error {
 	log.Print("-> Market Data Request")
 	log.Print("Enter symbol: ")
 	symbol := <-keyboard
 	log.Print("Raw? (false for price aggregation)")
 	raw, err := strconv.ParseBool(<-keyboard)
 	if err != nil {
-		log.Printf("raw not bool: %s", err.Error())
-		return
+		errMsg := fmt.Sprintf("raw not bool: %s", err.Error())
+		return errors.New(errMsg)
 	}
 	var agg string
 	if !raw {
@@ -67,13 +68,16 @@ func (m *MarketData) Execute(keyboard <-chan string, publisher FIXPublisher) {
 	lv := <-keyboard
 	depth, err := strconv.Atoi(lv)
 	if err != nil {
-		log.Printf("depth not int: %s", err.Error())
-		return
+		errMsg := fmt.Sprintf("depth not int: %s", err.Error())
+		return errors.New(errMsg)
 	}
 	reqs := buildFixMdRequests([]string{symbol}, depth, raw, agg)
 	for _, req := range reqs {
-		publisher.SendFIX(req)
+		if err := publisher.SendFIX(req); err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
 //Handle processes Market Data messages

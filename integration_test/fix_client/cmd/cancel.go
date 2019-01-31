@@ -20,7 +20,7 @@ type Cancel struct {
 }
 
 //Execute builds an Order Cancel FIX message
-func (c *Cancel) Execute(keyboard <-chan string, publisher FIXPublisher) {
+func (c *Cancel) Execute(keyboard <-chan string, publisher FIXPublisher) error {
 	log.Print("-> Cancel")
 	log.Printf("Enter ClOrdID to cancel (integer): ")
 	cancelid := <-keyboard
@@ -38,7 +38,7 @@ func (c *Cancel) Execute(keyboard <-chan string, publisher FIXPublisher) {
 		side = enum.Side_SELL
 	}
 	cancel := buildFixCancel(cancelid, clordid, symbol, side)
-	publisher.SendFIX(cancel)
+	return publisher.SendFIX(cancel)
 }
 
 //Handle processes the Cancel FIX message

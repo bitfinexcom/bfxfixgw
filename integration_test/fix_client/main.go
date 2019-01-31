@@ -72,7 +72,9 @@ func main() {
 	client.APISecret = apiSecret
 	client.BfxUserID = bfxUser
 	client.CancelOnDisconnect = *cod
-	client.Start()
+	if err = client.Start(); err != nil {
+		log.Fatal(err)
+	}
 
 	go control.run()
 

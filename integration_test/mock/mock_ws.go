@@ -38,11 +38,15 @@ func (c *client) writePump() {
 func (c *client) readPump() {
 	defer func() {
 		c.parent.unregister <- c
-		c.Conn.Close()
+		if err := c.Conn.Close(); err != nil {
+			log.Printf("error on read pump close: %v", err)
+		}
 	}()
 	c.Conn.SetReadLimit(512)
-	c.Conn.SetReadDeadline(time.Now().Add(10 * time.Second))
-	c.Conn.SetPongHandler(func(string) error { c.Conn.SetReadDeadline(time.Now().Add(10 * time.Second)); return nil })
+	if errDeadline := c.Conn.SetReadDeadline(time.Now().Add(10 * time.Second)); errDeadline != nil {
+		panic(errDeadline)
+	}
+	c.Conn.SetPongHandler(func(string) error { return c.Conn.SetReadDeadline(time.Now().Add(10 * time.Second)) })
 	for {
 		_, message, err := c.Conn.ReadMessage()
 		if err != nil {
@@ -213,7 +217,11 @@ func (s *Ws) Start() error {
 		return err
 	}
 	s.listener = l
-	go http.Serve(s.listener, s)
+	go func() {
+		if err := http.Serve(s.listener, s); err != nil {
+			log.Printf("error on closing http Ws server: %v", err)
+		}
+	}()
 	return nil
 }
 

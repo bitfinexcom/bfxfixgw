@@ -21,8 +21,8 @@ type Session struct {
 }
 
 // Send emits a FIX message
-func (s *Session) Send(msg fix.Messagable) {
-	fix.SendToTarget(msg, s.ID)
+func (s *Session) Send(msg fix.Messagable) error {
+	return fix.SendToTarget(msg, s.ID)
 }
 
 // TestFixClient is a FIX client for testing purposes
@@ -95,13 +95,15 @@ func (m *TestFixClient) LastSession() *Session {
 }
 
 //SendFIX emits a FIX message
-func (m *TestFixClient) SendFIX(msg fix.Messagable) {
+func (m *TestFixClient) SendFIX(msg fix.Messagable) (err error) {
 	if len(m.Sessions) > 0 {
 		for _, s := range m.Sessions {
-			s.Send(msg)
-			return
+			if err = s.Send(msg); err != nil {
+				return
+			}
 		}
 	}
+	return
 }
 
 //NewTestFixClient creates a new testing FIX client
@@ -221,7 +223,9 @@ func (m *TestFixClient) onLogon(sessionID fix.SessionID) {
 	}
 	go func() {
 		for _, msg := range m.sendOnLogon {
-			fix.SendToTarget(msg, sessionID)
+			if err := fix.SendToTarget(msg, sessionID); err != nil {
+				log.Fatal(err)
+			}
 		}
 	}()
 }

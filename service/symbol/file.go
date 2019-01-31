@@ -67,14 +67,13 @@ func NewFileSymbology(path string) (*FileSymbology, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
 	s := &FileSymbology{counterparties: make(map[string]*symbolset)}
 	scanner := bufio.NewScanner(f)
 	scanner.Split(bufio.ScanLines)
 	for scanner.Scan() {
 		s.parse(scanner.Text())
 	}
-	return s, nil
+	return s, f.Close()
 }
 
 // ToBitfinex converts symbol to Bitfinex form

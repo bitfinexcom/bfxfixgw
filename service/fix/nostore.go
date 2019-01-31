@@ -14,10 +14,10 @@ func NewNoStoreFactory() fix.MessageStoreFactory {
 type noStoreFactory struct {
 }
 
-func (nsf *noStoreFactory) Create(sessionID fix.SessionID) (fix.MessageStore, error) {
-	store := new(noStore)
-	store.Reset()
-	return store, nil
+func (nsf *noStoreFactory) Create(sessionID fix.SessionID) (store fix.MessageStore, err error) {
+	store = new(noStore)
+	err = store.Reset()
+	return
 }
 
 type noStore struct {

@@ -81,7 +81,11 @@ func (f *FIX) FromAdmin(msg *quickfix.Message, sID quickfix.SessionID) quickfix.
 			select {
 			case dc := <-peer.ListenDisconnect():
 				if dc {
-					logout("downstream disconnect", sID)
+					if errReportDisconnect := logout("downstream disconnect", sID); errReportDisconnect != nil {
+						//If disconnect cannot be reported, we are in unrecoverable state
+						//Best to panic and let the gateway come back online
+						panic(errReportDisconnect)
+					}
 				}
 			}
 		}()
@@ -104,7 +108,9 @@ func (f *FIX) FromAdmin(msg *quickfix.Message, sID quickfix.SessionID) quickfix.
 			cod, _ := msg.Body.GetBool(tagCancelOnDisconnect)
 			err := p.Logon(apiKey, apiSecret, bfxUserID, cod)
 			if err != nil {
-				logout(err.Error(), sID)
+				if err = logout(err.Error(), sID); err != nil {
+					return reject(err)
+				}
 			}
 		} else {
 			f.logger.Warn("could not find peer", zap.String("SessionID", sID.String()))

@@ -31,6 +31,9 @@ import (
 const (
 	// PricePrecision is the FIX tag to specify a book subscription price precision
 	PricePrecision quickfix.Tag = 20003
+
+	// TimeInForceFormat is the string format required for a dynamic expiration date
+	TimeInForceFormat = "2006-01-02 15:04:05"
 )
 
 // Handle FIX42 messages and process them upstream to Bitfinex.
@@ -92,12 +95,29 @@ func (f *FIX) OnFIX42NewOrderSingle(msg nos.NewOrderSingle, sID quickfix.Session
 		return err
 	}
 
-	ordtype, _ := msg.GetOrdType()
-	clordid, _ := msg.GetClOrdID()
-	side, _ := msg.GetSide()
-	tif, err := msg.GetTimeInForce()
+	ordtype, err := msg.GetOrdType()
 	if err != nil {
-		tif = enum.TimeInForce_GOOD_TILL_CANCEL // default TIF
+		return err
+	}
+	clordid, err := msg.GetClOrdID()
+	if err != nil {
+		return err
+	}
+	side, err := msg.GetSide()
+	if err != nil {
+		return err
+	}
+	tif := enum.TimeInForce_GOOD_TILL_CANCEL // default TIF
+	if msg.HasTimeInForce() {
+		if tif, err = msg.GetTimeInForce(); err != nil {
+			return err
+		} else if tif == enum.TimeInForce_GOOD_TILL_DATE {
+			expirationDate, err := msg.GetExpireTime()
+			if err != nil {
+				return err
+			}
+			bo.TimeInForce = expirationDate.Format(TimeInForceFormat)
+		}
 	}
 
 	flags := 0

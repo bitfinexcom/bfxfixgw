@@ -65,7 +65,7 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:bd2792b7d1943f1f12c552a54f49cd6705d553e63593a85f1d26d7ee558ae328"
+  digest = "1:f217a61e525cd496eed9adc99c264d16689a79fd7879168e106c7038fa737376"
   name = "github.com/quickfixgo/fix42"
   packages = [
     ".",
@@ -78,6 +78,7 @@
     "marketdatasnapshotfullrefresh",
     "newordersingle",
     "ordercancelreject",
+    "ordercancelreplacerequest",
     "ordercancelrequest",
     "orderstatusrequest",
   ]
@@ -202,6 +203,7 @@
     "github.com/quickfixgo/fix42/marketdatasnapshotfullrefresh",
     "github.com/quickfixgo/fix42/newordersingle",
     "github.com/quickfixgo/fix42/ordercancelreject",
+    "github.com/quickfixgo/fix42/ordercancelreplacerequest",
     "github.com/quickfixgo/fix42/ordercancelrequest",
     "github.com/quickfixgo/fix42/orderstatusrequest",
     "github.com/quickfixgo/quickfix",

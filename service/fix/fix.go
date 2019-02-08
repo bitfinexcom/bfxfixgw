@@ -11,6 +11,7 @@ import (
 
 	fix42mdr "github.com/quickfixgo/fix42/marketdatarequest"
 	fix42nos "github.com/quickfixgo/fix42/newordersingle"
+	fix42ocrr "github.com/quickfixgo/fix42/ordercancelreplacerequest"
 	fix42ocr "github.com/quickfixgo/fix42/ordercancelrequest"
 	fix42osr "github.com/quickfixgo/fix42/orderstatusrequest"
 	"github.com/quickfixgo/quickfix"
@@ -151,6 +152,7 @@ func New(s *quickfix.Settings, peers peer.Peers, serviceType ServiceType, symbol
 	}
 	if serviceType == OrderRoutingService {
 		f.AddRoute(fix42nos.Route(f.OnFIX42NewOrderSingle))
+		f.AddRoute(fix42ocrr.Route(f.OnFIX42OrderCancelReplaceRequest))
 		f.AddRoute(fix42ocr.Route(f.OnFIX42OrderCancelRequest))
 		f.AddRoute(fix42osr.Route(f.OnFIX42OrderStatusRequest))
 		storeFactory = quickfix.NewFileStoreFactory(s)

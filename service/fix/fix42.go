@@ -16,6 +16,7 @@ import (
 	mdrr "github.com/quickfixgo/fix42/marketdatarequestreject"
 	nos "github.com/quickfixgo/fix42/newordersingle"
 	ocj "github.com/quickfixgo/fix42/ordercancelreject"
+	ocrr "github.com/quickfixgo/fix42/ordercancelreplacerequest"
 	ocr "github.com/quickfixgo/fix42/ordercancelrequest"
 	osr "github.com/quickfixgo/fix42/orderstatusrequest"
 
@@ -145,6 +146,18 @@ func (f *FIX) OnFIX42NewOrderSingle(msg nos.NewOrderSingle, sID quickfix.Session
 	}
 
 	return nil
+}
+
+// OnFIX42OrderCancelReplaceRequest handles an Order Cancel Replace FIX message
+func (f *FIX) OnFIX42OrderCancelReplaceRequest(msg ocrr.OrderCancelReplaceRequest, sID quickfix.SessionID) quickfix.MessageRejectError {
+	_, ok := f.FindPeer(sID.String())
+	if !ok {
+		f.logger.Warn("could not find peer for SessionID", zap.String("SessionID", sID.String()))
+		return quickfix.NewMessageRejectError("could not find established peer for session ID", rejectReasonOther, nil)
+	}
+
+	//TODO: implement cancel replace handling
+	return quickfix.UnsupportedMessageType()
 }
 
 func reject(err error) quickfix.MessageRejectError {

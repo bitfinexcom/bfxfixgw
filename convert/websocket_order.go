@@ -13,6 +13,7 @@ import (
 
 	"github.com/bitfinexcom/bfxfixgw/service/symbol"
 	fix42nos "github.com/quickfixgo/fix42/newordersingle"
+	fix42ocrr "github.com/quickfixgo/fix42/ordercancelreplacerequest"
 )
 
 // OrderNewTypeFromFIX42NewOrderSingle takes a FIX42 NewOrderSingle and tries to extract enough information
@@ -151,4 +152,11 @@ func OrderNewFromFIX42NewOrderSingle(nos fix42nos.NewOrderSingle, symbology symb
 	}
 
 	return on, nil
+}
+
+// OrderUpdateFromFIX42OrderCancelReplaceReques converts an OrderCancelReplaceRequest
+// into an order update for the bitfinex websocket API, as best as it can.
+func OrderUpdateFromFIX42OrderCancelReplaceRequest(ocrr fix42ocrr.OrderCancelReplaceRequest, symbology symbol.Symbology, counterparty string) (*bitfinex.OrderUpdateRequest, quickfix.MessageRejectError) {
+	//TODO: implement conversion
+	return nil, nil
 }

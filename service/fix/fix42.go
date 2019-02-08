@@ -156,6 +156,11 @@ func (f *FIX) OnFIX42OrderCancelReplaceRequest(msg ocrr.OrderCancelReplaceReques
 		return quickfix.NewMessageRejectError("could not find established peer for session ID", rejectReasonOther, nil)
 	}
 
+	_, err := convert.OrderUpdateFromFIX42OrderCancelReplaceRequest(msg, f.Symbology, sID.TargetCompID)
+	if err != nil {
+		return err
+	}
+
 	//TODO: implement cancel replace handling
 	return quickfix.UnsupportedMessageType()
 }

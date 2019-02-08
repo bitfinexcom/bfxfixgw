@@ -4,9 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strconv"
-
 	"github.com/bitfinexcom/bfxfixgw/convert"
+	"strconv"
+	"time"
 
 	"go.uber.org/zap"
 
@@ -25,7 +25,7 @@ import (
 
 	lg "log"
 
-	bitfinex "github.com/bitfinexcom/bitfinex-api-go/v2"
+	"github.com/bitfinexcom/bitfinex-api-go/v2"
 )
 
 const (
@@ -40,7 +40,7 @@ const (
 
 var rejectReasonOther = 0
 
-func requestToOrder(o *bitfinex.OrderNewRequest) *bitfinex.Order {
+func requestToOrder(o *bitfinex.OrderNewRequest) (*bitfinex.Order, error) {
 	flags := 0
 	if o.PostOnly {
 		flags = flags | bitfinex.OrderFlagPostOnly
@@ -48,7 +48,7 @@ func requestToOrder(o *bitfinex.OrderNewRequest) *bitfinex.Order {
 	if o.Hidden {
 		flags = flags | bitfinex.OrderFlagHidden
 	}
-	return &bitfinex.Order{
+	ord := &bitfinex.Order{
 		GID:           o.GID,
 		CID:           o.CID,
 		Type:          o.Type,
@@ -60,6 +60,15 @@ func requestToOrder(o *bitfinex.OrderNewRequest) *bitfinex.Order {
 		Hidden:        o.Hidden,
 		Flags:         int64(flags),
 	}
+	if len(o.TimeInForce) > 0 {
+		tif, err := time.Parse(TimeInForceFormat, o.TimeInForce)
+		if err != nil {
+			return nil, err
+		}
+		ord.MTSTif = tif.UnixNano() / 1000000
+	}
+
+	return ord, nil
 }
 
 func requestToCxl(o *bitfinex.OrderCancelRequest) *bitfinex.OrderCancel {
@@ -120,21 +129,17 @@ func (f *FIX) OnFIX42NewOrderSingle(msg nos.NewOrderSingle, sID quickfix.Session
 		}
 	}
 
-	flags := 0
-	if bo.Hidden {
-		flags = flags | convert.FlagHidden
+	o, convErr := requestToOrder(bo)
+	if convErr != nil {
+		panic(convErr)
 	}
-	if bo.PostOnly {
-		flags = flags | convert.FlagPostOnly
-	}
-	p.AddOrder(clordid, bo.Price, bo.PriceAuxLimit, bo.PriceTrailing, bo.Amount, bo.Symbol, p.BfxUserID(), side, ordtype, tif, flags)
+	p.AddOrder(clordid, bo.Price, bo.PriceAuxLimit, bo.PriceTrailing, bo.Amount, bo.Symbol, p.BfxUserID(), side, ordtype, tif, o.MTSTif, int(o.Flags))
 	// order has been accepted by business logic in gateway, no more 35=j
 
 	e := p.Ws.SubmitOrder(context.Background(), bo)
 	if e != nil {
 		// should be an ER
-		o := requestToOrder(bo)
-		er := convert.FIX42ExecutionReportFromOrder(o, p.BfxUserID(), enum.ExecType_REJECTED, 0.0, enum.OrdStatus_REJECTED, e.Error(), f.Symbology, sID.TargetCompID, flags, bo.PriceAuxLimit, bo.PriceTrailing)
+		er := convert.FIX42ExecutionReportFromOrder(o, p.BfxUserID(), enum.ExecType_REJECTED, 0.0, enum.OrdStatus_REJECTED, e.Error(), f.Symbology, sID.TargetCompID, int(o.Flags), bo.PriceAuxLimit, bo.PriceTrailing)
 		f.logger.Warn("could not submit order", zap.Error(e))
 		return sendToTarget(er, sID)
 	}
@@ -427,10 +432,10 @@ func (f *FIX) OnFIX42OrderStatusRequest(msg osr.OrderStatusRequest, sID quickfix
 	orderID := strconv.FormatInt(order.ID, 10)
 	clOrdID := strconv.FormatInt(order.CID, 10)
 	ordtype := bitfinex.OrderType(order.Type)
-	tif := convert.TimeInForceToFIX(ordtype)
+	tif, _ := convert.TimeInForceToFIX(ordtype, order.MTSTif)
 	cached, err2 := peer.LookupByOrderID(orderID)
 	if err2 != nil {
-		cached = peer.AddOrder(clOrdID, order.Price, order.PriceAuxLimit, order.PriceTrailing, order.Amount, order.Symbol, peer.BfxUserID(), convert.SideToFIX(order.Amount), convert.OrdTypeToFIX(ordtype), tif, int(order.Flags))
+		cached = peer.AddOrder(clOrdID, order.Price, order.PriceAuxLimit, order.PriceTrailing, order.Amount, order.Symbol, peer.BfxUserID(), convert.SideToFIX(order.Amount), convert.OrdTypeToFIX(ordtype), tif, order.MTSTif, int(order.Flags))
 	}
 	status := convert.OrdStatusToFIX(order.Status)
 	er := convert.FIX42ExecutionReportFromOrder(order, peer.BfxUserID(), enum.ExecType_ORDER_STATUS, cached.FilledQty(), status, "", f.Symbology, sID.TargetCompID, cached.Flags, cached.Stop, cached.Trail)

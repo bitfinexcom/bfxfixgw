@@ -30,23 +30,25 @@ type CachedOrder struct {
 	Side                 enum.Side
 	OrderType            enum.OrdType
 	TimeInForce          enum.TimeInForce
+	TifExpiration        int64
 	Flags                int
 }
 
-func newOrder(clordid string, px, stop, trail, qty float64, symbol, account string, side enum.Side, ordType enum.OrdType, tif enum.TimeInForce, flags int) *CachedOrder {
+func newOrder(clordid string, px, stop, trail, qty float64, symbol, account string, side enum.Side, ordType enum.OrdType, tif enum.TimeInForce, exp int64, flags int) *CachedOrder {
 	return &CachedOrder{
-		ClOrdID:     clordid,
-		Px:          px,
-		Stop:        stop,
-		Trail:       trail,
-		Qty:         qty,
-		Executions:  make([]execution, 0),
-		Symbol:      symbol,
-		Account:     account,
-		Side:        side,
-		OrderType:   ordType,
-		TimeInForce: tif,
-		Flags:       flags,
+		ClOrdID:       clordid,
+		Px:            px,
+		Stop:          stop,
+		Trail:         trail,
+		Qty:           qty,
+		Executions:    make([]execution, 0),
+		Symbol:        symbol,
+		Account:       account,
+		Side:          side,
+		OrderType:     ordType,
+		TimeInForce:   tif,
+		TifExpiration: exp,
+		Flags:         flags,
 	}
 }
 
@@ -177,13 +179,13 @@ func (c *cache) ReverseLookupAPIReqIDs(bfxReqID string) (string, bool) {
 }
 
 // add when receiving a NewOrderSingle over FIX
-func (c *cache) AddOrder(clordid string, px, stop, trail, qty float64, symbol, account string, side enum.Side, ordType enum.OrdType, tif enum.TimeInForce, flags int) *CachedOrder {
+func (c *cache) AddOrder(clordid string, px, stop, trail, qty float64, symbol, account string, side enum.Side, ordType enum.OrdType, tif enum.TimeInForce, expTif int64, flags int) *CachedOrder {
 	if qty < 0 {
 		qty = -qty
 	}
 	c.lock.Lock()
 	c.log.Info("added order to cache", zap.String("ClOrdID", clordid), zap.Float64("Px", px), zap.Float64("Qty", qty))
-	order := newOrder(clordid, px, stop, trail, qty, symbol, account, side, ordType, tif, flags)
+	order := newOrder(clordid, px, stop, trail, qty, symbol, account, side, ordType, tif, expTif, flags)
 	c.orders[clordid] = order
 	c.lock.Unlock()
 	return order

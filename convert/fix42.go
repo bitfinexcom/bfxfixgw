@@ -23,6 +23,9 @@ import (
 	//fix42nos "github.com/quickfixgo/quickfix/fix42/newordersingle"
 )
 
+//OrderNotFoundText is the text that corresponds to an unknown order
+const OrderNotFoundText = "Order not found."
+
 // FIX42MarketDataFullRefreshFromTradeSnapshot generates a market data full refresh
 func FIX42MarketDataFullRefreshFromTradeSnapshot(mdReqID string, snapshot *bitfinex.TradeSnapshot, symbology symbol.Symbology, counterparty string) *fix42mdsfr.MarketDataSnapshotFullRefresh {
 	if len(snapshot.Snapshot) <= 0 {
@@ -304,14 +307,14 @@ func FIX42ExecutionReportFromTradeExecutionUpdate(t *bitfinex.TradeExecutionUpda
 
 func rejectReasonFromText(text string) enum.CxlRejReason {
 	switch text {
-	case "Order not found.":
+	case OrderNotFoundText:
 		return enum.CxlRejReason_UNKNOWN_ORDER
 	}
 	return enum.CxlRejReason_OTHER
 }
 
 // FIX42OrderCancelReject generates a cancel reject message
-func FIX42OrderCancelReject(account, orderID, origClOrdID, cxlClOrdID, text string) ocj.OrderCancelReject {
+func FIX42OrderCancelReject(account, orderID, origClOrdID, cxlClOrdID, text string, isCancelReplace bool) ocj.OrderCancelReject {
 	rejReason := rejectReasonFromText(text)
 	if rejReason == enum.CxlRejReason_UNKNOWN_ORDER {
 		orderID = "NONE" // FIX spec tag 37 in 35=9: If CxlRejReason="Unknown order", specify "NONE".
@@ -326,6 +329,9 @@ func FIX42OrderCancelReject(account, orderID, origClOrdID, cxlClOrdID, text stri
 	r.SetCxlRejReason(rejReason)
 	r.SetAccount(account)
 	r.SetText(text)
+	if isCancelReplace {
+		r.SetCxlRejResponseTo(enum.CxlRejResponseTo_ORDER_CANCEL_REPLACE_REQUEST)
+	}
 	return r
 }
 

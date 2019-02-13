@@ -174,7 +174,7 @@ func (w *Websocket) FIX42NotificationHandler(d *bitfinex.Notification, sID quick
 			if err == nil {
 				cxlClOrdID = cache.ClOrdID
 			}
-			return quickfix.SendToTarget(convert.FIX42OrderCancelReject(p.BfxUserID(), orderID, origClOrdID, cxlClOrdID, d.Text), sID)
+			return quickfix.SendToTarget(convert.FIX42OrderCancelReject(p.BfxUserID(), orderID, origClOrdID, cxlClOrdID, d.Text, false), sID)
 		} else if d.Status == "SUCCESS" {
 			clOrdID := strconv.FormatInt(o.CID, 10)
 			orig, err := p.LookupByClOrdID(clOrdID)

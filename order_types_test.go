@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	fix2 "github.com/bitfinexcom/bfxfixgw/service/fix"
+	"github.com/bitfinexcom/bfxfixgw/convert"
 	"testing"
 	"time"
 
@@ -71,7 +71,7 @@ func TestNewOrderSingleGTD(t *testing.T) {
 	srvWs.Broadcast(`{"event":"auth","status":"OK","chanId":0,"userId":1,"subId":"nonce1","auth_id":"valid-auth-guid","caps":{"orders":{"read":1,"write":0},"account":{"read":1,"write":0},"funding":{"read":1,"write":0},"history":{"read":1,"write":0},"wallets":{"read":1,"write":0},"withdraw":{"read":0,"write":0},"positions":{"read":1,"write":0}}}`)
 
 	// parse test expire time
-	expiration, err := time.Parse(fix2.TimeInForceFormat, "2006-01-02 15:04:05")
+	expiration, err := time.Parse(convert.TimeInForceFormat, "2006-01-02 15:04:05")
 	if err != nil {
 		t.Fatal(err)
 	}

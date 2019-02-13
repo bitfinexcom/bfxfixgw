@@ -20,16 +20,34 @@ go get ./...
 
 Local bfxfixgw source changes can be built by issuing the following commands from the ~/go/src/github.com/bitfinexcom/bfxfixgw directory.  The install command will copy the latest version of bfxfixgw and fix_client to ~/go/bin.
 
+Test:
+
+```bash
+make check
+```
+
+Linter:
+
+```bash
+make lint
+```
+
 Build:
 
 ```bash
-go build ./...
+make build
 ```
 
 And install binaries:
 
 ```bash
-go install ./...
+make install
+```
+
+Or do all above steps:
+
+```bash
+make all
 ```
 
 ## Configuration

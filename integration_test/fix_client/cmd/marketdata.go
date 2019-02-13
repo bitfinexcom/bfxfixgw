@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"strconv"
@@ -14,6 +15,7 @@ import (
 	"github.com/quickfixgo/tag"
 )
 
+//FixPricePrecision is the FIX tag for price precision
 const FixPricePrecision fix.Tag = 20003
 
 func newMdRequest(reqID, symbol string, depth int, precision string) *mdr.MarketDataRequest {
@@ -42,18 +44,20 @@ func buildFixMdRequests(symbols []string, depth int, raw bool, precLevel string)
 	return reqs
 }
 
+//MarketData is a FIX message builder for Market Data messages
 type MarketData struct {
 }
 
-func (m *MarketData) Execute(keyboard <-chan string, publisher FIXPublisher) {
+//Execute builds Market Data messages
+func (m *MarketData) Execute(keyboard <-chan string, publisher FIXPublisher) error {
 	log.Print("-> Market Data Request")
 	log.Print("Enter symbol: ")
 	symbol := <-keyboard
 	log.Print("Raw? (false for price aggregation)")
 	raw, err := strconv.ParseBool(<-keyboard)
 	if err != nil {
-		log.Printf("raw not bool: %s", err.Error())
-		return
+		errMsg := fmt.Sprintf("raw not bool: %s", err.Error())
+		return errors.New(errMsg)
 	}
 	var agg string
 	if !raw {
@@ -64,15 +68,19 @@ func (m *MarketData) Execute(keyboard <-chan string, publisher FIXPublisher) {
 	lv := <-keyboard
 	depth, err := strconv.Atoi(lv)
 	if err != nil {
-		log.Printf("depth not int: %s", err.Error())
-		return
+		errMsg := fmt.Sprintf("depth not int: %s", err.Error())
+		return errors.New(errMsg)
 	}
 	reqs := buildFixMdRequests([]string{symbol}, depth, raw, agg)
 	for _, req := range reqs {
-		publisher.SendFIX(req)
+		if err := publisher.SendFIX(req); err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
+//Handle processes Market Data messages
 func (m *MarketData) Handle(msg *fix.Message) {
 	msgtype, _ := msg.Header.GetString(tag.MsgType)
 	if msgtype == "X" || msgtype == "W" {

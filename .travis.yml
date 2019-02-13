@@ -1,1 +1,6 @@
 language: go
+env:
+  - ACTION=lint
+  - ACTION=check
+  - ACTION=build
+script: make $ACTION

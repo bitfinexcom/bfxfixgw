@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"errors"
+	"fmt"
 	"log"
 	"strconv"
 	"time"
@@ -33,10 +35,12 @@ func buildFixOrder(clordid, symbol string, px, stop, qty float64, side enum.Side
 	return &ord
 }
 
+//Order is a FIX message builder for Order messages
 type Order struct {
 }
 
-func (o *Order) Execute(keyboard <-chan string, publisher FIXPublisher) {
+//Execute builds FIX order messages
+func (o *Order) Execute(keyboard <-chan string, publisher FIXPublisher) error {
 	log.Print("-> New Order Single")
 	log.Printf("Enter ClOrdID (integer): ")
 	clordid := <-keyboard
@@ -69,8 +73,8 @@ func (o *Order) Execute(keyboard <-chan string, publisher FIXPublisher) {
 		str = <-keyboard
 		px, err = strconv.ParseFloat(str, 64)
 		if err != nil {
-			log.Printf("could not read px: %s", err.Error())
-			return
+			errMsg := fmt.Sprintf("could not read px: %s", err.Error())
+			return errors.New(errMsg)
 		}
 	}
 	peg := 0.0
@@ -82,16 +86,16 @@ func (o *Order) Execute(keyboard <-chan string, publisher FIXPublisher) {
 			str = <-keyboard
 			peg, err = strconv.ParseFloat(str, 64)
 			if err != nil {
-				log.Print("could not parse stop peg")
-				return
+				errMsg := fmt.Sprintf("could not parse stop peg: %s", err.Error())
+				return errors.New(errMsg)
 			}
 		} else {
 			log.Print("Enter stop px: ")
 			str = <-keyboard
 			stop, err = strconv.ParseFloat(str, 64)
 			if err != nil {
-				log.Printf("could not read stop px: %s", err.Error())
-				return
+				errMsg := fmt.Sprintf("could not read stop px: %s", err.Error())
+				return errors.New(errMsg)
 			}
 		}
 
@@ -100,8 +104,8 @@ func (o *Order) Execute(keyboard <-chan string, publisher FIXPublisher) {
 	str = <-keyboard
 	qty, err := strconv.ParseFloat(str, 64)
 	if err != nil {
-		log.Printf("could not read qty: %s", err.Error())
-		return
+		errMsg := fmt.Sprintf("could not read qty: %s", err.Error())
+		return errors.New(errMsg)
 	}
 	log.Print("Enter side: ")
 	str = <-keyboard
@@ -112,27 +116,28 @@ func (o *Order) Execute(keyboard <-chan string, publisher FIXPublisher) {
 	if str == "sell" {
 		side = enum.Side_SELL
 	}
-	nos := buildFixOrder(clordid, symbol, px, stop, qty, side, ordtype)
+	newOrderSingle := buildFixOrder(clordid, symbol, px, stop, qty, side, ordtype)
 
 	log.Print("Options? (hidden, postonly, fok): ")
 	str = <-keyboard
 	if str == "hidden" {
-		nos.SetString(tag.DisplayMethod, string(enum.DisplayMethod_UNDISCLOSED))
+		newOrderSingle.SetString(tag.DisplayMethod, string(enum.DisplayMethod_UNDISCLOSED))
 	}
 	if str == "postonly" {
-		nos.SetExecInst(enum.ExecInst_PARTICIPANT_DONT_INITIATE)
+		newOrderSingle.SetExecInst(enum.ExecInst_PARTICIPANT_DONT_INITIATE)
 	}
 	if str == "fok" {
-		nos.SetTimeInForce(enum.TimeInForce_FILL_OR_KILL)
+		newOrderSingle.SetTimeInForce(enum.TimeInForce_FILL_OR_KILL)
 	}
 	if peg != 0 {
-		nos.SetExecInst(enum.ExecInst_PRIMARY_PEG)
-		nos.SetPegDifference(decimal.NewFromFloat(peg), 4)
+		newOrderSingle.SetExecInst(enum.ExecInst_PRIMARY_PEG)
+		newOrderSingle.SetPegDifference(decimal.NewFromFloat(peg), 4)
 	}
 
-	publisher.SendFIX(nos)
+	return publisher.SendFIX(newOrderSingle)
 }
 
+//Handle processes order messages
 func (o *Order) Handle(msg *fix.Message) {
 	msgtype, _ := msg.Header.GetString(tag.MsgType)
 	if msgtype == "8" {

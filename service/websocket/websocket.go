@@ -7,12 +7,14 @@ import (
 	"go.uber.org/zap"
 )
 
+//Websocket is a session contained for peers, symbology, and logging
 type Websocket struct {
 	peer.Peers
 	symbol.Symbology
 	logger *zap.Logger
 }
 
+//New creates a new Websocket instance
 func New(peers peer.Peers, symbology symbol.Symbology) *Websocket {
 	return &Websocket{
 		Peers:     peers,

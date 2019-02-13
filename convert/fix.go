@@ -10,14 +10,17 @@ import (
 )
 
 const (
-	FlagHidden   int = 64
-	FlagClose        = 512
-	FlagPostOnly     = 4096
-	FlagOCO          = 16384
+	//FlagHidden represents a hidden order flag
+	FlagHidden int = 64
+	//FlagClose represents a close order flag
+	FlagClose = 512
+	//FlagPostOnly represents a post only order flag
+	FlagPostOnly = 4096
+	//FlagOCO represents an OCO order flag
+	FlagOCO = 16384
 )
 
-// Generic FIX types.
-
+// OrdStatusToFIX converts generic FIX types.
 func OrdStatusToFIX(status bitfinex.OrderStatus) enum.OrdStatus {
 	// if the status is a composite (e.g. EXECUTED @ X: was PARTIALLY FILLED @ Y)
 	// executed check must come first
@@ -33,7 +36,7 @@ func OrdStatusToFIX(status bitfinex.OrderStatus) enum.OrdStatus {
 	return enum.OrdStatus_NEW
 }
 
-// follows FIX 4.1+ rules on merging ExecTransType + ExecType fields into new ExecType enums.
+// ExecTypeToFIX follows FIX 4.1+ rules on merging ExecTransType + ExecType fields into new ExecType enums.
 func ExecTypeToFIX(status bitfinex.OrderStatus) enum.ExecType {
 	if strings.Contains(string(status), string(bitfinex.OrderStatusActive)) {
 		return enum.ExecType_NEW
@@ -50,6 +53,7 @@ func ExecTypeToFIX(status bitfinex.OrderStatus) enum.ExecType {
 	return enum.ExecType_ORDER_STATUS
 }
 
+// SideToFIX converts amount to FIX side
 func SideToFIX(amount float64) enum.Side {
 	switch {
 	case amount > 0.0:
@@ -61,27 +65,30 @@ func SideToFIX(amount float64) enum.Side {
 	}
 }
 
-// qty
+// LeavesQtyToFIX converts amount to FIX field
 func LeavesQtyToFIX(amount float64) field.LeavesQtyField {
 	d := decimal.NewFromFloat(amount)
 	return field.NewLeavesQty(d, 4)
 }
 
-// qty
+// LastSharesToFIX converts qty to FIX field
 func LastSharesToFIX(qty float64) field.LastSharesField {
 	d := decimal.NewFromFloat(qty)
 	return field.NewLastShares(d, 4)
 }
 
+// CumQtyToFIX converts cum qty to FIX field
 func CumQtyToFIX(cumQty float64) field.CumQtyField {
 	return field.NewCumQty(decimal.NewFromFloat(cumQty), 2)
 }
 
+// AvgPxToFIX converts price average to FIX field
 func AvgPxToFIX(priceAvg float64) field.AvgPxField {
 	d := decimal.NewFromFloat(priceAvg)
 	return field.NewAvgPx(d, 2)
 }
 
+// OrdTypeToFIX converts bitfinex order type to FIX order type
 func OrdTypeToFIX(ordtype bitfinex.OrderType) enum.OrdType {
 	switch ordtype {
 	case bitfinex.OrderTypeExchangeLimit:
@@ -110,6 +117,7 @@ func OrdTypeToFIX(ordtype bitfinex.OrderType) enum.OrdType {
 	return enum.OrdType_MARKET
 }
 
+// BookActionToFIX converts bitfinex book action to FIX MD enum
 func BookActionToFIX(action bitfinex.BookAction) enum.MDUpdateAction {
 	switch action {
 	case bitfinex.BookUpdateEntry:
@@ -120,6 +128,7 @@ func BookActionToFIX(action bitfinex.BookAction) enum.MDUpdateAction {
 	return enum.MDUpdateAction_NEW
 }
 
+// TimeInForceToFIX converts bitfinex order type to FIX TimeInForce
 func TimeInForceToFIX(ordtype bitfinex.OrderType) enum.TimeInForce {
 	switch ordtype {
 	case bitfinex.OrderTypeFOK:
@@ -130,6 +139,7 @@ func TimeInForceToFIX(ordtype bitfinex.OrderType) enum.TimeInForce {
 	return enum.TimeInForce_GOOD_TILL_CANCEL // GTC default
 }
 
+// ExecInstToFIX converts bitfinex order type with flags to FIX exec inst
 func ExecInstToFIX(ordtype bitfinex.OrderType, flags int) (enum.ExecInst, bool) {
 	execInst := ""
 	switch ordtype {
@@ -144,6 +154,7 @@ func ExecInstToFIX(ordtype bitfinex.OrderType, flags int) (enum.ExecInst, bool) 
 	return enum.ExecInst(execInst), execInst != "" // helps determining if ExecInst should be set
 }
 
+// DisplayMethodToFIX converts flags into FIX display method
 func DisplayMethodToFIX(flags int) (enum.DisplayMethod, bool) {
 	if flags&bitfinex.OrderFlagHidden != 0 {
 		return enum.DisplayMethod_UNDISCLOSED, true

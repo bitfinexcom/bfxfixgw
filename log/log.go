@@ -7,6 +7,7 @@ import (
 	"go.uber.org/zap"
 )
 
+// Logger is a global instance used for logging
 var Logger *zap.Logger
 
 func init() {

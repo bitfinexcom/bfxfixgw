@@ -9,7 +9,7 @@ import (
 	"sync"
 )
 
-// index is the bitfinex symbol
+// symbolset is the bitfinex symbol
 type symbolset struct {
 	symbols     map[string]string
 	passthrough bool
@@ -61,21 +61,22 @@ func (f *FileSymbology) parse(line string) {
 	}
 }
 
+// NewFileSymbology creates a new file symbology object from a given path
 func NewFileSymbology(path string) (*FileSymbology, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
 	s := &FileSymbology{counterparties: make(map[string]*symbolset)}
 	scanner := bufio.NewScanner(f)
 	scanner.Split(bufio.ScanLines)
 	for scanner.Scan() {
 		s.parse(scanner.Text())
 	}
-	return s, nil
+	return s, f.Close()
 }
 
+// ToBitfinex converts symbol to Bitfinex form
 func (f *FileSymbology) ToBitfinex(symbol, counterparty string) (string, error) {
 	f.lock.Lock()
 	defer f.lock.Unlock()
@@ -96,6 +97,7 @@ func (f *FileSymbology) ToBitfinex(symbol, counterparty string) (string, error) 
 	return "", fmt.Errorf("could not find Bitfinex symbol mapping \"%s\" for counterparty \"%s\"", symbol, counterparty)
 }
 
+// FromBitfinex converts symbol from Bitfinex form
 func (f *FileSymbology) FromBitfinex(symbol, counterparty string) (string, error) {
 	f.lock.Lock()
 	defer f.lock.Unlock()

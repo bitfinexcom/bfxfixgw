@@ -18,13 +18,14 @@ import (
 	"sync"
 )
 
+// TagMDRequestType is the tag used for market data request type
 const TagMDRequestType quickfix.Tag = 20004
 
-// LogicalService connects a logical FIX endpoint with a logical websocket connection
+// Service connects a logical FIX endpoint with a logical websocket connection
 type Service struct {
 	factory     peer.ClientFactory
 	peers       map[string]*peer.Peer
-	serviceType fix.FIXServiceType
+	serviceType fix.ServiceType
 	*fix.FIX
 	*websocket.Websocket
 	lock    sync.Mutex
@@ -32,7 +33,8 @@ type Service struct {
 	inbound chan *peer.Message
 }
 
-func New(factory peer.ClientFactory, settings *quickfix.Settings, srvType fix.FIXServiceType, symbology symbol.Symbology) (*Service, error) {
+// New creates a new service
+func New(factory peer.ClientFactory, settings *quickfix.Settings, srvType fix.ServiceType, symbology symbol.Symbology) (*Service, error) {
 	service := &Service{factory: factory, log: lg.Logger, peers: make(map[string]*peer.Peer), inbound: make(chan *peer.Message), serviceType: srvType}
 	var err error
 	service.FIX, err = fix.New(settings, service, srvType, symbology)
@@ -44,11 +46,13 @@ func New(factory peer.ClientFactory, settings *quickfix.Settings, srvType fix.FI
 	return service, nil
 }
 
+// Start commences service operation
 func (s *Service) Start() error {
 	go s.listen()
 	return s.FIX.Up()
 }
 
+// Stop ceases service operation
 func (s *Service) Stop() {
 	s.FIX.Down()
 	s.lock.Lock()
@@ -59,6 +63,7 @@ func (s *Service) Stop() {
 	s.lock.Unlock()
 }
 
+// AddPeer adds a FIX session to the current peer cache
 func (s *Service) AddPeer(fixSessionID quickfix.SessionID) *peer.Peer {
 	p := peer.New(s.factory, fixSessionID, s.inbound)
 	s.lock.Lock()
@@ -67,6 +72,7 @@ func (s *Service) AddPeer(fixSessionID quickfix.SessionID) *peer.Peer {
 	return p
 }
 
+// FindPeer finds a FIX session in the current peer cache
 func (s *Service) FindPeer(fixSessionID string) (*peer.Peer, bool) {
 	s.lock.Lock()
 	p, ok := s.peers[fixSessionID]
@@ -74,6 +80,7 @@ func (s *Service) FindPeer(fixSessionID string) (*peer.Peer, bool) {
 	return p, ok
 }
 
+// RemovePeer removes a FIX session from the current peer cache
 func (s *Service) RemovePeer(fixSessionID string) bool {
 	s.lock.Lock()
 	defer s.lock.Unlock()
@@ -111,27 +118,33 @@ func (s *Service) listen() {
 		case *bitfinex.Notification:
 			if !s.isOrderRoutingService() {
 				continue
+			} else if err := s.Websocket.FIX42NotificationHandler(obj, msg.FIXSessionID()); err != nil {
+				s.log.Error("fix notification handler error", zap.Error(err))
 			}
-			s.Websocket.FIX42NotificationHandler(obj, msg.FIXSessionID())
 		case *bitfinex.OrderNew:
 			if !s.isOrderRoutingService() {
 				continue
+			} else if err := s.Websocket.FIX42OrderNewHandler(obj, msg.FIXSessionID()); err != nil {
+				s.log.Error("fix order new handler error", zap.Error(err))
 			}
-			s.Websocket.FIX42OrderNewHandler(obj, msg.FIXSessionID())
 		case *bitfinex.OrderCancel:
 			if !s.isOrderRoutingService() {
 				continue
+			} else if err := s.Websocket.FIX42OrderCancelHandler(obj, msg.FIXSessionID()); err != nil {
+				s.log.Error("fix order cancel handler error", zap.Error(err))
 			}
-			s.Websocket.FIX42OrderCancelHandler(obj, msg.FIXSessionID())
 		case *bitfinex.OrderUpdate:
 			if !s.isOrderRoutingService() {
 				continue
+			} else if err := s.Websocket.FIX42OrderUpdateHandler(obj, msg.FIXSessionID()); err != nil {
+				s.log.Error("fix order update handler error", zap.Error(err))
 			}
-			s.Websocket.FIX42OrderUpdateHandler(obj, msg.FIXSessionID())
 		case *wsv2.InfoEvent:
 			// no-op
 		case *wsv2.AuthEvent:
-			s.Websocket.FIX42HandleAuth(obj, msg.FIXSessionID())
+			if err := s.Websocket.FIX42HandleAuth(obj, msg.FIXSessionID()); err != nil {
+				s.log.Error("fix auth handler error", zap.Error(err))
+			}
 		case *bitfinex.FundingInfo:
 			// no-op
 		case *bitfinex.MarginInfoUpdate:
@@ -153,20 +166,23 @@ func (s *Service) listen() {
 		case *bitfinex.OrderSnapshot:
 			if !s.isOrderRoutingService() {
 				continue
+			} else if err := s.Websocket.FIX42OrderSnapshotHandler(obj, msg.FIXSessionID()); err != nil {
+				s.log.Error("fix order snapshot handler error", zap.Error(err))
 			}
-			s.Websocket.FIX42OrderSnapshotHandler(obj, msg.FIXSessionID())
 		case *wsv2.SubscribeEvent:
 			// no-op: don't need to ack subscription to client
 		case *bitfinex.BookUpdateSnapshot:
 			if !s.isMarketDataService() {
 				continue
+			} else if err := s.Websocket.FIX42BookSnapshot(obj, msg.FIXSessionID()); err != nil {
+				s.log.Error("fix book snapshot handler error", zap.Error(err))
 			}
-			s.Websocket.FIX42BookSnapshot(obj, msg.FIXSessionID())
 		case *bitfinex.BookUpdate:
 			if !s.isMarketDataService() {
 				continue
+			} else if err := s.Websocket.FIX42BookUpdate(obj, msg.FIXSessionID()); err != nil {
+				s.log.Error("fix book update handler error", zap.Error(err))
 			}
-			s.Websocket.FIX42BookUpdate(obj, msg.FIXSessionID())
 		case *bitfinex.TradeExecution:
 			// 'te' delivered in-order
 			/*
@@ -179,28 +195,32 @@ func (s *Service) listen() {
 			// ignore trade execution update ('tu') in favor of trade executions since they come in-order
 			if !s.isOrderRoutingService() {
 				continue
+			} else if err := s.Websocket.FIX42TradeExecutionUpdateHandler(obj, msg.FIXSessionID()); err != nil {
+				s.log.Error("fix trade execution update handler error", zap.Error(err))
 			}
-			s.Websocket.FIX42TradeExecutionUpdateHandler(obj, msg.FIXSessionID())
 		case *bitfinex.Trade: // public trade
 			if !s.isMarketDataService() {
 				continue
+			} else if err := s.Websocket.FIX42TradeHandler(obj, msg.FIXSessionID()); err != nil {
+				s.log.Error("fix trade handler error", zap.Error(err))
 			}
-			s.Websocket.FIX42TradeHandler(obj, msg.FIXSessionID())
 		case *bitfinex.TradeSnapshot:
 			// no-op: do not provide trade snapshots
 		case *wsv2.ErrorEvent:
 			// subscription error
 			if obj.SubID != "" {
-				peer, ok := s.FindPeer(msg.FIXSessionID().String())
+				peerFound, ok := s.FindPeer(msg.FIXSessionID().String())
 				if ok {
-					_, err := peer.Ws.LookupSubscription(obj.SubID)
+					_, err := peerFound.Ws.LookupSubscription(obj.SubID)
 					if err == nil { // if sub exists, we know ref msg = V
-						if fixReqID, ok := peer.ReverseLookupAPIReqIDs(obj.SubID); ok {
-							fix := mdrr.New(field.NewMDReqID(fixReqID))
-							fix.SetMDReqRejReason(enum.MDReqRejReason_UNKNOWN_SYMBOL)
-							fix.SetText(obj.Message)
-							fix.SetString(TagMDRequestType, obj.Channel)
-							quickfix.SendToTarget(fix, msg.FIXSessionID())
+						if fixReqID, ok := peerFound.ReverseLookupAPIReqIDs(obj.SubID); ok {
+							fixMsg := mdrr.New(field.NewMDReqID(fixReqID))
+							fixMsg.SetMDReqRejReason(enum.MDReqRejReason_UNKNOWN_SYMBOL)
+							fixMsg.SetText(obj.Message)
+							fixMsg.SetString(TagMDRequestType, obj.Channel)
+							if err = quickfix.SendToTarget(fixMsg, msg.FIXSessionID()); err != nil {
+								s.log.Error("fix delivery error", zap.Error(err))
+							}
 							continue
 						}
 					}
@@ -209,9 +229,11 @@ func (s *Service) listen() {
 			// generic error
 			refMsgType := field.NewRefMsgType(s.FIX.LastMsgType()) // guess this is related to the last inbound FIX message
 			reason := field.NewBusinessRejectReason(businessRejectReason(obj.Message))
-			fix := bmr.New(refMsgType, reason)
-			fix.SetText(obj.Message)
-			quickfix.SendToTarget(fix, msg.FIXSessionID())
+			fixMsg := bmr.New(refMsgType, reason)
+			fixMsg.SetText(obj.Message)
+			if err := quickfix.SendToTarget(fixMsg, msg.FIXSessionID()); err != nil {
+				s.log.Error("fix delivery error", zap.Error(err))
+			}
 		case error:
 			s.log.Error("processing error", zap.Any("msg", obj))
 		default:

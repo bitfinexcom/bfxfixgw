@@ -18,7 +18,7 @@ var upgrader = websocket.Upgrader{
 
 type client struct {
 	ID     int
-	parent *MockWs
+	parent *Ws
 	*websocket.Conn
 	send     chan []byte
 	received []string
@@ -38,11 +38,15 @@ func (c *client) writePump() {
 func (c *client) readPump() {
 	defer func() {
 		c.parent.unregister <- c
-		c.Conn.Close()
+		if err := c.Conn.Close(); err != nil {
+			log.Printf("error on read pump close: %v", err)
+		}
 	}()
 	c.Conn.SetReadLimit(512)
-	c.Conn.SetReadDeadline(time.Now().Add(10 * time.Second))
-	c.Conn.SetPongHandler(func(string) error { c.Conn.SetReadDeadline(time.Now().Add(10 * time.Second)); return nil })
+	if errDeadline := c.Conn.SetReadDeadline(time.Now().Add(10 * time.Second)); errDeadline != nil {
+		panic(errDeadline)
+	}
+	c.Conn.SetPongHandler(func(string) error { return c.Conn.SetReadDeadline(time.Now().Add(10 * time.Second)) })
 	for {
 		_, message, err := c.Conn.ReadMessage()
 		if err != nil {
@@ -66,7 +70,8 @@ type tx struct {
 	ClientID int
 }
 
-type MockWs struct {
+//Ws is a mocked websocket instance
+type Ws struct {
 	clients  map[*client]bool
 	listener net.Listener
 	port     int
@@ -78,7 +83,8 @@ type MockWs struct {
 	totalClients int
 }
 
-func (s *MockWs) WaitForClientCount(count int) error {
+//WaitForClientCount waits for a specified number of clients to connect
+func (s *Ws) WaitForClientCount(count int) error {
 	loops := 16
 	delay := time.Millisecond * 250
 	for i := 0; i < loops; i++ {
@@ -90,12 +96,14 @@ func (s *MockWs) WaitForClientCount(count int) error {
 	return fmt.Errorf("client peer #%d did not connect", count)
 }
 
-func (s *MockWs) TotalClientCount() int {
+//TotalClientCount returns the total clients connected
+func (s *Ws) TotalClientCount() int {
 	return s.totalClients
 }
 
-func NewMockWs(port int) *MockWs {
-	return &MockWs{
+//NewMockWs creates a new mocked websocket
+func NewMockWs(port int) *Ws {
+	return &Ws{
 		port:       port,
 		clients:    make(map[*client]bool),
 		register:   make(chan *client),
@@ -106,16 +114,17 @@ func NewMockWs(port int) *MockWs {
 }
 
 // Broadcast sends a message to all connected clients.
-func (s *MockWs) Broadcast(msg string) {
+func (s *Ws) Broadcast(msg string) {
 	s.broadcast <- []byte(msg)
 }
 
-func (s *MockWs) Send(clientID int, msg string) {
+// Send emits a message to the client
+func (s *Ws) Send(clientID int, msg string) {
 	s.send <- &tx{ClientID: clientID, Msg: []byte(msg)}
 }
 
 // ReceivedCount starts indexing clients at position 0.
-func (s *MockWs) ReceivedCount(clientNum int) int {
+func (s *Ws) ReceivedCount(clientNum int) int {
 	i := 0
 	for client := range s.clients {
 		if i == clientNum {
@@ -129,7 +138,7 @@ func (s *MockWs) ReceivedCount(clientNum int) int {
 }
 
 // Received starts indexing clients and message positions at position 0.
-func (s *MockWs) Received(clientNum int, msgNum int) (string, error) {
+func (s *Ws) Received(clientNum int, msgNum int) (string, error) {
 	var client *client
 	i := 0
 	for c := range s.clients {
@@ -150,7 +159,8 @@ func (s *MockWs) Received(clientNum int, msgNum int) (string, error) {
 	return "", fmt.Errorf("could not find client %d", clientNum)
 }
 
-func (s *MockWs) DumpRecv() {
+//DumpRecv dumps all received messages from the websocket
+func (s *Ws) DumpRecv() {
 	i := 0
 	for c := range s.clients {
 		log.Printf("received for client %d:\n", c.ID)
@@ -161,7 +171,8 @@ func (s *MockWs) DumpRecv() {
 	}
 }
 
-func (s *MockWs) WaitForMessage(clientNum int, msgNum int) (string, error) {
+//WaitForMessage waits until a message has come in for the specified client
+func (s *Ws) WaitForMessage(clientNum int, msgNum int) (string, error) {
 	loops := 16
 	delay := time.Millisecond * 250
 	var msg string
@@ -178,26 +189,43 @@ func (s *MockWs) WaitForMessage(clientNum int, msgNum int) (string, error) {
 	return "", err
 }
 
-func (s *MockWs) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (s *Ws) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	s.serveWs(w, r)
 }
 
-func (s *MockWs) Stop() {
-	s.listener.Close() // stop listening to http
+//KillConnections closes all active connections
+func (s *Ws) KillConnections() (err error) {
+	for c := range s.clients {
+		log.Printf("killing connection for client %d:\n", c.ID)
+		if err = c.Conn.Close(); err != nil {
+			return
+		}
+	}
+	return
 }
 
-func (s *MockWs) Start() error {
+//Stop ceases listening to http
+func (s *Ws) Stop() error {
+	return s.listener.Close()
+}
+
+//Start begins listening to http
+func (s *Ws) Start() error {
 	go s.loop()
 	l, err := net.Listen("tcp", fmt.Sprintf(":%d", s.port))
 	if err != nil {
 		return err
 	}
 	s.listener = l
-	go http.Serve(s.listener, s)
+	go func() {
+		if err := http.Serve(s.listener, s); err != nil {
+			log.Printf("error on closing http Ws server: %v", err)
+		}
+	}()
 	return nil
 }
 
-func (s *MockWs) serveWs(w http.ResponseWriter, r *http.Request) {
+func (s *Ws) serveWs(w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Print(err)
@@ -210,7 +238,7 @@ func (s *MockWs) serveWs(w http.ResponseWriter, r *http.Request) {
 	s.clients[client] = true
 }
 
-func (s *MockWs) loop() {
+func (s *Ws) loop() {
 	for {
 		select {
 		case client := <-s.register:

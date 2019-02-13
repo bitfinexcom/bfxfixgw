@@ -1,4 +1,5 @@
-vendor
 .glide
+.idea
+integration_test/bfxfixgw
 *.log
 tmp/

@@ -6,17 +6,18 @@ import (
 	fix "github.com/quickfixgo/quickfix"
 )
 
-func NewNoStoreFactory() *noStoreFactory {
+// NewNoStoreFactory returns a new NoStoreFactory
+func NewNoStoreFactory() fix.MessageStoreFactory {
 	return &noStoreFactory{}
 }
 
 type noStoreFactory struct {
 }
 
-func (nsf *noStoreFactory) Create(sessionID fix.SessionID) (fix.MessageStore, error) {
-	store := new(noStore)
-	store.Reset()
-	return store, nil
+func (nsf *noStoreFactory) Create(sessionID fix.SessionID) (store fix.MessageStore, err error) {
+	store = new(noStore)
+	err = store.Reset()
+	return
 }
 
 type noStore struct {

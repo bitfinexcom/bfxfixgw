@@ -54,7 +54,9 @@ func (c *control) run() {
 			for name, cmd := range c.cmds {
 				if name == ln {
 					found = true
-					cmd.Execute(c.keyboard, c.publisher)
+					if err := cmd.Execute(c.keyboard, c.publisher); err != nil {
+						log.Printf(err.Error())
+					}
 				}
 			}
 			if !found {

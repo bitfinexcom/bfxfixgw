@@ -195,7 +195,7 @@ func (f *FIX) OnFIX42OrderCancelReplaceRequest(msg ocrr.OrderCancelReplaceReques
 
 	ou := &bitfinex.OrderUpdateRequest{GID: 0}
 	//Ensure ids are fine
-	cidi, er := strconv.ParseInt(ocid, 10, 64)
+	cidi, er := strconv.ParseInt(cid, 10, 64)
 	if er != nil {
 		r := convert.FIX42OrderCancelReject(p.BfxUserID(), id, ocid, cid, convert.OrderNotFoundText, true)
 		return sendToTarget(r, sID)
@@ -240,8 +240,12 @@ func (f *FIX) OnFIX42OrderCancelReplaceRequest(msg ocrr.OrderCancelReplaceReques
 	}
 	o := updateToOrder(ou, cidi, typ, cache.Symbol)
 	p.AddOrder(cid, ou.Price, ou.PriceAuxLimit, ou.PriceTrailing, ou.Amount, cache.Symbol, p.BfxUserID(), cache.Side, t, tif, genMTSTif(ou.TimeInForce), genFlags(ou.Hidden, ou.PostOnly))
-	// order has been accepted by business logic in gateway, no more 35=j
+	if _, er = p.UpdateOrder(cid, id); er != nil {
+		//Ensure order id is updated - this should not fail b/c above call inserts into cache
+		panic(er)
+	}
 
+	// order has been accepted by business logic in gateway, no more 35=j
 	e := p.Ws.SubmitUpdateOrder(context.Background(), ou)
 	if e != nil {
 		// should be an ER

@@ -3,7 +3,7 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:6e2d71b53e97db8b54ceff9149ec95a7932086e0fa8e9e27998a9e66c2a46507"
+  digest = "1:7adf7bdeeab3ed99ae7312fb3b7b5bea2091702b55b7be391e07152e5ff3f8cc"
   name = "github.com/bitfinexcom/bitfinex-api-go"
   packages = [
     "utils",
@@ -13,7 +13,7 @@
     "v2/websocket",
   ]
   pruneopts = "UT"
-  revision = "8eb1177ec1d7d6dd69f622df2fde54ba21994b22"
+  revision = "c6dc390bf362f75ea621836dc6bc34f34203579e"
 
 [[projects]]
   branch = "master"

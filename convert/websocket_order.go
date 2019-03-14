@@ -84,7 +84,7 @@ func GetAmountFromQtyAndSide(side enum.Side, qty decimal.Decimal) (amount float6
 }
 
 // GetFlagsFromFIX extracts order flags from FIX message
-func GetFlagsFromFIX(msg quickfix.FieldMap) (hidden bool, postOnly bool) {
+func GetFlagsFromFIX(msg quickfix.FieldMap) (hidden bool, postOnly bool, oco bool) {
 	// hidden
 	displayMethod, err := msg.GetString(tag.DisplayMethod)
 	if err == nil && enum.DisplayMethod(displayMethod) == enum.DisplayMethod_UNDISCLOSED {
@@ -97,11 +97,19 @@ func GetFlagsFromFIX(msg quickfix.FieldMap) (hidden bool, postOnly bool) {
 	if err == nil && strings.Contains(string(execInst.Value()), string(enum.ExecInst_PARTICIPANT_DONT_INITIATE)) {
 		postOnly = true
 	}
+
+	// order cancels order
+	if msg.Has(tag.ContingencyType) {
+		ctf := &field.ContingencyTypeField{}
+		if err = msg.Get(ctf); err == nil {
+			oco = ctf.Value() == enum.ContingencyType_ONE_CANCELS_THE_OTHER
+		}
+	}
 	return
 }
 
 // GetAmountFromQtyAndSide converts an order with type and prices to Bitfinex price and aux price
-func GetPricesFromOrdType(msg quickfix.FieldMap) (t enum.OrdType, px float64, auxpx float64, trailpx float64, err quickfix.MessageRejectError) {
+func GetPricesFromOrdType(msg quickfix.FieldMap) (t enum.OrdType, px float64, auxpx float64, trailpx float64, ocopx float64, err quickfix.MessageRejectError) {
 	tf := &field.OrdTypeField{}
 	if err = msg.Get(tf); err != nil {
 		return
@@ -115,6 +123,18 @@ func GetPricesFromOrdType(msg quickfix.FieldMap) (t enum.OrdType, px float64, au
 			return
 		}
 		px, _ = pd.Float64()
+		if msg.Has(tag.ContingencyType) {
+			ctf := &field.ContingencyTypeField{}
+			if err = msg.Get(ctf); err != nil {
+				return
+			} else if ctf.Value() == enum.ContingencyType_ONE_CANCELS_THE_OTHER {
+				pd := &field.StopPxField{}
+				if err = msg.Get(pd); err != nil {
+					return
+				}
+				ocopx, _ = pd.Float64()
+			}
+		}
 	case enum.OrdType_STOP:
 		pd := &field.StopPxField{}
 		if err = msg.Get(pd); err != nil {
@@ -182,7 +202,7 @@ func OrderNewFromFIX42NewOrderSingle(nos fix42nos.NewOrderSingle, symbology symb
 	}
 	on.Symbol = sym
 
-	_, on.Price, on.PriceAuxLimit, on.PriceTrailing, err = GetPricesFromOrdType(nos.FieldMap)
+	_, on.Price, on.PriceAuxLimit, on.PriceTrailing, on.PriceOcoStop, err = GetPricesFromOrdType(nos.FieldMap)
 	if err != nil {
 		return nil, err
 	}
@@ -198,6 +218,6 @@ func OrderNewFromFIX42NewOrderSingle(nos fix42nos.NewOrderSingle, symbology symb
 	}
 	on.Amount = GetAmountFromQtyAndSide(side, qd)
 
-	on.Hidden, on.PostOnly = GetFlagsFromFIX(nos.FieldMap)
+	on.Hidden, on.PostOnly, on.OcoOrder = GetFlagsFromFIX(nos.FieldMap)
 	return on, nil
 }

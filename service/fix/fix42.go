@@ -221,7 +221,7 @@ func (f *FIX) OnFIX42OrderCancelReplaceRequest(msg ocrr.OrderCancelReplaceReques
 	ou.Amount = convert.GetAmountFromQtyAndSide(cache.Side, qty)
 
 	var t enum.OrdType
-	t, ou.Price, ou.PriceAuxLimit, ou.PriceTrailing, err = convert.GetPricesFromOrdType(msg.FieldMap)
+	t, ou.Price, ou.PriceAuxLimit, ou.PriceTrailing, _, err = convert.GetPricesFromOrdType(msg.FieldMap)
 	if err != nil {
 		return err
 	}
@@ -232,7 +232,7 @@ func (f *FIX) OnFIX42OrderCancelReplaceRequest(msg ocrr.OrderCancelReplaceReques
 		return err
 	}
 
-	ou.Hidden, ou.PostOnly = convert.GetFlagsFromFIX(msg.FieldMap)
+	ou.Hidden, ou.PostOnly, _ = convert.GetFlagsFromFIX(msg.FieldMap)
 
 	typ, err := convert.OrderNewTypeFromFIX42(msg.FieldMap)
 	if er != nil {

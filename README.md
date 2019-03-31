@@ -245,7 +245,10 @@ Below is a table of various Bitfinex order features and their FIX `35=D NewOrder
 |---------------------------|-----------------------|-------------------------------|
 | Hidden					| DisplayMethod (1084)	| Undisclosed (4)				|
 | Post-Only<sup>*</sup>		| ExecInst (18)			| Participate don't initiate (6)|
+| One Cancels Other (OCO)   | ContingencyType (1385)| One Cancels the Other (1)     |
 | Fill or Kill				| TimeInForce (59)		| Fill or Kill (4)				|
+| Good till Date			| TimeInForce (59)		| Good till Date (6)			|
+| Good till Date			| ExpireTime (126)		| Example: 2006-01-02 15:04:05	|
 
 <sup>*</sup> Post-Only orders are considered to have a Good-till-Cancel time in force.  
 

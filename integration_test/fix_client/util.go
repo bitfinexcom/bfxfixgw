@@ -1,11 +1,9 @@
 package main
 
 import (
+	fix "github.com/quickfixgo/quickfix"
 	"log"
 	"os"
-	"strings"
-
-	fix "github.com/quickfixgo/quickfix"
 )
 
 func loadSettings(file string) *fix.Settings {
@@ -18,8 +16,4 @@ func loadSettings(file string) *fix.Settings {
 		log.Fatal(err)
 	}
 	return settings
-}
-
-func defixify(fix *fix.Message) string {
-	return strings.Replace(fix.String(), string(0x1), "|", -1)
 }

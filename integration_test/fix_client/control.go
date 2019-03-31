@@ -15,7 +15,6 @@ type control struct {
 	publisher cmd.FIXPublisher
 	keyboard  chan string
 	cmds      map[string]cmd.Cmd
-	current   cmd.Cmd
 }
 
 func newControl(publisher cmd.FIXPublisher) *control {
@@ -27,8 +26,8 @@ func newControl(publisher cmd.FIXPublisher) *control {
 }
 
 func (c *control) Handle(msg *fix.Message) {
-	for _, cmd := range c.cmds {
-		cmd.Handle(msg)
+	for _, command := range c.cmds {
+		command.Handle(msg)
 	}
 }
 
@@ -51,11 +50,11 @@ func (c *control) run() {
 		log.Print("Enter command: ")
 		for ln := range c.keyboard {
 			found := false
-			for name, cmd := range c.cmds {
+			for name, command := range c.cmds {
 				if name == ln {
 					found = true
-					if err := cmd.Execute(c.keyboard, c.publisher); err != nil {
-						log.Printf(err.Error())
+					if err := command.Execute(c.keyboard, c.publisher); err != nil {
+						log.Print(err.Error())
 					}
 				}
 			}

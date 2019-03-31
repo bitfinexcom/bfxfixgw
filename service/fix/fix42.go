@@ -94,13 +94,6 @@ func updateToOrder(o *bitfinex.OrderUpdateRequest, cid int64, typ, symbol string
 	return
 }
 
-func requestToCxl(o *bitfinex.OrderCancelRequest) *bitfinex.OrderCancel {
-	return &bitfinex.OrderCancel{
-		ID:  o.ID,
-		CID: o.CID,
-	}
-}
-
 func logout(message string, sID quickfix.SessionID) error {
 	msg := lgout.New()
 	msg.SetText(message)
@@ -235,7 +228,7 @@ func (f *FIX) OnFIX42OrderCancelReplaceRequest(msg ocrr.OrderCancelReplaceReques
 	ou.Hidden, ou.PostOnly, _ = convert.GetFlagsFromFIX(msg.FieldMap)
 
 	typ, err := convert.OrderNewTypeFromFIX42(msg.FieldMap)
-	if er != nil {
+	if err != nil {
 		return err
 	}
 	o := updateToOrder(ou, cidi, typ, cache.Symbol)
@@ -353,7 +346,7 @@ func (f *FIX) OnFIX42MarketDataRequest(msg mdr.MarketDataRequest, sID quickfix.S
 
 		if p.MDReqIDExists(mdReqID) {
 			rej := mdrr.New(field.NewMDReqID(mdReqID))
-			rej.SetText(err.Error())
+			rej.SetText("duplicate MDReqID by session: " + mdReqID)
 			rej.SetMDReqRejReason(enum.MDReqRejReason_DUPLICATE_MDREQID)
 			f.logger.Warn("duplicate MDReqID by session: " + mdReqID)
 			return sendToTarget(rej, sID)
@@ -492,8 +485,8 @@ func (f *FIX) OnFIX42OrderCancelRequest(msg ocr.OrderCancelRequest, sID quickfix
 	err2 := p.Ws.Send(context.Background(), oc)
 	if err2 != nil {
 		f.logger.Error("not logged onto websocket", zap.String("SessionID", sID.String()), zap.Error(err))
-		ocr := convert.FIX42OrderCancelReject(p.BfxUserID(), id, ocid, cid, err2.Error(), false)
-		return sendToTarget(ocr, sID)
+		rej := convert.FIX42OrderCancelReject(p.BfxUserID(), id, ocid, cid, err2.Error(), false)
+		return sendToTarget(rej, sID)
 	}
 
 	return nil
@@ -512,13 +505,16 @@ func (f *FIX) OnFIX42OrderStatusRequest(msg osr.OrderStatusRequest, sID quickfix
 		}
 	*/
 	oidi, nerr := strconv.ParseInt(oid, 10, 64)
+	if nerr != nil {
+		return reject(nerr)
+	}
 
-	peer, ok := f.FindPeer(sID.String())
+	foundPeer, ok := f.FindPeer(sID.String())
 	if !ok {
 		return reject(fmt.Errorf("could not find route for FIX session %s", sID.String()))
 	}
 
-	order, nerr := peer.Rest.Orders.Status(oidi)
+	order, nerr := foundPeer.Rest.Orders.Status(oidi)
 	if nerr != nil {
 		return reject(nerr)
 	}
@@ -526,11 +522,11 @@ func (f *FIX) OnFIX42OrderStatusRequest(msg osr.OrderStatusRequest, sID quickfix
 	clOrdID := strconv.FormatInt(order.CID, 10)
 	ordtype := bitfinex.OrderType(order.Type)
 	tif, _ := convert.TimeInForceToFIX(ordtype, order.MTSTif)
-	cached, err2 := peer.LookupByOrderID(orderID)
+	cached, err2 := foundPeer.LookupByOrderID(orderID)
 	if err2 != nil {
-		cached = peer.AddOrder(clOrdID, order.Price, order.PriceAuxLimit, order.PriceTrailing, order.Amount, order.Symbol, peer.BfxUserID(), convert.SideToFIX(order.Amount), convert.OrdTypeToFIX(ordtype), tif, order.MTSTif, int(order.Flags))
+		cached = foundPeer.AddOrder(clOrdID, order.Price, order.PriceAuxLimit, order.PriceTrailing, order.Amount, order.Symbol, foundPeer.BfxUserID(), convert.SideToFIX(order.Amount), convert.OrdTypeToFIX(ordtype), tif, order.MTSTif, int(order.Flags))
 	}
 	status := convert.OrdStatusToFIX(order.Status)
-	er := convert.FIX42ExecutionReportFromOrder(order, peer.BfxUserID(), enum.ExecType_ORDER_STATUS, cached.FilledQty(), status, "", f.Symbology, sID.TargetCompID, cached.Flags, cached.Stop, cached.Trail)
+	er := convert.FIX42ExecutionReportFromOrder(order, foundPeer.BfxUserID(), enum.ExecType_ORDER_STATUS, cached.FilledQty(), status, "", f.Symbology, sID.TargetCompID, cached.Flags, cached.Stop, cached.Trail)
 	return sendToTarget(er, sID)
 }

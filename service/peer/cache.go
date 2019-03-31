@@ -2,7 +2,6 @@ package peer
 
 import (
 	"fmt"
-	"log"
 	"sync"
 
 	"github.com/quickfixgo/enum"
@@ -189,12 +188,6 @@ func (c *cache) AddOrder(clordid string, px, stop, trail, qty float64, symbol, a
 	c.orders[clordid] = order
 	c.lock.Unlock()
 	return order
-}
-
-func (c *cache) dump() {
-	for clordid, order := range c.orders {
-		log.Printf("%s:\t%s", clordid, order.OrderID)
-	}
 }
 
 // update when receiving a on-req with a server-assigned order ID

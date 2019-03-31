@@ -26,7 +26,9 @@ func TestNewOrderSingleGTD(t *testing.T) {
 		fixMd.Stop()
 		fixOrd.Stop()
 		gw.Stop()
-		srvWs.Stop()
+		if err := srvWs.Stop(); err != nil {
+			t.Fatal(err)
+		}
 	}()
 
 	// assert FIX MD logon
@@ -89,7 +91,9 @@ func TestNewOrderSingleGTD(t *testing.T) {
 	nos.Set(field.NewTimeInForce(enum.TimeInForce_GOOD_TILL_DATE))
 	nos.Set(field.NewExpireTime(expiration))
 	session := fixOrd.LastSession()
-	session.Send(nos)
+	if err := session.Send(nos); err != nil {
+		t.Fatal(err)
+	}
 
 	// assert OrderNew
 	msg, err = srvWs.WaitForMessage(OrdersClient, 1)
@@ -157,7 +161,9 @@ func TestNewOrderSingleRejectBadGTD(t *testing.T) {
 		fixMd.Stop()
 		fixOrd.Stop()
 		gw.Stop()
-		srvWs.Stop()
+		if err := srvWs.Stop(); err != nil {
+			t.Fatal(err)
+		}
 	}()
 
 	// assert FIX MD logon
@@ -213,7 +219,9 @@ func TestNewOrderSingleRejectBadGTD(t *testing.T) {
 	nos.Set(field.NewPrice(decimal.NewFromFloat(14000.0), 1))
 	nos.Set(field.NewTimeInForce(enum.TimeInForce_GOOD_TILL_DATE))
 	session := fixOrd.LastSession()
-	session.Send(nos)
+	if err := session.Send(nos); err != nil {
+		t.Fatal(err)
+	}
 
 	// assert FIX message reject
 	fix, err = fixOrd.WaitForMessage(OrderSessionID, 2)
@@ -239,7 +247,9 @@ func TestNewOrderSingleThenUpdate(t *testing.T) {
 		fixMd.Stop()
 		fixOrd.Stop()
 		gw.Stop()
-		srvWs.Stop()
+		if err := srvWs.Stop(); err != nil {
+			t.Fatal(err)
+		}
 	}()
 
 	// assert FIX MD logon
@@ -294,7 +304,9 @@ func TestNewOrderSingleThenUpdate(t *testing.T) {
 	nos.Set(field.NewOrderQty(decimal.NewFromFloat(1.0), 1))
 	nos.Set(field.NewPrice(decimal.NewFromFloat(12000.0), 1))
 	session := fixOrd.LastSession()
-	session.Send(nos)
+	if err := session.Send(nos); err != nil {
+		t.Fatal(err)
+	}
 
 	// assert OrderNew
 	msg, err = srvWs.WaitForMessage(OrdersClient, 1)
@@ -329,7 +341,9 @@ func TestNewOrderSingleThenUpdate(t *testing.T) {
 		field.NewOrdType(enum.OrdType_LIMIT))
 	oup.Set(field.NewOrderQty(decimal.NewFromFloat(2.0), 1))
 	oup.Set(field.NewPrice(decimal.NewFromFloat(21000.0), 1))
-	session.Send(oup)
+	if err := session.Send(oup); err != nil {
+		t.Fatal(err)
+	}
 
 	// assert OrderUpdate
 	msg, err = srvWs.WaitForMessage(OrdersClient, 2)
@@ -349,7 +363,9 @@ func TestNewOrderSingleThenUpdate(t *testing.T) {
 	oup.Set(field.NewClOrdID("678"))
 	oup.Set(field.NewTimeInForce(enum.TimeInForce_GOOD_TILL_DATE))
 	oup.Set(field.NewExpireTime(expiration))
-	session.Send(oup)
+	if err := session.Send(oup); err != nil {
+		t.Fatal(err)
+	}
 
 	// assert OrderUpdate
 	msg, err = srvWs.WaitForMessage(OrdersClient, 3)
@@ -374,7 +390,9 @@ func TestNewOrderSingleOCO(t *testing.T) {
 		fixMd.Stop()
 		fixOrd.Stop()
 		gw.Stop()
-		srvWs.Stop()
+		if err := srvWs.Stop(); err != nil {
+			t.Fatal(err)
+		}
 	}()
 
 	// assert FIX MD logon
@@ -430,7 +448,9 @@ func TestNewOrderSingleOCO(t *testing.T) {
 	nos.Set(field.NewPrice(decimal.NewFromFloat(12000.0), 1))
 	nos.Set(field.NewContingencyType(enum.ContingencyType_ONE_CANCELS_THE_OTHER))
 	session := fixOrd.LastSession()
-	session.Send(nos)
+	if err := session.Send(nos); err != nil {
+		t.Fatal(err)
+	}
 
 	// assert FIX message reject - need that stop price
 	fix, err = fixOrd.WaitForMessage(OrderSessionID, 2)
@@ -444,7 +464,9 @@ func TestNewOrderSingleOCO(t *testing.T) {
 
 	// put in stop price then assert OrderNew
 	nos.Set(field.NewStopPx(decimal.NewFromFloat(11500.0), 1))
-	session.Send(nos)
+	if err := session.Send(nos); err != nil {
+		t.Fatal(err)
+	}
 	msg, err = srvWs.WaitForMessage(OrdersClient, 1)
 	if err != nil {
 		t.Fatal(err)

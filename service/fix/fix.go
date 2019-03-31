@@ -79,14 +79,12 @@ func (f *FIX) FromAdmin(msg *quickfix.Message, sID quickfix.SessionID) quickfix.
 	if msg.IsMsgTypeOf(msgTypeLogon) {
 		peerAdded := f.Peers.AddPeer(sID)
 		go func(session string) {
-			select {
-			case dc := <-peerAdded.ListenDisconnect():
-				if _, ok := f.FindPeer(session); dc && ok {
-					if errReportDisconnect := logout("downstream disconnect", sID); errReportDisconnect != nil {
-						//If disconnect cannot be reported, we are in unrecoverable state
-						//Best to panic and let the gateway come back online
-						panic(errReportDisconnect)
-					}
+			dc := <-peerAdded.ListenDisconnect()
+			if _, ok := f.FindPeer(session); dc && ok {
+				if errReportDisconnect := logout("downstream disconnect", sID); errReportDisconnect != nil {
+					//If disconnect cannot be reported, we are in unrecoverable state
+					//Best to panic and let the gateway come back online
+					panic(errReportDisconnect)
 				}
 			}
 		}(sID.String())

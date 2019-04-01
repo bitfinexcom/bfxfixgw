@@ -23,7 +23,9 @@ func TestNewOrderSingleBuyLimitFill(t *testing.T) {
 		fixMd.Stop()
 		fixOrd.Stop()
 		gw.Stop()
-		srvWs.Stop()
+		if err := srvWs.Stop(); err != nil {
+			t.Fatal(err)
+		}
 	}()
 
 	// assert FIX MD logon
@@ -78,7 +80,9 @@ func TestNewOrderSingleBuyLimitFill(t *testing.T) {
 	nos.Set(field.NewOrderQty(decimal.NewFromFloat(1.0), 1))
 	nos.Set(field.NewPrice(decimal.NewFromFloat(12000.0), 1))
 	session := fixOrd.LastSession()
-	session.Send(nos)
+	if err := session.Send(nos); err != nil {
+		t.Fatal(err)
+	}
 
 	// assert OrderNew
 	msg, err = srvWs.WaitForMessage(OrdersClient, 1)
@@ -142,7 +146,9 @@ func TestNewOrderSingleSellMarketFill(t *testing.T) {
 		fixMd.Stop()
 		fixOrd.Stop()
 		gw.Stop()
-		srvWs.Stop()
+		if err := srvWs.Stop(); err != nil {
+			t.Fatal(err)
+		}
 	}()
 
 	// assert FIX MD logon
@@ -196,7 +202,9 @@ func TestNewOrderSingleSellMarketFill(t *testing.T) {
 		field.NewOrdType(enum.OrdType_MARKET))
 	nos.Set(field.NewOrderQty(decimal.NewFromFloat(1.0), 1))
 	session := fixOrd.LastSession()
-	session.Send(nos)
+	if err := session.Send(nos); err != nil {
+		t.Fatal(err)
+	}
 
 	// assert OrderNew
 	msg, err = srvWs.WaitForMessage(OrdersClient, 1)
@@ -273,7 +281,9 @@ func TestNewOrderSingleRejectBadPrice(t *testing.T) {
 		fixMd.Stop()
 		fixOrd.Stop()
 		gw.Stop()
-		srvWs.Stop()
+		if err := srvWs.Stop(); err != nil {
+			t.Fatal(err)
+		}
 	}()
 
 	// assert FIX MD logon
@@ -328,7 +338,9 @@ func TestNewOrderSingleRejectBadPrice(t *testing.T) {
 	nos.Set(field.NewOrderQty(decimal.NewFromFloat(1.0), 1))
 	nos.Set(field.NewPrice(decimal.NewFromFloat(-12483), 4)) // bad price
 	session := fixOrd.LastSession()
-	session.Send(nos)
+	if err := session.Send(nos); err != nil {
+		t.Fatal(err)
+	}
 
 	// assert OrderNew
 	msg, err = srvWs.WaitForMessage(OrdersClient, 1)
@@ -365,7 +377,9 @@ func TestNewOrderSingleRejectBadSymbol(t *testing.T) {
 		fixMd.Stop()
 		fixOrd.Stop()
 		gw.Stop()
-		srvWs.Stop()
+		if err := srvWs.Stop(); err != nil {
+			t.Fatal(err)
+		}
 	}()
 
 	// assert FIX MD logon
@@ -419,7 +433,9 @@ func TestNewOrderSingleRejectBadSymbol(t *testing.T) {
 		field.NewOrdType(enum.OrdType_MARKET))
 	nos.Set(field.NewOrderQty(decimal.NewFromFloat(1.0), 1))
 	session := fixOrd.LastSession()
-	session.Send(nos)
+	if err := session.Send(nos); err != nil {
+		t.Fatal(err)
+	}
 
 	// assert OrderNew
 	msg, err = srvWs.WaitForMessage(OrdersClient, 1)

@@ -4,6 +4,7 @@ package convert
 
 import (
 	"strconv"
+	"time"
 
 	"github.com/bitfinexcom/bfxfixgw/service/symbol"
 
@@ -21,6 +22,9 @@ import (
 	ocj "github.com/quickfixgo/fix42/ordercancelreject"
 	//fix42nos "github.com/quickfixgo/quickfix/fix42/newordersingle"
 )
+
+//OrderNotFoundText is the text that corresponds to an unknown order
+const OrderNotFoundText = "Order not found."
 
 // FIX42MarketDataFullRefreshFromTradeSnapshot generates a market data full refresh
 func FIX42MarketDataFullRefreshFromTradeSnapshot(mdReqID string, snapshot *bitfinex.TradeSnapshot, symbology symbol.Symbology, counterparty string) *fix42mdsfr.MarketDataSnapshotFullRefresh {
@@ -156,7 +160,7 @@ func FIX42MarketDataIncrementalRefreshFromBookUpdate(mdReqID string, update *bit
 }
 
 // FIX42ExecutionReport generates a FIX execution report from provided order details
-func FIX42ExecutionReport(symbol, clOrdID, orderID, account string, execType enum.ExecType, side enum.Side, origQty, thisQty, cumQty, px, stop, trail, avgPx float64, ordStatus enum.OrdStatus, ordType enum.OrdType, tif enum.TimeInForce, text string, symbology symbol.Symbology, counterparty string, flags int) fix42er.ExecutionReport {
+func FIX42ExecutionReport(symbol, clOrdID, orderID, account string, execType enum.ExecType, side enum.Side, origQty, thisQty, cumQty, px, stop, trail, avgPx float64, ordStatus enum.OrdStatus, ordType enum.OrdType, tif enum.TimeInForce, exp time.Time, text string, symbology symbol.Symbology, counterparty string, flags int) fix42er.ExecutionReport {
 	// total order qty
 	amt := decimal.NewFromFloat(origQty)
 
@@ -244,6 +248,9 @@ func FIX42ExecutionReport(symbol, clOrdID, orderID, account string, execType enu
 		e.SetExecInst(enum.ExecInst(execInst))
 	}
 	e.SetTimeInForce(tif)
+	if tif == enum.TimeInForce_GOOD_TILL_DATE {
+		e.SetExpireTime(exp)
+	}
 
 	return e
 }
@@ -257,8 +264,9 @@ func FIX42ExecutionReportFromOrder(o *bitfinex.Order, account string, execType e
 		fAmt = -fAmt
 	}
 	ordtype := OrdTypeToFIX(bitfinex.OrderType(o.Type))
-	tif := TimeInForceToFIX(bitfinex.OrderType(o.Type)) // support FOK
-	e := FIX42ExecutionReport(o.Symbol, strconv.FormatInt(o.CID, 10), orderID, account, execType, SideToFIX(o.Amount), fAmt, 0.0, cumQty, o.Price, stop, peg, o.PriceAvg, ordStatus, ordtype, tif, text, symbology, counterparty, flags)
+	tif, exp := TimeInForceToFIX(bitfinex.OrderType(o.Type), o.MTSTif) // support FOK
+
+	e := FIX42ExecutionReport(o.Symbol, strconv.FormatInt(o.CID, 10), orderID, account, execType, SideToFIX(o.Amount), fAmt, 0.0, cumQty, o.Price, stop, peg, o.PriceAvg, ordStatus, ordtype, tif, exp, text, symbology, counterparty, flags)
 	if text != "" {
 		e.SetText(text)
 	}
@@ -267,7 +275,7 @@ func FIX42ExecutionReportFromOrder(o *bitfinex.Order, account string, execType e
 }
 
 // FIX42ExecutionReportFromTradeExecutionUpdate generates a FIX execution report from a bitfinex trade execution
-func FIX42ExecutionReportFromTradeExecutionUpdate(t *bitfinex.TradeExecutionUpdate, account, clOrdID string, origQty, totalFillQty, origPx, stopPx, trailPx, avgFillPx float64, symbology symbol.Symbology, counterparty string, flags int) fix42er.ExecutionReport {
+func FIX42ExecutionReportFromTradeExecutionUpdate(t *bitfinex.TradeExecutionUpdate, account, clOrdID string, origQty, totalFillQty, origPx, stopPx, trailPx, avgFillPx float64, symbology symbol.Symbology, counterparty string, expTif int64, flags int) fix42er.ExecutionReport {
 	orderID := strconv.FormatInt(t.OrderID, 10)
 	var execType enum.ExecType
 	var ordStatus enum.OrdStatus
@@ -282,8 +290,8 @@ func FIX42ExecutionReportFromTradeExecutionUpdate(t *bitfinex.TradeExecutionUpda
 	if execAmt < 0 {
 		execAmt = -execAmt
 	}
-	tif := TimeInForceToFIX(bitfinex.OrderType(t.OrderType)) // support FOK
-	er := FIX42ExecutionReport(t.Pair, clOrdID, orderID, account, execType, SideToFIX(t.ExecAmount), origQty, execAmt, totalFillQty, origPx, stopPx, trailPx, avgFillPx, ordStatus, OrdTypeToFIX(bitfinex.OrderType(t.OrderType)), tif, "", symbology, counterparty, flags)
+	tif, exp := TimeInForceToFIX(bitfinex.OrderType(t.OrderType), expTif) // support FOK
+	er := FIX42ExecutionReport(t.Pair, clOrdID, orderID, account, execType, SideToFIX(t.ExecAmount), origQty, execAmt, totalFillQty, origPx, stopPx, trailPx, avgFillPx, ordStatus, OrdTypeToFIX(bitfinex.OrderType(t.OrderType)), tif, exp, "", symbology, counterparty, flags)
 	f := t.Fee
 	if f < 0 {
 		f = -f
@@ -299,14 +307,14 @@ func FIX42ExecutionReportFromTradeExecutionUpdate(t *bitfinex.TradeExecutionUpda
 
 func rejectReasonFromText(text string) enum.CxlRejReason {
 	switch text {
-	case "Order not found.":
+	case OrderNotFoundText:
 		return enum.CxlRejReason_UNKNOWN_ORDER
 	}
 	return enum.CxlRejReason_OTHER
 }
 
 // FIX42OrderCancelReject generates a cancel reject message
-func FIX42OrderCancelReject(account, orderID, origClOrdID, cxlClOrdID, text string) ocj.OrderCancelReject {
+func FIX42OrderCancelReject(account, orderID, origClOrdID, cxlClOrdID, text string, isCancelReplace bool) ocj.OrderCancelReject {
 	rejReason := rejectReasonFromText(text)
 	if rejReason == enum.CxlRejReason_UNKNOWN_ORDER {
 		orderID = "NONE" // FIX spec tag 37 in 35=9: If CxlRejReason="Unknown order", specify "NONE".
@@ -321,6 +329,9 @@ func FIX42OrderCancelReject(account, orderID, origClOrdID, cxlClOrdID, text stri
 	r.SetCxlRejReason(rejReason)
 	r.SetAccount(account)
 	r.SetText(text)
+	if isCancelReplace {
+		r.SetCxlRejResponseTo(enum.CxlRejResponseTo_ORDER_CANCEL_REPLACE_REQUEST)
+	}
 	return r
 }
 

@@ -24,7 +24,7 @@
 #   go-tests = true
 #   unused-packages = true
 
-required = ["golang.org/x/lint/golint", "github.com/kisielk/errcheck"]
+required = ["github.com/golangci/golangci-lint/cmd/golangci-lint"]
 
 [[constraint]]
   branch = "master"

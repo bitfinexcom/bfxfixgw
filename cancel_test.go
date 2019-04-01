@@ -24,7 +24,9 @@ func TestOrderCancelSimple(t *testing.T) {
 		fixMd.Stop()
 		fixOrd.Stop()
 		gw.Stop()
-		srvWs.Stop()
+		if err := srvWs.Stop(); err != nil {
+			t.Fatal(err)
+		}
 	}()
 
 	// assert FIX MD logon
@@ -79,7 +81,9 @@ func TestOrderCancelSimple(t *testing.T) {
 	nos.Set(field.NewOrderQty(decimal.NewFromFloat(1.0), 1))
 	nos.Set(field.NewPrice(decimal.NewFromFloat(12000.0), 1))
 	session := fixOrd.LastSession()
-	session.Send(nos)
+	if err := session.Send(nos); err != nil {
+		t.Fatal(err)
+	}
 
 	// assert OrderNew
 	msg, err = srvWs.WaitForMessage(OrdersClient, 1)
@@ -112,7 +116,9 @@ func TestOrderCancelSimple(t *testing.T) {
 		field.NewSymbol("BTCUSD"),
 		field.NewSide(enum.Side_BUY),
 		field.NewTransactTime(time.Now()))
-	session.Send(cxl)
+	if err := session.Send(cxl); err != nil {
+		t.Fatal(err)
+	}
 
 	// assert cancel req
 	msg, err = srvWs.WaitForMessage(OrdersClient, 2)
@@ -133,7 +139,10 @@ func TestOrderCancelSimple(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = checkFixTags(fix, "35=8", "49=BFXFIX", "56=EXORG_ORD", "1=user123", "14=0.0000", "20=3", "32=0.0000", "37=1234567", "39=6", "54=1", "55=tBTCUSD", "150=0", "151=1.0000")
+	err = checkFixTags(fix, "35=8", "49=BFXFIX", "56=EXORG_ORD", "1=user123", "14=0.0000", "20=3", "14=0.0000", "37=1234567", "39=6", "54=1", "151=1.0000")
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// publish cancel success
 	srvWs.Send(OrdersClient, `[0,"oc",[1234567,0,555,"tBTCUSD",1521062529896,1521062593974,1,1,"EXCHANGE LIMIT",null,null,null,0,"CANCELED",null,null,12000,0,null,null,null,null,null,0,0,0,null,null,"API>BFX",null,null,null]]`)
@@ -142,7 +151,10 @@ func TestOrderCancelSimple(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = checkFixTags(fix, "35=8", "49=BFXFIX", "56=EXORG_ORD", "1=user123", "14=0.0000", "20=3", "32=0.0000", "37=1234567", "39=4", "54=1", "55=tBTCUSD", "150=4", "151=1.0000")
+	err = checkFixTags(fix, "35=8", "49=BFXFIX", "56=EXORG_ORD", "1=user123", "14=0.0000", "20=3", "32=0.0000", "37=1234567", "39=4", "54=1", "55=tBTCUSD", "150=4")
+	if err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestOrderCancelInFlightFillOK(t *testing.T) {
@@ -157,7 +169,9 @@ func TestOrderCancelInFlightFillOK(t *testing.T) {
 		fixMd.Stop()
 		fixOrd.Stop()
 		gw.Stop()
-		srvWs.Stop()
+		if err := srvWs.Stop(); err != nil {
+			t.Fatal(err)
+		}
 	}()
 
 	// assert FIX MD logon
@@ -212,7 +226,9 @@ func TestOrderCancelInFlightFillOK(t *testing.T) {
 	nos.Set(field.NewOrderQty(decimal.NewFromFloat(1.0), 1))
 	nos.Set(field.NewPrice(decimal.NewFromFloat(12000.0), 1))
 	session := fixOrd.LastSession()
-	session.Send(nos)
+	if err := session.Send(nos); err != nil {
+		t.Fatal(err)
+	}
 
 	// assert OrderNew
 	msg, err = srvWs.WaitForMessage(OrdersClient, 1)
@@ -258,7 +274,9 @@ func TestOrderCancelInFlightFillOK(t *testing.T) {
 		field.NewSymbol("BTCUSD"),
 		field.NewSide(enum.Side_BUY),
 		field.NewTransactTime(time.Now()))
-	session.Send(cxl)
+	if err := session.Send(cxl); err != nil {
+		t.Fatal(err)
+	}
 
 	// assert cancel req
 	msg, err = srvWs.WaitForMessage(OrdersClient, 2)
@@ -279,7 +297,10 @@ func TestOrderCancelInFlightFillOK(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = checkFixTags(fix, "35=8", "49=BFXFIX", "56=EXORG_ORD", "1=user123", "14=0.0000", "20=3", "32=0.2168", "37=1234567", "39=6", "54=1", "55=tBTCUSD", "150=0", "151=1.0000")
+	err = checkFixTags(fix, "35=8", "49=BFXFIX", "56=EXORG_ORD", "1=user123", "20=3", "14=0.2168", "37=1234567", "39=6", "54=1", "150=6", "151=0.7832")
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// publish cancel success
 	srvWs.Send(OrdersClient, `[0,"oc",[1234567,0,555,"tBTCUSD",1521062529896,1521062593974,1,1,"EXCHANGE LIMIT",null,null,null,0,"CANCELED",null,null,12000,0,null,null,null,null,null,0,0,0,null,null,"API>BFX",null,null,null]]`)
@@ -288,7 +309,10 @@ func TestOrderCancelInFlightFillOK(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = checkFixTags(fix, "35=8", "49=BFXFIX", "56=EXORG_ORD", "1=user123", "14=0.0000", "20=3", "32=0.2168", "37=1234567", "39=4", "54=1", "55=tBTCUSD", "150=4", "151=1.0000")
+	err = checkFixTags(fix, "35=8", "49=BFXFIX", "56=EXORG_ORD", "1=user123", "14=0.2168", "20=3", "37=1234567", "39=4", "54=1", "55=tBTCUSD", "150=4", "151=0.0000")
+	if err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestOrderCancelUnknownOrder(t *testing.T) {
@@ -303,7 +327,9 @@ func TestOrderCancelUnknownOrder(t *testing.T) {
 		fixMd.Stop()
 		fixOrd.Stop()
 		gw.Stop()
-		srvWs.Stop()
+		if err := srvWs.Stop(); err != nil {
+			t.Fatal(err)
+		}
 	}()
 
 	// assert FIX MD logon
@@ -355,7 +381,9 @@ func TestOrderCancelUnknownOrder(t *testing.T) {
 		field.NewSide(enum.Side_BUY),
 		field.NewTransactTime(time.Now()))
 	session := fixOrd.LastSession()
-	session.Send(cxl)
+	if err := session.Send(cxl); err != nil {
+		t.Fatal(err)
+	}
 
 	// assert cancel req
 	msg, err = srvWs.WaitForMessage(OrdersClient, 1)
@@ -376,7 +404,10 @@ func TestOrderCancelUnknownOrder(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = checkFixTags(fix, "35=9", "49=BFXFIX", "56=EXORG_ORD", "1=user123", "55=tBTCUSD", "37=555", "11=555", "41=555", "39=8", "434=1", "102=1")
+	err = checkFixTags(fix, "35=9", "49=BFXFIX", "56=EXORG_ORD", "1=user123", "11=555", "41=555", "39=8", "434=1", "102=1")
+	if err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestOrderCancelInFlightFillReject(t *testing.T) {
@@ -391,7 +422,9 @@ func TestOrderCancelInFlightFillReject(t *testing.T) {
 		fixMd.Stop()
 		fixOrd.Stop()
 		gw.Stop()
-		srvWs.Stop()
+		if err := srvWs.Stop(); err != nil {
+			t.Fatal(err)
+		}
 	}()
 
 	// assert FIX MD logon
@@ -446,7 +479,9 @@ func TestOrderCancelInFlightFillReject(t *testing.T) {
 	nos.Set(field.NewOrderQty(decimal.NewFromFloat(1.0), 1))
 	nos.Set(field.NewPrice(decimal.NewFromFloat(12000.0), 1))
 	session := fixOrd.LastSession()
-	session.Send(nos)
+	if err := session.Send(nos); err != nil {
+		t.Fatal(err)
+	}
 
 	// assert OrderNew
 	msg, err = srvWs.WaitForMessage(OrdersClient, 1)
@@ -505,7 +540,9 @@ func TestOrderCancelInFlightFillReject(t *testing.T) {
 		field.NewSymbol("BTCUSD"),
 		field.NewSide(enum.Side_BUY),
 		field.NewTransactTime(time.Now()))
-	session.Send(cxl)
+	if err := session.Send(cxl); err != nil {
+		t.Fatal(err)
+	}
 
 	// assert cancel req
 	msg, err = srvWs.WaitForMessage(OrdersClient, 2)
@@ -526,5 +563,8 @@ func TestOrderCancelInFlightFillReject(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = checkFixTags(fix, "35=9", "49=BFXFIX", "56=EXORG_ORD", "1=user123", "55=tBTCUSD", "37=555", "11=555", "41=555", "39=8", "434=1", "102=1")
+	err = checkFixTags(fix, "35=9", "49=BFXFIX", "56=EXORG_ORD", "1=user123", "37=NONE", "11=555", "41=555", "39=8", "434=1", "102=1")
+	if err != nil {
+		t.Fatal(err)
+	}
 }

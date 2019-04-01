@@ -9,6 +9,7 @@ import (
 	_ "net/http/pprof"
 	"os"
 	"path"
+	"time"
 
 	"github.com/bitfinexcom/bitfinex-api-go/v2/rest"
 	"github.com/bitfinexcom/bitfinex-api-go/v2/websocket"
@@ -24,14 +25,16 @@ import (
 )
 
 var (
-	mdcfg   = flag.String("mdcfg", "demo_fix_marketdata.cfg", "Market data FIX configuration file name")
-	ordcfg  = flag.String("ordcfg", "demo_fix_orders.cfg", "Order flow FIX configuration file name")
-	orders  = flag.Bool("orders", false, "enable order routing FIX endpoint")
-	md      = flag.Bool("md", false, "enable market data FIX endpoint")
-	ws      = flag.String("ws", "wss://api.bitfinex.com/ws/2", "v2 Websocket API URL")
-	rst     = flag.String("rest", "https://api.bitfinex.com/v2/", "v2 REST API URL")
-	sym     = flag.String("symbology", "", "symbol master, omit for passthrough symbology or provide a symbology master file")
-	verbose = flag.Bool("v", false, "verbose logging")
+	mdcfg             = flag.String("mdcfg", "demo_fix_marketdata.cfg", "Market data FIX configuration file name")
+	ordcfg            = flag.String("ordcfg", "demo_fix_orders.cfg", "Order flow FIX configuration file name")
+	orders            = flag.Bool("orders", false, "enable order routing FIX endpoint")
+	md                = flag.Bool("md", false, "enable market data FIX endpoint")
+	ws                = flag.String("ws", "wss://api.bitfinex.com/ws/2", "v2 Websocket API URL")
+	rst               = flag.String("rest", "https://api.bitfinex.com/v2/", "v2 REST API URL")
+	sym               = flag.String("symbology", "", "symbol master, omit for passthrough symbology or provide a symbology master file")
+	verbose           = flag.Bool("v", false, "verbose logging")
+	reconnectInterval = flag.Duration("reconnectInterval", 60*time.Second, "websocket reconnect interval")
+	reconnectAttempts = flag.Int("reconnectAttempts", 100, "websocket reconnect attempts")
 	//flag.StringVar(&logfile, "logfile", "logs/debug.log", "path to the log file")
 	//flag.StringVar(&configfile, "configfile", "config/server.cfg", "path to the config file")
 )
@@ -126,6 +129,8 @@ type defaultClientFactory struct {
 func (d *defaultClientFactory) NewWs() *websocket.Client {
 	if d.Parameters == nil {
 		d.Parameters = websocket.NewDefaultParameters()
+		d.Parameters.ReconnectAttempts = *reconnectAttempts
+		d.Parameters.ReconnectInterval = *reconnectInterval
 	}
 	return websocket.NewWithParamsNonce(d.Parameters, peer.NewMultikeyNonceGenerator())
 }
@@ -174,6 +179,8 @@ func main() {
 	}
 	params := websocket.NewDefaultParameters()
 	params.URL = *ws
+	params.ReconnectAttempts = *reconnectAttempts
+	params.ReconnectInterval = *reconnectInterval
 	params.LogTransport = *verbose
 	factory := &defaultClientFactory{
 		Parameters: params,

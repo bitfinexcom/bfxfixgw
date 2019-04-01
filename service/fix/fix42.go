@@ -4,9 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strconv"
-
 	"github.com/bitfinexcom/bfxfixgw/convert"
+	"github.com/bitfinexcom/bfxfixgw/service/peer"
+	"strconv"
+	"time"
 
 	"go.uber.org/zap"
 
@@ -15,7 +16,7 @@ import (
 	mdr "github.com/quickfixgo/fix42/marketdatarequest"
 	mdrr "github.com/quickfixgo/fix42/marketdatarequestreject"
 	nos "github.com/quickfixgo/fix42/newordersingle"
-	ocj "github.com/quickfixgo/fix42/ordercancelreject"
+	ocrr "github.com/quickfixgo/fix42/ordercancelreplacerequest"
 	ocr "github.com/quickfixgo/fix42/ordercancelrequest"
 	osr "github.com/quickfixgo/fix42/orderstatusrequest"
 
@@ -25,7 +26,7 @@ import (
 
 	lg "log"
 
-	bitfinex "github.com/bitfinexcom/bitfinex-api-go/v2"
+	"github.com/bitfinexcom/bitfinex-api-go/v2"
 )
 
 const (
@@ -37,15 +38,30 @@ const (
 
 var rejectReasonOther = 0
 
-func requestToOrder(o *bitfinex.OrderNewRequest) *bitfinex.Order {
-	flags := 0
-	if o.PostOnly {
+func genFlags(hidden bool, postOnly bool) (flags int) {
+	flags = 0
+	if postOnly {
 		flags = flags | bitfinex.OrderFlagPostOnly
 	}
-	if o.Hidden {
+	if hidden {
 		flags = flags | bitfinex.OrderFlagHidden
 	}
-	return &bitfinex.Order{
+	return
+}
+
+func genMTSTif(timeInForce string) int64 {
+	if len(timeInForce) > 0 {
+		tif, err := time.Parse(convert.TimeInForceFormat, timeInForce)
+		if err != nil {
+			panic(err)
+		}
+		return tif.UnixNano() / 1000000
+	}
+	return 0
+}
+
+func requestToOrder(o *bitfinex.OrderNewRequest) (ord *bitfinex.Order) {
+	ord = &bitfinex.Order{
 		GID:           o.GID,
 		CID:           o.CID,
 		Type:          o.Type,
@@ -55,15 +71,27 @@ func requestToOrder(o *bitfinex.OrderNewRequest) *bitfinex.Order {
 		PriceTrailing: o.PriceTrailing,
 		PriceAuxLimit: o.PriceAuxLimit,
 		Hidden:        o.Hidden,
-		Flags:         int64(flags),
+		Flags:         int64(genFlags(o.Hidden, o.PostOnly)),
+		MTSTif:        genMTSTif(o.TimeInForce),
 	}
+	return
 }
 
-func requestToCxl(o *bitfinex.OrderCancelRequest) *bitfinex.OrderCancel {
-	return &bitfinex.OrderCancel{
-		ID:  o.ID,
-		CID: o.CID,
+func updateToOrder(o *bitfinex.OrderUpdateRequest, cid int64, typ, symbol string) (ord *bitfinex.Order) {
+	ord = &bitfinex.Order{
+		GID:           o.GID,
+		CID:           cid,
+		Type:          typ,
+		Symbol:        symbol,
+		Amount:        o.Amount,
+		Price:         o.Price,
+		PriceTrailing: o.PriceTrailing,
+		PriceAuxLimit: o.PriceAuxLimit,
+		Hidden:        o.Hidden,
+		Flags:         int64(genFlags(o.Hidden, o.PostOnly)),
+		MTSTif:        genMTSTif(o.TimeInForce),
 	}
+	return
 }
 
 func logout(message string, sID quickfix.SessionID) error {
@@ -92,29 +120,129 @@ func (f *FIX) OnFIX42NewOrderSingle(msg nos.NewOrderSingle, sID quickfix.Session
 		return err
 	}
 
-	ordtype, _ := msg.GetOrdType()
-	clordid, _ := msg.GetClOrdID()
-	side, _ := msg.GetSide()
-	tif, err := msg.GetTimeInForce()
+	ordtype, err := msg.GetOrdType()
 	if err != nil {
-		tif = enum.TimeInForce_GOOD_TILL_CANCEL // default TIF
+		return err
+	}
+	clordid, err := msg.GetClOrdID()
+	if err != nil {
+		return err
+	}
+	side, err := msg.GetSide()
+	if err != nil {
+		return err
+	}
+	var tif enum.TimeInForce
+	tif, bo.TimeInForce, err = convert.GetTimeInForceFromFIX(msg.FieldMap)
+	if err != nil {
+		return err
 	}
 
-	flags := 0
-	if bo.Hidden {
-		flags = flags | convert.FlagHidden
-	}
-	if bo.PostOnly {
-		flags = flags | convert.FlagPostOnly
-	}
-	p.AddOrder(clordid, bo.Price, bo.PriceAuxLimit, bo.PriceTrailing, bo.Amount, bo.Symbol, p.BfxUserID(), side, ordtype, tif, flags)
+	o := requestToOrder(bo)
+	p.AddOrder(clordid, bo.Price, bo.PriceAuxLimit, bo.PriceTrailing, bo.Amount, bo.Symbol, p.BfxUserID(), side, ordtype, tif, o.MTSTif, int(o.Flags))
 	// order has been accepted by business logic in gateway, no more 35=j
 
 	e := p.Ws.SubmitOrder(context.Background(), bo)
 	if e != nil {
 		// should be an ER
-		o := requestToOrder(bo)
-		er := convert.FIX42ExecutionReportFromOrder(o, p.BfxUserID(), enum.ExecType_REJECTED, 0.0, enum.OrdStatus_REJECTED, e.Error(), f.Symbology, sID.TargetCompID, flags, bo.PriceAuxLimit, bo.PriceTrailing)
+		er := convert.FIX42ExecutionReportFromOrder(o, p.BfxUserID(), enum.ExecType_REJECTED, 0.0, enum.OrdStatus_REJECTED, e.Error(), f.Symbology, sID.TargetCompID, int(o.Flags), bo.PriceAuxLimit, bo.PriceTrailing)
+		f.logger.Warn("could not submit order", zap.Error(e))
+		return sendToTarget(er, sID)
+	}
+
+	return nil
+}
+
+// OnFIX42OrderCancelReplaceRequest handles an Order Cancel Replace FIX message
+func (f *FIX) OnFIX42OrderCancelReplaceRequest(msg ocrr.OrderCancelReplaceRequest, sID quickfix.SessionID) quickfix.MessageRejectError {
+	ocid, err := msg.GetOrigClOrdID() // Required
+	if err != nil {
+		return err
+	}
+
+	cid, err := msg.GetClOrdID() // required
+	if err != nil {
+		return err
+	}
+
+	p, ok := f.FindPeer(sID.String())
+	if !ok {
+		f.logger.Warn("could not find peer for SessionID", zap.String("SessionID", sID.String()))
+		return quickfix.NewMessageRejectError("could not find established peer for session ID", rejectReasonOther, nil)
+	}
+
+	id := ""
+	var cache *peer.CachedOrder
+	if msg.HasOrderID() {
+		if id, err = msg.GetOrderID(); err != nil {
+			return err
+		}
+	} else {
+		var er error
+		if cache, er = p.LookupByClOrdID(ocid); er != nil {
+			r := convert.FIX42OrderCancelReject(p.BfxUserID(), id, ocid, cid, convert.OrderNotFoundText, true)
+			return sendToTarget(r, sID)
+		}
+		id = cache.OrderID
+	}
+
+	ou := &bitfinex.OrderUpdateRequest{GID: 0}
+	//Ensure ids are fine
+	cidi, er := strconv.ParseInt(cid, 10, 64)
+	if er != nil {
+		r := convert.FIX42OrderCancelReject(p.BfxUserID(), id, ocid, cid, convert.OrderNotFoundText, true)
+		return sendToTarget(r, sID)
+	} else if ou.ID, er = strconv.ParseInt(id, 10, 64); er != nil {
+		r := convert.FIX42OrderCancelReject(p.BfxUserID(), id, ocid, cid, convert.OrderNotFoundText, true)
+		return sendToTarget(r, sID)
+	} else if _, er = strconv.ParseInt(ocid, 10, 64); er != nil {
+		r := convert.FIX42OrderCancelReject(p.BfxUserID(), id, ocid, cid, convert.OrderNotFoundText, true)
+		return sendToTarget(r, sID)
+	} else if cache == nil {
+		cache, er = p.LookupByClOrdID(ocid)
+		if er != nil || cache.OrderID != id {
+			r := convert.FIX42OrderCancelReject(p.BfxUserID(), id, ocid, cid, convert.OrderNotFoundText, true)
+			return sendToTarget(r, sID)
+		}
+	}
+
+	//Update requisite fields
+	qty, err := msg.GetOrderQty()
+	if err != nil {
+		return err
+	}
+	ou.Amount = convert.GetAmountFromQtyAndSide(cache.Side, qty)
+
+	var t enum.OrdType
+	t, ou.Price, ou.PriceAuxLimit, ou.PriceTrailing, _, err = convert.GetPricesFromOrdType(msg.FieldMap)
+	if err != nil {
+		return err
+	}
+
+	var tif enum.TimeInForce
+	tif, ou.TimeInForce, err = convert.GetTimeInForceFromFIX(msg.FieldMap)
+	if err != nil {
+		return err
+	}
+
+	ou.Hidden, ou.PostOnly, _ = convert.GetFlagsFromFIX(msg.FieldMap)
+
+	typ, err := convert.OrderNewTypeFromFIX42(msg.FieldMap)
+	if err != nil {
+		return err
+	}
+	o := updateToOrder(ou, cidi, typ, cache.Symbol)
+	p.AddOrder(cid, ou.Price, ou.PriceAuxLimit, ou.PriceTrailing, ou.Amount, cache.Symbol, p.BfxUserID(), cache.Side, t, tif, genMTSTif(ou.TimeInForce), genFlags(ou.Hidden, ou.PostOnly))
+	if _, er = p.UpdateOrder(cid, id); er != nil {
+		//Ensure order id is updated - this should not fail b/c above call inserts into cache
+		panic(er)
+	}
+
+	// order has been accepted by business logic in gateway, no more 35=j
+	e := p.Ws.SubmitUpdateOrder(context.Background(), ou)
+	if e != nil {
+		// should be an ER
+		er := convert.FIX42ExecutionReportFromOrder(o, p.BfxUserID(), enum.ExecType_REJECTED, 0.0, enum.OrdStatus_REJECTED, e.Error(), f.Symbology, sID.TargetCompID, int(o.Flags), ou.PriceAuxLimit, ou.PriceTrailing)
 		f.logger.Warn("could not submit order", zap.Error(e))
 		return sendToTarget(er, sID)
 	}
@@ -218,7 +346,7 @@ func (f *FIX) OnFIX42MarketDataRequest(msg mdr.MarketDataRequest, sID quickfix.S
 
 		if p.MDReqIDExists(mdReqID) {
 			rej := mdrr.New(field.NewMDReqID(mdReqID))
-			rej.SetText(err.Error())
+			rej.SetText("duplicate MDReqID by session: " + mdReqID)
 			rej.SetMDReqRejReason(enum.MDReqRejReason_DUPLICATE_MDREQID)
 			f.logger.Warn("duplicate MDReqID by session: " + mdReqID)
 			return sendToTarget(rej, sID)
@@ -335,31 +463,14 @@ func (f *FIX) OnFIX42OrderCancelRequest(msg ocr.OrderCancelRequest, sID quickfix
 	if id != "" { // cancel by server-assigned ID
 		idi, err := strconv.ParseInt(id, 10, 64)
 		if err != nil { // bitfinex uses int IDs so we can reject right away.
-			r := ocj.New(
-				field.NewOrderID(id),
-				field.NewClOrdID(cid),
-				field.NewOrigClOrdID(ocid),
-				field.NewOrdStatus(enum.OrdStatus_REJECTED),
-				field.NewCxlRejResponseTo(enum.CxlRejResponseTo_ORDER_CANCEL_REQUEST),
-			)
-			r.SetCxlRejReason(enum.CxlRejReason_UNKNOWN_ORDER)
-			r.SetText(err.Error())
-			r.SetAccount(p.BfxUserID())
+			r := convert.FIX42OrderCancelReject(p.BfxUserID(), id, ocid, cid, convert.OrderNotFoundText, false)
 			return sendToTarget(r, sID)
 		}
 		oc.ID = idi
 	} else { // cancel by client-assigned ID
 		ocidi, err := strconv.ParseInt(ocid, 10, 64)
 		if err != nil {
-			r := ocj.New(
-				field.NewOrderID(id),
-				field.NewClOrdID(cid),
-				field.NewOrigClOrdID(ocid),
-				field.NewOrdStatus(enum.OrdStatus_REJECTED),
-				field.NewCxlRejResponseTo(enum.CxlRejResponseTo_ORDER_CANCEL_REQUEST),
-			)
-			r.SetCxlRejReason(enum.CxlRejReason_UNKNOWN_ORDER)
-			r.SetAccount(p.BfxUserID())
+			r := convert.FIX42OrderCancelReject(p.BfxUserID(), id, ocid, cid, convert.OrderNotFoundText, false)
 			return sendToTarget(r, sID)
 		}
 		oc.CID = ocidi
@@ -374,8 +485,8 @@ func (f *FIX) OnFIX42OrderCancelRequest(msg ocr.OrderCancelRequest, sID quickfix
 	err2 := p.Ws.Send(context.Background(), oc)
 	if err2 != nil {
 		f.logger.Error("not logged onto websocket", zap.String("SessionID", sID.String()), zap.Error(err))
-		ocr := convert.FIX42OrderCancelReject(p.BfxUserID(), id, ocid, cid, err2.Error())
-		return sendToTarget(ocr, sID)
+		rej := convert.FIX42OrderCancelReject(p.BfxUserID(), id, ocid, cid, err2.Error(), false)
+		return sendToTarget(rej, sID)
 	}
 
 	return nil
@@ -394,25 +505,28 @@ func (f *FIX) OnFIX42OrderStatusRequest(msg osr.OrderStatusRequest, sID quickfix
 		}
 	*/
 	oidi, nerr := strconv.ParseInt(oid, 10, 64)
+	if nerr != nil {
+		return reject(nerr)
+	}
 
-	peer, ok := f.FindPeer(sID.String())
+	foundPeer, ok := f.FindPeer(sID.String())
 	if !ok {
 		return reject(fmt.Errorf("could not find route for FIX session %s", sID.String()))
 	}
 
-	order, nerr := peer.Rest.Orders.Status(oidi)
+	order, nerr := foundPeer.Rest.Orders.Status(oidi)
 	if nerr != nil {
 		return reject(nerr)
 	}
 	orderID := strconv.FormatInt(order.ID, 10)
 	clOrdID := strconv.FormatInt(order.CID, 10)
 	ordtype := bitfinex.OrderType(order.Type)
-	tif := convert.TimeInForceToFIX(ordtype)
-	cached, err2 := peer.LookupByOrderID(orderID)
+	tif, _ := convert.TimeInForceToFIX(ordtype, order.MTSTif)
+	cached, err2 := foundPeer.LookupByOrderID(orderID)
 	if err2 != nil {
-		cached = peer.AddOrder(clOrdID, order.Price, order.PriceAuxLimit, order.PriceTrailing, order.Amount, order.Symbol, peer.BfxUserID(), convert.SideToFIX(order.Amount), convert.OrdTypeToFIX(ordtype), tif, int(order.Flags))
+		cached = foundPeer.AddOrder(clOrdID, order.Price, order.PriceAuxLimit, order.PriceTrailing, order.Amount, order.Symbol, foundPeer.BfxUserID(), convert.SideToFIX(order.Amount), convert.OrdTypeToFIX(ordtype), tif, order.MTSTif, int(order.Flags))
 	}
 	status := convert.OrdStatusToFIX(order.Status)
-	er := convert.FIX42ExecutionReportFromOrder(order, peer.BfxUserID(), enum.ExecType_ORDER_STATUS, cached.FilledQty(), status, "", f.Symbology, sID.TargetCompID, cached.Flags, cached.Stop, cached.Trail)
+	er := convert.FIX42ExecutionReportFromOrder(order, foundPeer.BfxUserID(), enum.ExecType_ORDER_STATUS, cached.FilledQty(), status, "", f.Symbology, sID.TargetCompID, cached.Flags, cached.Stop, cached.Trail)
 	return sendToTarget(er, sID)
 }

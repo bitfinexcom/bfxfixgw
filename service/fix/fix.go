@@ -11,6 +11,7 @@ import (
 
 	fix42mdr "github.com/quickfixgo/fix42/marketdatarequest"
 	fix42nos "github.com/quickfixgo/fix42/newordersingle"
+	fix42ocrr "github.com/quickfixgo/fix42/ordercancelreplacerequest"
 	fix42ocr "github.com/quickfixgo/fix42/ordercancelrequest"
 	fix42osr "github.com/quickfixgo/fix42/orderstatusrequest"
 	"github.com/quickfixgo/quickfix"
@@ -78,14 +79,12 @@ func (f *FIX) FromAdmin(msg *quickfix.Message, sID quickfix.SessionID) quickfix.
 	if msg.IsMsgTypeOf(msgTypeLogon) {
 		peerAdded := f.Peers.AddPeer(sID)
 		go func(session string) {
-			select {
-			case dc := <-peerAdded.ListenDisconnect():
-				if _, ok := f.FindPeer(session); dc && ok {
-					if errReportDisconnect := logout("downstream disconnect", sID); errReportDisconnect != nil {
-						//If disconnect cannot be reported, we are in unrecoverable state
-						//Best to panic and let the gateway come back online
-						panic(errReportDisconnect)
-					}
+			dc := <-peerAdded.ListenDisconnect()
+			if _, ok := f.FindPeer(session); dc && ok {
+				if errReportDisconnect := logout("downstream disconnect", sID); errReportDisconnect != nil {
+					//If disconnect cannot be reported, we are in unrecoverable state
+					//Best to panic and let the gateway come back online
+					panic(errReportDisconnect)
 				}
 			}
 		}(sID.String())
@@ -151,6 +150,7 @@ func New(s *quickfix.Settings, peers peer.Peers, serviceType ServiceType, symbol
 	}
 	if serviceType == OrderRoutingService {
 		f.AddRoute(fix42nos.Route(f.OnFIX42NewOrderSingle))
+		f.AddRoute(fix42ocrr.Route(f.OnFIX42OrderCancelReplaceRequest))
 		f.AddRoute(fix42ocr.Route(f.OnFIX42OrderCancelRequest))
 		f.AddRoute(fix42osr.Route(f.OnFIX42OrderStatusRequest))
 		storeFactory = quickfix.NewFileStoreFactory(s)

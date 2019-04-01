@@ -24,7 +24,6 @@ type fixVersion string
 
 const (
 	Fix42 fixVersion = "fix42"
-	Fix44 fixVersion = "fix44"
 )
 
 const (
@@ -102,7 +101,9 @@ func setupWithClientCheck(t *testing.T, port int, settings mockFixSettings, chec
 
 	// mock BFX websocket
 	wsService := mock.NewMockWs(port)
-	wsService.Start()
+	if err := wsService.Start(); err != nil {
+		t.Fatal(err)
+	}
 	params := websocket.NewDefaultParameters()
 	params.URL = "ws://localhost:6001"
 	params.AutoReconnect = true
@@ -142,10 +143,9 @@ func setupWithClientCheck(t *testing.T, port int, settings mockFixSettings, chec
 	clientMDFix.APIKey = settings.APIKey
 	clientMDFix.APISecret = settings.APISecret
 	clientMDFix.BfxUserID = settings.BfxUserID
-	if err != nil {
+	if err := clientMDFix.Start(); err != nil {
 		t.Fatalf("could not create FIX md client: %s", err.Error())
 	}
-	clientMDFix.Start()
 	if checkClient {
 		err = wsService.WaitForClientCount(1)
 		if err != nil {
@@ -155,13 +155,15 @@ func setupWithClientCheck(t *testing.T, port int, settings mockFixSettings, chec
 
 	clientOrdSettings := loadSettings(fmt.Sprintf("conf/integration_test/client/orders_%s.cfg", settings.FixVersion))
 	clientOrdFix, err := mock.NewTestFixClient(clientOrdSettings, quickfix.NewFileStoreFactory(clientOrdSettings), "Orders")
+	if err != nil {
+		t.Fatal(err)
+	}
 	clientOrdFix.APIKey = settings.APIKey
 	clientOrdFix.APISecret = settings.APISecret
 	clientOrdFix.BfxUserID = settings.BfxUserID
-	if err != nil {
+	if err := clientOrdFix.Start(); err != nil {
 		t.Fatalf("could not create FIX ord client: %s", err.Error())
 	}
-	clientOrdFix.Start()
 	if checkClient {
 		err = wsService.WaitForClientCount(2)
 		if err != nil {
@@ -193,24 +195,26 @@ func TestLogon(t *testing.T) {
 		fixMd.Stop()
 		fixOrd.Stop()
 		gw.Stop()
-		srvWs.Stop()
+		if err := srvWs.Stop(); err != nil {
+			t.Fatal(err)
+		}
 	}()
 
 	// assert FIX MD logon
-	fix, err := fixMd.WaitForMessage(MarketDataSessionID, 1)
+	fixm, err := fixMd.WaitForMessage(MarketDataSessionID, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = checkFixTags(fix, "35=A", "49=BFXFIX", "56=EXORG_MD")
+	err = checkFixTags(fixm, "35=A", "49=BFXFIX", "56=EXORG_MD")
 	if err != nil {
 		t.Fatal(err)
 	}
 	// assert FIX order logon
-	fix, err = fixOrd.WaitForMessage(OrderSessionID, 1)
+	fixm, err = fixOrd.WaitForMessage(OrderSessionID, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = checkFixTags(fix, "35=A", "49=BFXFIX", "56=EXORG_ORD")
+	err = checkFixTags(fixm, "35=A", "49=BFXFIX", "56=EXORG_ORD")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -246,7 +250,9 @@ func TestLogonNoCredentials(t *testing.T) {
 		fixMd.Stop()
 		fixOrd.Stop()
 		gw.Stop()
-		srvWs.Stop()
+		if err := srvWs.Stop(); err != nil {
+			t.Fatal(err)
+		}
 	}()
 
 	// give clients an opportunity to connect, but they should NOT be established
@@ -255,12 +261,12 @@ func TestLogonNoCredentials(t *testing.T) {
 		t.Fatal("expected no client connection (no credentials), but a client connection was erroneously established")
 	}
 
-	fix, err := fixMd.WaitForMessage(MarketDataSessionID, 1)
+	fixm, err := fixMd.WaitForMessage(MarketDataSessionID, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
 	// expect malformed logon
-	err = checkFixTags(fix, "35=A", "49=BFXFIX", "56=EXORG_MD")
+	err = checkFixTags(fixm, "35=A", "49=BFXFIX", "56=EXORG_MD")
 	if err != nil {
 		t.Fatal(err)
 	}

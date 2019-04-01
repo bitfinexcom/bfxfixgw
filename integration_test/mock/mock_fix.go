@@ -17,7 +17,6 @@ type Session struct {
 	Received map[int]string
 	Sent     map[int]string
 	m        sync.Mutex
-	wg       sync.WaitGroup
 }
 
 // Send emits a FIX message
@@ -209,7 +208,6 @@ func (m *TestFixClient) Stop() {
 func (m *TestFixClient) OnLogout(sessionID fix.SessionID) {
 	log.Printf("[FIX %s] MockFix.OnLogout: %s", m.name, sessionID)
 	m.Sessions[sessionID.String()].LoggedOn = false
-	return
 }
 
 //SendOnLogon sets the logon messages
@@ -235,7 +233,6 @@ func (m *TestFixClient) OnLogon(sessionID fix.SessionID) {
 	log.Printf("[FIX %s] MockFix.OnLogon: %s", m.name, sessionID)
 	m.Sessions[sessionID.String()].LoggedOn = true
 	m.onLogon(sessionID)
-	return
 }
 
 func fixString(msg fix.Messagable) string {
@@ -257,7 +254,6 @@ func (m *TestFixClient) ToAdmin(msg *fix.Message, sessionID fix.SessionID) {
 		}
 	}
 	log.Printf("[FIX %s] MockFix.ToAdmin (outgoing): %s", m.name, fixString(msg))
-	return
 }
 
 // FromAdmin handles incoming admin
@@ -316,5 +312,4 @@ func (m *TestFixClient) OnCreate(sessionID fix.SessionID) {
 	}
 	m.Sessions[sessionID.String()] = s
 	m.last = s
-	return
 }

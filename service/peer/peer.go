@@ -45,12 +45,6 @@ type Peer struct {
 	*cache
 }
 
-// could be from FIX market data, or FIX order flow
-type subscription struct {
-	Request        *websocket.SubscriptionRequest
-	SubscriptionID string
-}
-
 // New creates a peer, but does not establish a websocket connection yet
 func New(factory ClientFactory, fixSessionID quickfix.SessionID, toParent chan<- *Message) *Peer {
 	log.Printf("created peer for %s", fixSessionID)

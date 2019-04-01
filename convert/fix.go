@@ -1,12 +1,12 @@
 package convert
 
 import (
-	"strings"
-
 	"github.com/bitfinexcom/bitfinex-api-go/v2"
 	"github.com/quickfixgo/enum"
 	"github.com/quickfixgo/field"
 	"github.com/shopspring/decimal"
+	"strings"
+	"time"
 )
 
 const (
@@ -128,15 +128,27 @@ func BookActionToFIX(action bitfinex.BookAction) enum.MDUpdateAction {
 	return enum.MDUpdateAction_NEW
 }
 
+// MTSToTime converts bitfinex millisecond timestamp to go time.Time
+func MTSToTime(mts int64) (time.Time, bool) {
+	if mts > 0 {
+		return time.Unix(0, mts*1000000), true
+	}
+	return time.Time{}, false
+}
+
 // TimeInForceToFIX converts bitfinex order type to FIX TimeInForce
-func TimeInForceToFIX(ordtype bitfinex.OrderType) enum.TimeInForce {
+func TimeInForceToFIX(ordtype bitfinex.OrderType, mtstif int64) (enum.TimeInForce, time.Time) {
+	tif, ok := MTSToTime(mtstif)
+	if ok {
+		return enum.TimeInForce_GOOD_TILL_DATE, tif
+	}
 	switch ordtype {
 	case bitfinex.OrderTypeFOK:
 		fallthrough
 	case bitfinex.OrderTypeExchangeFOK:
-		return enum.TimeInForce_FILL_OR_KILL
+		return enum.TimeInForce_FILL_OR_KILL, tif
 	}
-	return enum.TimeInForce_GOOD_TILL_CANCEL // GTC default
+	return enum.TimeInForce_GOOD_TILL_CANCEL, tif // GTC default
 }
 
 // ExecInstToFIX converts bitfinex order type with flags to FIX exec inst

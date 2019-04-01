@@ -13,11 +13,16 @@ func TestDisconnect(t *testing.T) {
 		FixVersion: Fix42,
 	}
 	fixMd, fixOrd, srvWs, gw := setup(t, 6001, set)
+	isWsOnline := true
 	defer func() {
 		fixMd.Stop()
 		fixOrd.Stop()
 		gw.Stop()
-		srvWs.Stop()
+		if isWsOnline {
+			if err := srvWs.Stop(); err != nil {
+				t.Fatal(err)
+			}
+		}
 	}()
 
 	// assert FIX MD logon
@@ -63,10 +68,13 @@ func TestDisconnect(t *testing.T) {
 	srvWs.Broadcast(`{"event":"auth","status":"OK","chanId":0,"userId":1,"subId":"nonce1","auth_id":"valid-auth-guid","caps":{"orders":{"read":1,"write":0},"account":{"read":1,"write":0},"funding":{"read":1,"write":0},"history":{"read":1,"write":0},"wallets":{"read":1,"write":0},"withdraw":{"read":0,"write":0},"positions":{"read":1,"write":0}}}`)
 
 	// disconnect ws
-	srvWs.Stop()
+	isWsOnline = false
+	if err := srvWs.Stop(); err != nil {
+		t.Fatal(err)
+	}
 
 	// wait for ws disconnect & reconnect period, assert FIX logoff msgs
-	fix, err = fixMd.WaitForMessageWithWait(MarketDataSessionID, 2, time.Second*20)
+	_, err = fixMd.WaitForMessageWithWait(MarketDataSessionID, 2, time.Second*20)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -84,7 +92,9 @@ func TestReconnect(t *testing.T) {
 		fixMd.Stop()
 		fixOrd.Stop()
 		gw.Stop()
-		srvWs.Stop()
+		if err := srvWs.Stop(); err != nil {
+			t.Fatal(err)
+		}
 	}()
 
 	// assert FIX MD logon

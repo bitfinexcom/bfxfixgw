@@ -3,9 +3,9 @@ package bitfinex
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"log"
 	"math"
+	"fmt"
 )
 
 // Prefixes for available pairs
@@ -182,6 +182,7 @@ func (o *OrderNewRequest) MarshalJSON() ([]byte, error) {
 		PriceTrailing: o.PriceTrailing,
 		PriceAuxLimit: o.PriceAuxLimit,
 		PriceOcoStop:  o.PriceOcoStop,
+		TimeInForce:   o.TimeInForce,
 	}
 
 	if o.Hidden {
@@ -214,6 +215,7 @@ type OrderUpdateRequest struct {
 	PriceAuxLimit float64 `json:"price_aux_limit,string,omitempty"`
 	Hidden        bool    `json:"hidden,omitempty"`
 	PostOnly      bool    `json:"postonly,omitempty"`
+	TimeInForce   string  `json:"tif,omitempty"`
 }
 
 // MarshalJSON converts the order object into the format required by the bitfinex
@@ -229,6 +231,7 @@ func (o *OrderUpdateRequest) MarshalJSON() ([]byte, error) {
 		PriceAuxLimit float64 `json:"price_aux_limit,string,omitempty"`
 		Hidden        bool    `json:"hidden,omitempty"`
 		PostOnly      bool    `json:"postonly,omitempty"`
+		TimeInForce   string  `json:"tif,omitempty"`
 		Flags         int     `json:"flags,omitempty"`
 	}{
 		ID:            o.ID,
@@ -238,6 +241,7 @@ func (o *OrderUpdateRequest) MarshalJSON() ([]byte, error) {
 		PriceTrailing: o.PriceTrailing,
 		PriceAuxLimit: o.PriceAuxLimit,
 		Delta:         o.Delta,
+		TimeInForce:   o.TimeInForce,
 	}
 
 	if o.Hidden {
@@ -325,6 +329,7 @@ type Order struct {
 	AmountOrig    float64
 	Type          string
 	TypePrev      string
+	MTSTif        int64
 	Flags         int64
 	Status        OrderStatus
 	Price         float64
@@ -367,6 +372,7 @@ func NewOrderFromRaw(raw []interface{}) (o *Order, err error) {
 			AmountOrig:    f64ValOrZero(raw[7]),
 			Type:          sValOrEmpty(raw[8]),
 			TypePrev:      sValOrEmpty(raw[9]),
+			MTSTif:        int64(f64ValOrZero(raw[10])),
 			Flags:         i64ValOrZero(raw[12]),
 			Status:        OrderStatus(sValOrEmpty(raw[13])),
 			Price:         f64ValOrZero(raw[16]),
@@ -1356,26 +1362,29 @@ const (
 
 // BookUpdate represents an order book price update.
 type BookUpdate struct {
-	ID     int64      // the book update ID, optional
-	Symbol string     // book symbol
-	Price  float64    // updated price
-	Count  int64      // updated count, optional
-	Amount float64    // updated amount
-	Side   OrderSide  // side
-	Action BookAction // action (add/remove)
+	ID          int64       // the book update ID, optional
+	Symbol      string      // book symbol
+	Price       float64     // updated price
+	PriceJsNum  json.Number // update price as json.Number
+	Count       int64       // updated count, optional
+	Amount      float64     // updated amount
+	AmountJsNum json.Number // update amount as json.Number
+	Side        OrderSide   // side
+	Action      BookAction  // action (add/remove)
 }
 
 type BookUpdateSnapshot struct {
 	Snapshot []*BookUpdate
 }
 
-func NewBookUpdateSnapshotFromRaw(symbol, precision string, raw [][]float64) (*BookUpdateSnapshot, error) {
+func NewBookUpdateSnapshotFromRaw(symbol, precision string, raw [][]float64, raw_numbers interface{}) (*BookUpdateSnapshot, error) {
+	fmt.Println(raw_numbers)
 	if len(raw) <= 0 {
 		return nil, fmt.Errorf("data slice too short for book snapshot: %#v", raw)
 	}
 	snap := make([]*BookUpdate, len(raw))
 	for i, f := range raw {
-		b, err := NewBookUpdateFromRaw(symbol, precision, ToInterface(f))
+		b, err := NewBookUpdateFromRaw(symbol, precision, ToInterface(f), raw_numbers.([]interface{})[i])
 		if err != nil {
 			return nil, err
 		}
@@ -1391,13 +1400,16 @@ func IsRawBook(precision string) bool {
 // NewBookUpdateFromRaw creates a new book update object from raw data.  Precision determines how
 // to interpret the side (baked into Count versus Amount)
 // raw book updates [ID, price, qty], aggregated book updates [price, amount, count]
-func NewBookUpdateFromRaw(symbol, precision string, data []interface{}) (b *BookUpdate, err error) {
+func NewBookUpdateFromRaw(symbol, precision string, data []interface{}, raw_numbers interface{}) (b *BookUpdate, err error) {
 	if len(data) < 3 {
 		return b, fmt.Errorf("data slice too short for book update, expected %d got %d: %#v", 5, len(data), data)
 	}
 	var px float64
+	var px_num json.Number
 	var id, cnt int64
+	raw_num_array := raw_numbers.([]interface{})
 	amt := f64ValOrZero(data[2])
+	amt_num := floatToJsonNumber(raw_num_array[2])
 
 	var side OrderSide
 	var actionCtrl float64
@@ -1405,10 +1417,12 @@ func NewBookUpdateFromRaw(symbol, precision string, data []interface{}) (b *Book
 		// [ID, price, amount]
 		id = i64ValOrZero(data[0])
 		px = f64ValOrZero(data[1])
+		px_num = floatToJsonNumber(raw_num_array[1])
 		actionCtrl = px
 	} else {
 		// [price, amount, count]
 		px = f64ValOrZero(data[0])
+		px_num = floatToJsonNumber(raw_num_array[0])
 		cnt = i64ValOrZero(data[1])
 		actionCtrl = float64(cnt)
 	}
@@ -1427,13 +1441,15 @@ func NewBookUpdateFromRaw(symbol, precision string, data []interface{}) (b *Book
 	}
 
 	b = &BookUpdate{
-		Symbol: symbol,
-		Price:  math.Abs(px),
-		Count:  cnt,
-		Amount: math.Abs(amt),
-		Side:   side,
-		Action: action,
-		ID:     id,
+		Symbol:      symbol,
+		Price:       math.Abs(px),
+		PriceJsNum:  px_num,
+		Count:       cnt,
+		Amount:      math.Abs(amt),
+		AmountJsNum: amt_num,
+		Side:        side,
+		Action:      action,
+		ID:          id,
 	}
 
 	return

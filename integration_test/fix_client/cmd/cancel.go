@@ -45,6 +45,6 @@ func (c *Cancel) Execute(keyboard <-chan string, publisher FIXPublisher) error {
 func (c *Cancel) Handle(msg *fix.Message) {
 	msgtype, _ := msg.Header.GetString(tag.MsgType)
 	if msgtype == "8" {
-		//log.Printf("[CANCEL]: %s", msg.String())
+		log.Printf("[CANCEL]: %s", msg.String())
 	}
 }

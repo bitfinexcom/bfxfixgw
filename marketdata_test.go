@@ -90,7 +90,9 @@ func TestMarketData(t *testing.T) {
 
 	// request market data
 	req := newMdRequest("request-id-1", "tBTCUSD", 1)
-	fixMd.Send(req)
+	if err = fixMd.Send(req); err != nil {
+		t.Fatal(err)
+	}
 
 	// wait for ws to see requests
 	msg, err = srvWs.WaitForMessage(MarketDataClient, 1)
@@ -224,5 +226,7 @@ func TestMarketData(t *testing.T) {
 	fixMd.Stop()
 	fixOrd.Stop()
 	gw.Stop()
-	srvWs.Stop()
+	if err := srvWs.Stop(); err != nil {
+		t.Fatal(err)
+	}
 }

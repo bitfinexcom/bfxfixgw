@@ -160,7 +160,7 @@ func FIX42MarketDataIncrementalRefreshFromBookUpdate(mdReqID string, update *bit
 }
 
 // FIX42ExecutionReport generates a FIX execution report from provided order details
-func FIX42ExecutionReport(symbol, clOrdID, orderID, account string, execType enum.ExecType, side enum.Side, origQty, thisQty, cumQty, px, stop, trail, avgPx float64, ordStatus enum.OrdStatus, ordType enum.OrdType, tif enum.TimeInForce, exp time.Time, text string, symbology symbol.Symbology, counterparty string, flags int) fix42er.ExecutionReport {
+func FIX42ExecutionReport(symbol, clOrdID, orderID, account string, execType enum.ExecType, side enum.Side, origQty, thisQty, cumQty, px, stop, trail, avgPx float64, ordStatus enum.OrdStatus, ordType enum.OrdType, isMargin bool, tif enum.TimeInForce, exp time.Time, text string, symbology symbol.Symbology, counterparty string, flags int) fix42er.ExecutionReport {
 	// total order qty
 	amt := decimal.NewFromFloat(origQty)
 
@@ -211,6 +211,9 @@ func FIX42ExecutionReport(symbol, clOrdID, orderID, account string, execType enu
 	e.SetOrderQty(amt, 4)
 	if text != "" {
 		e.SetText(text)
+	}
+	if isMargin {
+		e.Set(field.NewCashMargin(enum.CashMargin_MARGIN_CLOSE))
 	}
 	e.SetOrdType(ordType)
 	e.SetClOrdID(clOrdID)
@@ -263,10 +266,10 @@ func FIX42ExecutionReportFromOrder(o *bitfinex.Order, account string, execType e
 	if fAmt < 0 {
 		fAmt = -fAmt
 	}
-	ordtype := OrdTypeToFIX(bitfinex.OrderType(o.Type))
+	ordtype, isMargin := OrdTypeToFIX(bitfinex.OrderType(o.Type))
 	tif, exp := TimeInForceToFIX(bitfinex.OrderType(o.Type), o.MTSTif) // support FOK
 
-	e := FIX42ExecutionReport(o.Symbol, strconv.FormatInt(o.CID, 10), orderID, account, execType, SideToFIX(o.Amount), fAmt, 0.0, cumQty, o.Price, stop, peg, o.PriceAvg, ordStatus, ordtype, tif, exp, text, symbology, counterparty, flags)
+	e := FIX42ExecutionReport(o.Symbol, strconv.FormatInt(o.CID, 10), orderID, account, execType, SideToFIX(o.Amount), fAmt, 0.0, cumQty, o.Price, stop, peg, o.PriceAvg, ordStatus, ordtype, isMargin, tif, exp, text, symbology, counterparty, flags)
 	if text != "" {
 		e.SetText(text)
 	}
@@ -291,7 +294,8 @@ func FIX42ExecutionReportFromTradeExecutionUpdate(t *bitfinex.TradeExecutionUpda
 		execAmt = -execAmt
 	}
 	tif, exp := TimeInForceToFIX(bitfinex.OrderType(t.OrderType), expTif) // support FOK
-	er := FIX42ExecutionReport(t.Pair, clOrdID, orderID, account, execType, SideToFIX(t.ExecAmount), origQty, execAmt, totalFillQty, origPx, stopPx, trailPx, avgFillPx, ordStatus, OrdTypeToFIX(bitfinex.OrderType(t.OrderType)), tif, exp, "", symbology, counterparty, flags)
+	ordType, isMargin := OrdTypeToFIX(bitfinex.OrderType(t.OrderType))
+	er := FIX42ExecutionReport(t.Pair, clOrdID, orderID, account, execType, SideToFIX(t.ExecAmount), origQty, execAmt, totalFillQty, origPx, stopPx, trailPx, avgFillPx, ordStatus, ordType, isMargin, tif, exp, "", symbology, counterparty, flags)
 	f := t.Fee
 	if f < 0 {
 		f = -f

@@ -7,6 +7,7 @@ import (
 	"github.com/bitfinexcom/bfxfixgw/convert"
 	"github.com/bitfinexcom/bfxfixgw/service/peer"
 	"strconv"
+	"strings"
 	"time"
 
 	"go.uber.org/zap"
@@ -137,9 +138,10 @@ func (f *FIX) OnFIX42NewOrderSingle(msg nos.NewOrderSingle, sID quickfix.Session
 	if err != nil {
 		return err
 	}
+	ismargin := strings.Contains(bo.Type, "MARGIN")
 
 	o := requestToOrder(bo)
-	p.AddOrder(clordid, bo.Price, bo.PriceAuxLimit, bo.PriceTrailing, bo.Amount, bo.Symbol, p.BfxUserID(), side, ordtype, tif, o.MTSTif, int(o.Flags))
+	p.AddOrder(clordid, bo.Price, bo.PriceAuxLimit, bo.PriceTrailing, bo.Amount, bo.Symbol, p.BfxUserID(), side, ordtype, ismargin, tif, o.MTSTif, int(o.Flags))
 	// order has been accepted by business logic in gateway, no more 35=j
 
 	e := p.Ws.SubmitOrder(context.Background(), bo)
@@ -232,7 +234,7 @@ func (f *FIX) OnFIX42OrderCancelReplaceRequest(msg ocrr.OrderCancelReplaceReques
 		return err
 	}
 	o := updateToOrder(ou, cidi, typ, cache.Symbol)
-	p.AddOrder(cid, ou.Price, ou.PriceAuxLimit, ou.PriceTrailing, ou.Amount, cache.Symbol, p.BfxUserID(), cache.Side, t, tif, genMTSTif(ou.TimeInForce), genFlags(ou.Hidden, ou.PostOnly))
+	p.AddOrder(cid, ou.Price, ou.PriceAuxLimit, ou.PriceTrailing, ou.Amount, cache.Symbol, p.BfxUserID(), cache.Side, t, cache.IsMargin, tif, genMTSTif(ou.TimeInForce), genFlags(ou.Hidden, ou.PostOnly))
 	if _, er = p.UpdateOrder(cid, id); er != nil {
 		//Ensure order id is updated - this should not fail b/c above call inserts into cache
 		panic(er)
@@ -524,7 +526,8 @@ func (f *FIX) OnFIX42OrderStatusRequest(msg osr.OrderStatusRequest, sID quickfix
 	tif, _ := convert.TimeInForceToFIX(ordtype, order.MTSTif)
 	cached, err2 := foundPeer.LookupByOrderID(orderID)
 	if err2 != nil {
-		cached = foundPeer.AddOrder(clOrdID, order.Price, order.PriceAuxLimit, order.PriceTrailing, order.Amount, order.Symbol, foundPeer.BfxUserID(), convert.SideToFIX(order.Amount), convert.OrdTypeToFIX(ordtype), tif, order.MTSTif, int(order.Flags))
+		ot, isMargin := convert.OrdTypeToFIX(ordtype)
+		cached = foundPeer.AddOrder(clOrdID, order.Price, order.PriceAuxLimit, order.PriceTrailing, order.Amount, order.Symbol, foundPeer.BfxUserID(), convert.SideToFIX(order.Amount), ot, isMargin, tif, order.MTSTif, int(order.Flags))
 	}
 	status := convert.OrdStatusToFIX(order.Status)
 	er := convert.FIX42ExecutionReportFromOrder(order, foundPeer.BfxUserID(), enum.ExecType_ORDER_STATUS, cached.FilledQty(), status, "", f.Symbology, sID.TargetCompID, cached.Flags, cached.Stop, cached.Trail)

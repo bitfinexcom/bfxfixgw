@@ -249,8 +249,11 @@ Below is a table of various Bitfinex order features and their FIX `35=D NewOrder
 | Fill or Kill				| TimeInForce (59)		| Fill or Kill (4)				|
 | Good till Date			| TimeInForce (59)		| Good till Date (6)			|
 | Good till Date			| ExpireTime (126)		| Example: 2006-01-02 15:04:05	|
+| Margin<sup>*</sup>        | CashMargin (544)		| Margin Open (2)				|
 
 <sup>*</sup> Post-Only orders are considered to have a Good-till-Cancel time in force.  
+
+<sup>*</sup> Margin order execution reports respond with CashMargin (544) = Margin Close (3)
 
 For a trailing stop order:
 

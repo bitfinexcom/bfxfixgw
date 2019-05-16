@@ -108,7 +108,8 @@ func (w *Websocket) FIX42TradeExecutionUpdateHandler(t *bitfinex.TradeExecutionU
 		// update everything at the same time
 		ordtype := bitfinex.OrderType(os.Type)
 		tif, _ := convert.TimeInForceToFIX(ordtype, os.MTSTif)
-		p.AddOrder(clOrdID, os.Price, os.PriceAuxLimit, os.PriceTrailing, os.Amount, os.Symbol, p.BfxUserID(), convert.SideToFIX(t.ExecAmount), convert.OrdTypeToFIX(ordtype), tif, os.MTSTif, int(os.Flags))
+		ot, isMargin := convert.OrdTypeToFIX(ordtype)
+		p.AddOrder(clOrdID, os.Price, os.PriceAuxLimit, os.PriceTrailing, os.Amount, os.Symbol, p.BfxUserID(), convert.SideToFIX(t.ExecAmount), ot, isMargin, tif, os.MTSTif, int(os.Flags))
 		cached, err = p.UpdateOrder(clOrdID, orderID)
 		if err != nil {
 			w.logger.Warn("could not update order", zap.Error(err))
@@ -187,7 +188,7 @@ func (w *Websocket) FIX42NotificationHandler(d *bitfinex.Notification, sID quick
 			}
 
 			exp, _ := convert.MTSToTime(orig.TifExpiration)
-			er := convert.FIX42ExecutionReport(orig.Symbol, orig.ClOrdID, orig.OrderID, orig.Account, enum.ExecType_PENDING_CANCEL, orig.Side, orig.Qty, 0.0, orig.FilledQty(), orig.Px, orig.Stop, orig.Trail, orig.AvgFillPx(), enum.OrdStatus_PENDING_CANCEL, orig.OrderType, orig.TimeInForce, exp, d.Text, w.Symbology, sID.TargetCompID, orig.Flags)
+			er := convert.FIX42ExecutionReport(orig.Symbol, orig.ClOrdID, orig.OrderID, orig.Account, enum.ExecType_PENDING_CANCEL, orig.Side, orig.Qty, 0.0, orig.FilledQty(), orig.Px, orig.Stop, orig.Trail, orig.AvgFillPx(), enum.OrdStatus_PENDING_CANCEL, orig.OrderType, orig.IsMargin, orig.TimeInForce, exp, d.Text, w.Symbology, sID.TargetCompID, orig.Flags)
 			if orig.Px > 0 {
 				er.SetPrice(decimal.NewFromFloat(orig.Px), 4)
 			}
@@ -212,7 +213,8 @@ func (w *Websocket) FIX42NotificationHandler(d *bitfinex.Notification, sID quick
 				w.logger.Warn("adding unknown order (entered outside session)", zap.String("ClOrdID", clOrdID), zap.String("OrderID", orderID))
 				ordtype := bitfinex.OrderType(order.Type)
 				tif, _ := convert.TimeInForceToFIX(ordtype, order.MTSTif)
-				cache := p.AddOrder(clOrdID, order.Price, order.PriceAuxLimit, order.PriceTrailing, order.Amount, order.Symbol, p.BfxUserID(), convert.SideToFIX(order.Amount), convert.OrdTypeToFIX(ordtype), tif, order.MTSTif, int(order.Flags))
+				ot, isMargin := convert.OrdTypeToFIX(ordtype)
+				cache := p.AddOrder(clOrdID, order.Price, order.PriceAuxLimit, order.PriceTrailing, order.Amount, order.Symbol, p.BfxUserID(), convert.SideToFIX(order.Amount), ot, isMargin, tif, order.MTSTif, int(order.Flags))
 				cache.OrderID = orderID
 			}
 			ordStatus = enum.OrdStatus_NEW
@@ -251,7 +253,8 @@ func (w *Websocket) FIX42OrderSnapshotHandler(os *bitfinex.OrderSnapshot, sID qu
 			tif, _ := convert.TimeInForceToFIX(ordtype, order.MTSTif)
 
 			// add order to cache
-			cache := peer.AddOrder(strconv.FormatInt(order.CID, 10), order.Price, order.PriceAuxLimit, order.PriceTrailing, order.Amount, order.Symbol, peer.BfxUserID(), convert.SideToFIX(order.Amount), convert.OrdTypeToFIX(ordtype), tif, order.MTSTif, int(order.Flags))
+			ot, isMargin := convert.OrdTypeToFIX(ordtype)
+			cache := peer.AddOrder(strconv.FormatInt(order.CID, 10), order.Price, order.PriceAuxLimit, order.PriceTrailing, order.Amount, order.Symbol, peer.BfxUserID(), convert.SideToFIX(order.Amount), ot, isMargin, tif, order.MTSTif, int(order.Flags))
 
 			// need to fetch executions for this order to fill cache execution details
 			snapshot, err := peer.Rest.Orders.OrderTrades(order.Symbol, order.ID)

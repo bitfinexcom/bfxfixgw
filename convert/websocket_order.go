@@ -21,39 +21,45 @@ const TimeInForceFormat = "2006-01-02 15:04:05"
 
 // OrderNewTypeFromFIX42 takes a FIX42 message and tries to extract enough information
 // to figure out the appropriate type for the bitfinex order.
-// XXX: Only works for EXCHANGE orders at the moment, i.e. automatically adds EXCHANGE prefix.
-func OrderNewTypeFromFIX42(msg quickfix.FieldMap) (string, quickfix.MessageRejectError) {
+func OrderNewTypeFromFIX42(msg quickfix.FieldMap) (ordType string, err quickfix.MessageRejectError) {
 	ot := &field.OrdTypeField{}
 	_ = msg.Get(ot)
 	tif := &field.TimeInForceField{}
 	_ = msg.Get(tif)
 	ei := &field.ExecInstField{}
 	_ = msg.Get(ei)
+	cm := &field.CashMarginField{}
+	_ = msg.Get(cm)
 
 	if ei.Value() == enum.ExecInst_ALL_OR_NONE {
-		return "", quickfix.ValueIsIncorrect(ei.Tag())
+		err = quickfix.ValueIsIncorrect(ei.Tag())
+		return
 	}
 
 	// map AON & IOC => FOK
 	if tif.Value() == enum.TimeInForce_FILL_OR_KILL || tif.Value() == enum.TimeInForce_IMMEDIATE_OR_CANCEL {
-		return bitfinex.OrderTypeExchangeFOK, nil
+		ordType = bitfinex.OrderTypeExchangeFOK
+	} else {
+		switch ot.Value() {
+		case enum.OrdType_MARKET:
+			ordType = bitfinex.OrderTypeExchangeMarket
+		case enum.OrdType_LIMIT:
+			ordType = bitfinex.OrderTypeExchangeLimit
+		case enum.OrdType_STOP:
+			ordType = bitfinex.OrderTypeExchangeStop
+			if msg.Has(ei.Tag()) && strings.Contains(string(ei.Value()), string(enum.ExecInst_PRIMARY_PEG)) {
+				ordType = bitfinex.OrderTypeExchangeTrailingStop
+			}
+		case enum.OrdType_STOP_LIMIT:
+			ordType = bitfinex.OrderTypeExchangeStopLimit
+		}
 	}
 
-	switch ot.Value() {
-	case enum.OrdType_MARKET:
-		return bitfinex.OrderTypeExchangeMarket, nil
-	case enum.OrdType_LIMIT:
-		return bitfinex.OrderTypeExchangeLimit, nil
-	case enum.OrdType_STOP:
-		if msg.Has(ei.Tag()) && strings.Contains(string(ei.Value()), string(enum.ExecInst_PRIMARY_PEG)) {
-			return bitfinex.OrderTypeExchangeTrailingStop, nil
-		}
-		return bitfinex.OrderTypeExchangeStop, nil
-	case enum.OrdType_STOP_LIMIT:
-		return bitfinex.OrderTypeExchangeStopLimit, nil
-	default:
-		return "", nil
+	// if cash margin flag present, swizzle order type prefix
+	if msg.Has(tag.CashMargin) && cm.Value() == enum.CashMargin_MARGIN_OPEN {
+		ordType = strings.Replace(ordType, "EXCHANGE", "MARGIN", 1)
 	}
+	return
 }
 
 // GetTimeInForceFromFIX extracts a FIX message map's time in force information

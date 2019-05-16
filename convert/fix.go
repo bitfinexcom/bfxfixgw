@@ -89,16 +89,17 @@ func AvgPxToFIX(priceAvg float64) field.AvgPxField {
 }
 
 // OrdTypeToFIX converts bitfinex order type to FIX order type
-func OrdTypeToFIX(ordtype bitfinex.OrderType) enum.OrdType {
-	switch ordtype {
+func OrdTypeToFIX(bfxOrdType bitfinex.OrderType) (ordType enum.OrdType, isMargin bool) {
+	isMargin = strings.Contains(string(bfxOrdType), "MARGIN")
+	switch strings.Replace(string(bfxOrdType), "MARGIN", "EXCHANGE", 1) {
 	case bitfinex.OrderTypeExchangeLimit:
 		fallthrough
 	case bitfinex.OrderTypeLimit:
-		return enum.OrdType_LIMIT
+		ordType = enum.OrdType_LIMIT
 	case bitfinex.OrderTypeExchangeMarket:
 		fallthrough
 	case bitfinex.OrderTypeMarket:
-		return enum.OrdType_MARKET
+		ordType = enum.OrdType_MARKET
 	case bitfinex.OrderTypeStop:
 		fallthrough
 	case bitfinex.OrderTypeTrailingStop:
@@ -106,15 +107,17 @@ func OrdTypeToFIX(ordtype bitfinex.OrderType) enum.OrdType {
 	case bitfinex.OrderTypeExchangeTrailingStop:
 		fallthrough
 	case bitfinex.OrderTypeExchangeStop:
-		return enum.OrdType_STOP
+		ordType = enum.OrdType_STOP
 	case bitfinex.OrderTypeStopLimit:
-		return enum.OrdType_STOP_LIMIT
+		ordType = enum.OrdType_STOP_LIMIT
 	case bitfinex.OrderTypeFOK:
 		fallthrough
 	case bitfinex.OrderTypeExchangeFOK:
-		return enum.OrdType_LIMIT
+		ordType = enum.OrdType_LIMIT
+	default:
+		ordType = enum.OrdType_MARKET
 	}
-	return enum.OrdType_MARKET
+	return
 }
 
 // BookActionToFIX converts bitfinex book action to FIX MD enum

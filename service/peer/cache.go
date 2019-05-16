@@ -28,12 +28,13 @@ type CachedOrder struct {
 	lock                 sync.Mutex
 	Side                 enum.Side
 	OrderType            enum.OrdType
+	IsMargin             bool
 	TimeInForce          enum.TimeInForce
 	TifExpiration        int64
 	Flags                int
 }
 
-func newOrder(clordid string, px, stop, trail, qty float64, symbol, account string, side enum.Side, ordType enum.OrdType, tif enum.TimeInForce, exp int64, flags int) *CachedOrder {
+func newOrder(clordid string, px, stop, trail, qty float64, symbol, account string, side enum.Side, ordType enum.OrdType, isMargin bool, tif enum.TimeInForce, exp int64, flags int) *CachedOrder {
 	return &CachedOrder{
 		ClOrdID:       clordid,
 		Px:            px,
@@ -45,6 +46,7 @@ func newOrder(clordid string, px, stop, trail, qty float64, symbol, account stri
 		Account:       account,
 		Side:          side,
 		OrderType:     ordType,
+		IsMargin:      isMargin,
 		TimeInForce:   tif,
 		TifExpiration: exp,
 		Flags:         flags,
@@ -178,13 +180,13 @@ func (c *cache) ReverseLookupAPIReqIDs(bfxReqID string) (string, bool) {
 }
 
 // add when receiving a NewOrderSingle over FIX
-func (c *cache) AddOrder(clordid string, px, stop, trail, qty float64, symbol, account string, side enum.Side, ordType enum.OrdType, tif enum.TimeInForce, expTif int64, flags int) *CachedOrder {
+func (c *cache) AddOrder(clordid string, px, stop, trail, qty float64, symbol, account string, side enum.Side, ordType enum.OrdType, isMargin bool, tif enum.TimeInForce, expTif int64, flags int) *CachedOrder {
 	if qty < 0 {
 		qty = -qty
 	}
 	c.lock.Lock()
 	c.log.Info("added order to cache", zap.String("ClOrdID", clordid), zap.Float64("Px", px), zap.Float64("Qty", qty))
-	order := newOrder(clordid, px, stop, trail, qty, symbol, account, side, ordType, tif, expTif, flags)
+	order := newOrder(clordid, px, stop, trail, qty, symbol, account, side, ordType, isMargin, tif, expTif, flags)
 	c.orders[clordid] = order
 	c.lock.Unlock()
 	return order

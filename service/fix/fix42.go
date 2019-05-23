@@ -116,7 +116,7 @@ func (f *FIX) OnFIX42NewOrderSingle(msg nos.NewOrderSingle, sID quickfix.Session
 		return quickfix.NewMessageRejectError("could not find established peer for session ID", rejectReasonOther, nil)
 	}
 
-	bo, err := convert.OrderNewFromFIX42NewOrderSingle(msg, f.Symbology, sID.TargetCompID)
+	bo, err := convert.OrderNewFromFIXNewOrderSingle(msg.FieldMap, f.Symbology, sID.TargetCompID)
 	if err != nil {
 		return err
 	}
@@ -229,7 +229,7 @@ func (f *FIX) OnFIX42OrderCancelReplaceRequest(msg ocrr.OrderCancelReplaceReques
 
 	ou.Hidden, ou.PostOnly, _ = convert.GetFlagsFromFIX(msg.FieldMap)
 
-	typ, err := convert.OrderNewTypeFromFIX42(msg.FieldMap)
+	typ, err := convert.OrderNewTypeFromFIX(msg.FieldMap)
 	if err != nil {
 		return err
 	}

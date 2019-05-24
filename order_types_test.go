@@ -15,12 +15,12 @@ import (
 //TestNewOrderSingleGTD tests a custom expiration date when submitting a new order
 func (s *gatewaySuite) TestNewOrderSingleGTD() {
 	// assert FIX MD logon
-	fix, err := s.fixMd.WaitForMessage(MarketDataSessionID, 1)
+	fix, err := s.fixMd.WaitForMessage(s.MarketDataSessionID, 1)
 	s.Require().Nil(err)
 	err = s.checkFixTags(fix, "35=A", "49=BFXFIX", "56=EXORG_MD")
 	s.Require().Nil(err)
 	// assert FIX order logon
-	fix, err = s.fixOrd.WaitForMessage(OrderSessionID, 1)
+	fix, err = s.fixOrd.WaitForMessage(s.OrderSessionID, 1)
 	s.Require().Nil(err)
 	err = s.checkFixTags(fix, "35=A", "49=BFXFIX", "56=EXORG_ORD")
 	s.Require().Nil(err)
@@ -73,7 +73,7 @@ func (s *gatewaySuite) TestNewOrderSingleGTD() {
 
 	// service publish new ack, assert NEW
 	s.srvWs.Send(OrdersClient, `[0,"on",[1234567,0,555,"tBTCUSD",1521153050972,1521153051035,1,1,"EXCHANGE LIMIT",null,`+expirationMilliStr+`,null,0,"ACTIVE",null,null,12000,0,null,null,null,null,null,0,0,0,null,null,"API>BFX",null,null,null]]`)
-	fix, err = s.fixOrd.WaitForMessage(OrderSessionID, 2)
+	fix, err = s.fixOrd.WaitForMessage(s.OrderSessionID, 2)
 	s.Require().Nil(err)
 	err = s.checkFixTags(fix, "35=8", "49=BFXFIX", "56=EXORG_ORD", "1=user123", "40=2", "20=3", "32=0.000", "39=0", "54=1", "55=tBTCUSD", "150=0", "151=1.00", "6=0.00", "14=0.00", "59=6", "126=20060102-15:04:05.000")
 	s.Require().Nil(err)
@@ -82,7 +82,7 @@ func (s *gatewaySuite) TestNewOrderSingleGTD() {
 	s.srvWs.Send(OrdersClient, `[0,"tu",[1,"tBTCUSD",1514909325593,1234567,0.21679716,12000,"EXCHANGE LIMIT",12000,1,-0.39712904,"USD"]]`)
 
 	// assert FIX execution report PARTIAL FILL
-	fix, err = s.fixOrd.WaitForMessage(OrderSessionID, 3)
+	fix, err = s.fixOrd.WaitForMessage(s.OrderSessionID, 3)
 	s.Require().Nil(err)
 	err = s.checkFixTags(fix, "35=8", "49=BFXFIX", "56=EXORG_ORD", "1=user123", "40=2", "20=3", "32=0.2168", "39=1", "54=1", "55=tBTCUSD", "150=1", "151=0.7832", "6=12000", "14=0.2168", "59=6", "126=20060102-15:04:05.000")
 	s.Require().Nil(err)
@@ -91,7 +91,7 @@ func (s *gatewaySuite) TestNewOrderSingleGTD() {
 	s.srvWs.Send(OrdersClient, `[0,"tu",[1,"tBTCUSD",1514909325593,1234567,0.78320284,12000,"EXCHANGE LIMIT",12000,1,-0.39712904,"USD"]]`)
 
 	// assert FIX execution report FULL FILL
-	fix, err = s.fixOrd.WaitForMessage(OrderSessionID, 4)
+	fix, err = s.fixOrd.WaitForMessage(s.OrderSessionID, 4)
 	s.Require().Nil(err)
 	err = s.checkFixTags(fix, "35=8", "49=BFXFIX", "56=EXORG_ORD", "1=user123", "40=2", "20=3", "32=0.7832", "39=2", "54=1", "55=tBTCUSD", "150=2", "151=0.0000", "6=12000", "14=1.000", "59=6", "126=20060102-15:04:05.000")
 	s.Require().Nil(err)
@@ -100,12 +100,12 @@ func (s *gatewaySuite) TestNewOrderSingleGTD() {
 //TestNewOrderSingleRejectBadGTD rejects a custom expiration date when field is missing
 func (s *gatewaySuite) TestNewOrderSingleRejectBadGTD() {
 	// assert FIX MD logon
-	fix, err := s.fixMd.WaitForMessage(MarketDataSessionID, 1)
+	fix, err := s.fixMd.WaitForMessage(s.MarketDataSessionID, 1)
 	s.Require().Nil(err)
 	err = s.checkFixTags(fix, "35=A", "49=BFXFIX", "56=EXORG_MD")
 	s.Require().Nil(err)
 	// assert FIX order logon
-	fix, err = s.fixOrd.WaitForMessage(OrderSessionID, 1)
+	fix, err = s.fixOrd.WaitForMessage(s.OrderSessionID, 1)
 	s.Require().Nil(err)
 	err = s.checkFixTags(fix, "35=A", "49=BFXFIX", "56=EXORG_ORD")
 	s.Require().Nil(err)
@@ -141,7 +141,7 @@ func (s *gatewaySuite) TestNewOrderSingleRejectBadGTD() {
 	s.Require().Nil(err)
 
 	// assert FIX message reject
-	fix, err = s.fixOrd.WaitForMessage(OrderSessionID, 2)
+	fix, err = s.fixOrd.WaitForMessage(s.OrderSessionID, 2)
 	s.Require().Nil(err)
 	err = s.checkFixTags(fix, "35=j", "49=BFXFIX", "56=EXORG_ORD", "372=D", "380=5", "58=Conditionally Required Field Missing (126)")
 	s.Require().Nil(err)
@@ -150,12 +150,12 @@ func (s *gatewaySuite) TestNewOrderSingleRejectBadGTD() {
 //TestNewOrderSingleMargin tests margin order types
 func (s *gatewaySuite) TestNewOrderSingleMargin() {
 	// assert FIX MD logon
-	fix, err := s.fixMd.WaitForMessage(MarketDataSessionID, 1)
+	fix, err := s.fixMd.WaitForMessage(s.MarketDataSessionID, 1)
 	s.Require().Nil(err)
 	err = s.checkFixTags(fix, "35=A", "49=BFXFIX", "56=EXORG_MD")
 	s.Require().Nil(err)
 	// assert FIX order logon
-	fix, err = s.fixOrd.WaitForMessage(OrderSessionID, 1)
+	fix, err = s.fixOrd.WaitForMessage(s.OrderSessionID, 1)
 	s.Require().Nil(err)
 	err = s.checkFixTags(fix, "35=A", "49=BFXFIX", "56=EXORG_ORD")
 	s.Require().Nil(err)
@@ -200,7 +200,7 @@ func (s *gatewaySuite) TestNewOrderSingleMargin() {
 
 	// service publish new ack, assert NEW
 	s.srvWs.Send(OrdersClient, `[0,"on",[1234567,0,555,"tBTCUSD",1521153050972,1521153051035,1,1,"MARGIN LIMIT",null,null,null,0,"ACTIVE",null,null,12000,0,null,null,null,null,null,0,0,0,null,null,"API>BFX",null,null,null]]`)
-	fix, err = s.fixOrd.WaitForMessage(OrderSessionID, 2)
+	fix, err = s.fixOrd.WaitForMessage(s.OrderSessionID, 2)
 	s.Require().Nil(err)
 	err = s.checkFixTags(fix, "35=8", "49=BFXFIX", "56=EXORG_ORD", "1=user123", "40=2", "20=3", "32=0.000", "39=0", "54=1", "55=tBTCUSD", "150=0", "151=1.00", "6=0.00", "14=0.00", "544=3")
 	s.Require().Nil(err)
@@ -209,7 +209,7 @@ func (s *gatewaySuite) TestNewOrderSingleMargin() {
 	s.srvWs.Send(OrdersClient, `[0,"tu",[1,"tBTCUSD",1514909325593,1234567,0.21679716,12000,"MARGIN LIMIT",12000,1,-0.39712904,"USD"]]`)
 
 	// assert FIX execution report PARTIAL FILL
-	fix, err = s.fixOrd.WaitForMessage(OrderSessionID, 3)
+	fix, err = s.fixOrd.WaitForMessage(s.OrderSessionID, 3)
 	s.Require().Nil(err)
 	err = s.checkFixTags(fix, "35=8", "49=BFXFIX", "56=EXORG_ORD", "1=user123", "40=2", "20=3", "32=0.2168", "39=1", "54=1", "55=tBTCUSD", "150=1", "151=0.7832", "6=12000", "14=0.2168", "544=3")
 	s.Require().Nil(err)
@@ -218,7 +218,7 @@ func (s *gatewaySuite) TestNewOrderSingleMargin() {
 	s.srvWs.Send(OrdersClient, `[0,"tu",[1,"tBTCUSD",1514909325593,1234567,0.78320284,12000,"MARGIN LIMIT",12000,1,-0.39712904,"USD"]]`)
 
 	// assert FIX execution report FULL FILL
-	fix, err = s.fixOrd.WaitForMessage(OrderSessionID, 4)
+	fix, err = s.fixOrd.WaitForMessage(s.OrderSessionID, 4)
 	s.Require().Nil(err)
 	err = s.checkFixTags(fix, "35=8", "49=BFXFIX", "56=EXORG_ORD", "1=user123", "40=2", "20=3", "32=0.7832", "39=2", "54=1", "55=tBTCUSD", "150=2", "151=0.0000", "6=12000", "14=1.000", "544=3")
 	s.Require().Nil(err)
@@ -227,12 +227,12 @@ func (s *gatewaySuite) TestNewOrderSingleMargin() {
 //TestNewOrderSingleThenUpdate assures the gateway service will publish an OrderNew websocket message when receiving a FIX42 NewOrderSingle, and can update it later
 func (s *gatewaySuite) TestNewOrderSingleThenUpdate() {
 	// assert FIX MD logon
-	fix, err := s.fixMd.WaitForMessage(MarketDataSessionID, 1)
+	fix, err := s.fixMd.WaitForMessage(s.MarketDataSessionID, 1)
 	s.Require().Nil(err)
 	err = s.checkFixTags(fix, "35=A", "49=BFXFIX", "56=EXORG_MD")
 	s.Require().Nil(err)
 	// assert FIX order logon
-	fix, err = s.fixOrd.WaitForMessage(OrderSessionID, 1)
+	fix, err = s.fixOrd.WaitForMessage(s.OrderSessionID, 1)
 	s.Require().Nil(err)
 	err = s.checkFixTags(fix, "35=A", "49=BFXFIX", "56=EXORG_ORD")
 	s.Require().Nil(err)
@@ -276,7 +276,7 @@ func (s *gatewaySuite) TestNewOrderSingleThenUpdate() {
 
 	// service publish new ack, assert NEW
 	s.srvWs.Send(OrdersClient, `[0,"on",[1234567,0,555,"tBTCUSD",1521153050972,1521153051035,1,1,"EXCHANGE LIMIT",null,null,null,0,"ACTIVE",null,null,12000,0,null,null,null,null,null,0,0,0,null,null,"API>BFX",null,null,null]]`)
-	fix, err = s.fixOrd.WaitForMessage(OrderSessionID, 2)
+	fix, err = s.fixOrd.WaitForMessage(s.OrderSessionID, 2)
 	s.Require().Nil(err)
 	err = s.checkFixTags(fix, "35=8", "49=BFXFIX", "56=EXORG_ORD", "1=user123", "40=2", "20=3", "32=0.000", "39=0", "54=1", "55=tBTCUSD", "150=0", "151=1.00", "6=0.00", "14=0.00")
 	s.Require().Nil(err)
@@ -318,12 +318,12 @@ func (s *gatewaySuite) TestNewOrderSingleThenUpdate() {
 //TestNewOrderSingleOCO assures the gateway service will publish an OrderNew websocket message when receiving a FIX42 NewOrderSingle with an OCO contingency
 func (s *gatewaySuite) TestNewOrderSingleOCO() {
 	// assert FIX MD logon
-	fix, err := s.fixMd.WaitForMessage(MarketDataSessionID, 1)
+	fix, err := s.fixMd.WaitForMessage(s.MarketDataSessionID, 1)
 	s.Require().Nil(err)
 	err = s.checkFixTags(fix, "35=A", "49=BFXFIX", "56=EXORG_MD")
 	s.Require().Nil(err)
 	// assert FIX order logon
-	fix, err = s.fixOrd.WaitForMessage(OrderSessionID, 1)
+	fix, err = s.fixOrd.WaitForMessage(s.OrderSessionID, 1)
 	s.Require().Nil(err)
 	err = s.checkFixTags(fix, "35=A", "49=BFXFIX", "56=EXORG_ORD")
 	s.Require().Nil(err)
@@ -359,7 +359,7 @@ func (s *gatewaySuite) TestNewOrderSingleOCO() {
 	s.Require().Nil(err)
 
 	// assert FIX message reject - need that stop price
-	fix, err = s.fixOrd.WaitForMessage(OrderSessionID, 2)
+	fix, err = s.fixOrd.WaitForMessage(s.OrderSessionID, 2)
 	s.Require().Nil(err)
 	err = s.checkFixTags(fix, "35=j", "49=BFXFIX", "56=EXORG_ORD", "372=D", "380=5", "58=Conditionally Required Field Missing (99)")
 	s.Require().Nil(err)

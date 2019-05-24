@@ -19,10 +19,8 @@ import (
 )
 
 const (
-	MarketDataClient           = 0
-	OrdersClient               = 1
-	MarketDataSessionID string = "FIX.4.2:EXORG_MD->BFXFIX"
-	OrderSessionID      string = "FIX.4.2:EXORG_ORD->BFXFIX"
+	MarketDataClient = 0
+	OrdersClient     = 1
 )
 
 type testNonceFactory struct {
@@ -53,27 +51,33 @@ type mockFixSettings struct {
 	FixVersion string
 }
 
-func TestGatewaySuite(t *testing.T) {
+func runSuite(t *testing.T, fixVersion, fixBeginString string) {
 	gwSuite := new(gatewaySuite)
 	gwSuite.settings = mockFixSettings{
 		APIKey:     "apiKey1",
 		APISecret:  "apiSecret2",
 		BfxUserID:  "user123",
-		FixVersion: "fix42",
+		FixVersion: fixVersion,
 	}
-	gwSuite.fixVersionTag = "FIX.4.2"
+	gwSuite.fixVersionTag = fixBeginString
 	suite.Run(t, gwSuite)
+}
+
+func TestGatewaySuiteFIX42(t *testing.T) {
+	runSuite(t, "fix42", "FIX.4.2")
 }
 
 type gatewaySuite struct {
 	suite.Suite
-	fixMd         *mock.TestFixClient
-	fixOrd        *mock.TestFixClient
-	srvWs         *mock.Ws
-	gw            *Gateway
-	settings      mockFixSettings
-	fixVersionTag string
-	isWsOnline    bool
+	fixMd               *mock.TestFixClient
+	fixOrd              *mock.TestFixClient
+	srvWs               *mock.Ws
+	gw                  *Gateway
+	settings            mockFixSettings
+	fixVersionTag       string
+	isWsOnline          bool
+	MarketDataSessionID string
+	OrderSessionID      string
 }
 
 func (s *gatewaySuite) checkFixTags(fix string, tags ...string) (err error) {
@@ -100,6 +104,9 @@ func (s *gatewaySuite) loadSettings(file string) *quickfix.Settings {
 }
 
 func (s *gatewaySuite) SetupTest() {
+	s.MarketDataSessionID = s.fixVersionTag + ":EXORG_MD->BFXFIX"
+	s.OrderSessionID = s.fixVersionTag + ":EXORG_ORD->BFXFIX"
+
 	// remove temporary directories
 	tries := 40
 	var err error

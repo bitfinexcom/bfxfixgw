@@ -3,14 +3,14 @@ package main
 //TestLogon assures the gateway service will authenticate a websocket connection when receiving a FIX Logon message with valid credentials.
 func (s *gatewaySuite) TestLogon() {
 	// assert FIX MD logon
-	fixm, err := s.fixMd.WaitForMessage(MarketDataSessionID, 1)
+	fixm, err := s.fixMd.WaitForMessage(s.MarketDataSessionID, 1)
 	s.Require().Nil(err)
 
 	err = s.checkFixTags(fixm, "35=A", "49=BFXFIX", "56=EXORG_MD")
 	s.Require().Nil(err)
 
 	// assert FIX order logon
-	fixm, err = s.fixOrd.WaitForMessage(OrderSessionID, 1)
+	fixm, err = s.fixOrd.WaitForMessage(s.OrderSessionID, 1)
 	s.Require().Nil(err)
 
 	err = s.checkFixTags(fixm, "35=A", "49=BFXFIX", "56=EXORG_ORD")
@@ -42,7 +42,7 @@ func (s *gatewaySuite) TestLogonNoCredentials() {
 	err := s.srvWs.WaitForClientCount(2)
 	s.Require().NotNil(err)
 
-	fixm, err := s.fixMd.WaitForMessage(MarketDataSessionID, 1)
+	fixm, err := s.fixMd.WaitForMessage(s.MarketDataSessionID, 1)
 	s.Require().Nil(err)
 
 	// expect malformed logon

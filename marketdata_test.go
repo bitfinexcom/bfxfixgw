@@ -17,12 +17,12 @@ func newMdRequest(reqID, symbol string, depth int) *mdr.MarketDataRequest {
 
 func (s *gatewaySuite) TestMarketData() {
 	// assert FIX MD logon
-	fix, err := s.fixMd.WaitForMessage(MarketDataSessionID, 1)
+	fix, err := s.fixMd.WaitForMessage(s.MarketDataSessionID, 1)
 	s.Require().Nil(err)
 	err = s.checkFixTags(fix, "35=A", "49=BFXFIX", "56=EXORG_MD")
 	s.Require().Nil(err)
 	// assert FIX order logon
-	fix, err = s.fixOrd.WaitForMessage(OrderSessionID, 1)
+	fix, err = s.fixOrd.WaitForMessage(s.OrderSessionID, 1)
 	s.Require().Nil(err)
 	err = s.checkFixTags(fix, "35=A", "49=BFXFIX", "56=EXORG_ORD")
 	s.Require().Nil(err)
@@ -44,11 +44,11 @@ func (s *gatewaySuite) TestMarketData() {
 	s.srvWs.Broadcast(`{"event":"auth","status":"OK","chanId":0,"userId":1,"subId":"nonce1","auth_id":"valid-auth-guid","caps":{"orders":{"read":1,"write":0},"account":{"read":1,"write":0},"funding":{"read":1,"write":0},"history":{"read":1,"write":0},"wallets":{"read":1,"write":0},"withdraw":{"read":0,"write":0},"positions":{"read":1,"write":0}}}`)
 
 	// assert FIX MD logon
-	fix, err = s.fixMd.WaitForMessage(MarketDataSessionID, 1)
+	fix, err = s.fixMd.WaitForMessage(s.MarketDataSessionID, 1)
 	s.Require().Nil(err)
 	err = s.checkFixTags(fix, "35=A", "49=BFXFIX", "56=EXORG_MD")
 	s.Require().Nil(err)
-	fix, err = s.fixOrd.WaitForMessage(OrderSessionID, 1)
+	fix, err = s.fixOrd.WaitForMessage(s.OrderSessionID, 1)
 	s.Require().Nil(err)
 	err = s.checkFixTags(fix, "35=A", "49=BFXFIX", "56=EXORG_ORD")
 	s.Require().Nil(err)
@@ -78,7 +78,7 @@ func (s *gatewaySuite) TestMarketData() {
 	s.srvWs.Send(MarketDataClient, `[8,[[1085.2,1,0.16337353],[1085,1,1],[1084.5,1,-0.0360446]]]`)
 
 	// assert book snapshot
-	fix, err = s.fixMd.WaitForMessage(MarketDataSessionID, 2)
+	fix, err = s.fixMd.WaitForMessage(s.MarketDataSessionID, 2)
 	s.Require().Nil(err)
 	err = s.checkFixTags(fix, "35=W", "268=3", "269=0|270=1085.2000|271=0.1634|269=0|270=1085.0000|271=1.0000|269=1|270=1084.5000|271=0.0360", "48=tBTCUSD", "22=8")
 	s.Require().Nil(err)
@@ -87,7 +87,7 @@ func (s *gatewaySuite) TestMarketData() {
 	s.srvWs.Send(MarketDataClient, `[8,[1084,1,0.05246595]]`)
 
 	// assert book update
-	fix, err = s.fixMd.WaitForMessage(MarketDataSessionID, 3)
+	fix, err = s.fixMd.WaitForMessage(s.MarketDataSessionID, 3)
 	s.Require().Nil(err)
 	err = s.checkFixTags(fix, "35=X", "268=1", "279=0", "269=0", "48=tBTCUSD", "22=8", "271=0.0525")
 	s.Require().Nil(err)
@@ -100,7 +100,7 @@ func (s *gatewaySuite) TestMarketData() {
 	// srv->client trade update
 	s.srvWs.Send(MarketDataClient, `[19,[24165025,1516316086676,-0.05246595,1085.2]]`)
 
-	fix, err = s.fixMd.WaitForMessage(MarketDataSessionID, 4)
+	fix, err = s.fixMd.WaitForMessage(s.MarketDataSessionID, 4)
 	s.Require().Nil(err)
 	err = s.checkFixTags(fix, "35=X", "268=1", "279=0", "269=2", "48=tBTCUSD", "22=8", "271=0.0525")
 	s.Require().Nil(err)

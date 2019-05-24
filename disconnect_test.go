@@ -6,12 +6,12 @@ import (
 
 func (s *gatewaySuite) TestDisconnect() {
 	// assert FIX MD logon
-	fix, err := s.fixMd.WaitForMessage(MarketDataSessionID, 1)
+	fix, err := s.fixMd.WaitForMessage(s.MarketDataSessionID, 1)
 	s.Require().Nil(err)
 	err = s.checkFixTags(fix, "35=A", "49=BFXFIX", "56=EXORG_MD")
 	s.Require().Nil(err)
 	// assert FIX order logon
-	fix, err = s.fixOrd.WaitForMessage(OrderSessionID, 1)
+	fix, err = s.fixOrd.WaitForMessage(s.OrderSessionID, 1)
 	s.Require().Nil(err)
 	err = s.checkFixTags(fix, "35=A", "49=BFXFIX", "56=EXORG_ORD")
 	s.Require().Nil(err)
@@ -38,18 +38,18 @@ func (s *gatewaySuite) TestDisconnect() {
 	defer func() { s.isWsOnline = false }()
 
 	// wait for ws disconnect & reconnect period, assert FIX logoff msgs
-	_, err = s.fixMd.WaitForMessageWithWait(MarketDataSessionID, 2, time.Second*20)
+	_, err = s.fixMd.WaitForMessageWithWait(s.MarketDataSessionID, 2, time.Second*20)
 	s.Require().Nil(err)
 }
 
 func (s *gatewaySuite) TestReconnect() {
 	// assert FIX MD logon
-	fix, err := s.fixMd.WaitForMessage(MarketDataSessionID, 1)
+	fix, err := s.fixMd.WaitForMessage(s.MarketDataSessionID, 1)
 	s.Require().Nil(err)
 	err = s.checkFixTags(fix, "35=A", "49=BFXFIX", "56=EXORG_MD")
 	s.Require().Nil(err)
 	// assert FIX order logon
-	fix, err = s.fixOrd.WaitForMessage(OrderSessionID, 1)
+	fix, err = s.fixOrd.WaitForMessage(s.OrderSessionID, 1)
 	s.Require().Nil(err)
 	err = s.checkFixTags(fix, "35=A", "49=BFXFIX", "56=EXORG_ORD")
 	s.Require().Nil(err)
@@ -77,7 +77,7 @@ func (s *gatewaySuite) TestReconnect() {
 	s.Require().Nil(err)
 
 	// wait for ws disconnect & reconnect period, assert FIX logoff msgs
-	fix, err = s.fixOrd.WaitForMessageWithWait(OrderSessionID, 2, time.Second*20)
+	fix, err = s.fixOrd.WaitForMessageWithWait(s.OrderSessionID, 2, time.Second*20)
 	s.Require().Nil(err)
 	err = s.checkFixTags(fix, "35=5", "49=BFXFIX", "56=EXORG_ORD")
 	s.Require().Nil(err)
@@ -87,12 +87,12 @@ func (s *gatewaySuite) TestReconnect() {
 	s.Require().Nil(err)
 
 	// wait for ws to reconnect, get a sequence number reset
-	fix, err = s.fixOrd.WaitForMessageWithWait(OrderSessionID, 3, time.Second*20)
+	fix, err = s.fixOrd.WaitForMessageWithWait(s.OrderSessionID, 3, time.Second*20)
 	s.Require().Nil(err)
 	err = s.checkFixTags(fix, "35=4", "49=BFXFIX", "56=EXORG_ORD")
 	s.Require().Nil(err)
 
-	fix, err = s.fixOrd.WaitForMessage(OrderSessionID, 4)
+	fix, err = s.fixOrd.WaitForMessage(s.OrderSessionID, 4)
 	s.Require().Nil(err)
 	err = s.checkFixTags(fix, "35=A", "49=BFXFIX", "56=EXORG_ORD")
 	s.Require().Nil(err)

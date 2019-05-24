@@ -67,6 +67,10 @@ func TestGatewaySuiteFIX42(t *testing.T) {
 	runSuite(t, "fix42", "FIX.4.2")
 }
 
+func TestGatewaySuiteFIX44(t *testing.T) {
+	runSuite(t, "fix44", "FIX.4.4")
+}
+
 type gatewaySuite struct {
 	suite.Suite
 	fixMd               *mock.TestFixClient

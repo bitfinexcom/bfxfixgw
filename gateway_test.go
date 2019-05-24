@@ -1,0 +1,185 @@
+package main
+
+import (
+	"bytes"
+	"fmt"
+	"github.com/bitfinexcom/bfxfixgw/integration_test/mock"
+	"github.com/bitfinexcom/bfxfixgw/service/fix"
+	"github.com/bitfinexcom/bfxfixgw/service/symbol"
+	"github.com/bitfinexcom/bitfinex-api-go/utils"
+	"github.com/bitfinexcom/bitfinex-api-go/v2/rest"
+	"github.com/bitfinexcom/bitfinex-api-go/v2/websocket"
+	"github.com/quickfixgo/quickfix"
+	"github.com/stretchr/testify/suite"
+	"io/ioutil"
+	"net/http"
+	"os"
+	"testing"
+	"time"
+)
+
+const (
+	MarketDataClient           = 0
+	OrdersClient               = 1
+	MarketDataSessionID string = "FIX.4.2:EXORG_MD->BFXFIX"
+	OrderSessionID      string = "FIX.4.2:EXORG_ORD->BFXFIX"
+)
+
+type testNonceFactory struct {
+}
+
+func (t *testNonceFactory) New() utils.NonceGenerator {
+	return &mock.NonceGenerator{}
+}
+
+type testClientFactory struct {
+	Params *websocket.Parameters
+	Nonce  *testNonceFactory
+	HTTPDo func(c *http.Client, req *http.Request) (*http.Response, error)
+}
+
+func (m *testClientFactory) NewWs() *websocket.Client {
+	return websocket.NewWithParamsNonce(m.Params, m.Nonce.New())
+}
+
+func (m *testClientFactory) NewRest() *rest.Client {
+	return rest.NewClientWithHttpDo(m.HTTPDo)
+}
+
+type mockFixSettings struct {
+	APIKey     string
+	APISecret  string
+	BfxUserID  string
+	FixVersion string
+}
+
+func TestGatewaySuite(t *testing.T) {
+	gwSuite := new(gatewaySuite)
+	gwSuite.settings = mockFixSettings{
+		APIKey:     "apiKey1",
+		APISecret:  "apiSecret2",
+		BfxUserID:  "user123",
+		FixVersion: "fix42",
+	}
+	gwSuite.fixVersionTag = "FIX.4.2"
+	suite.Run(t, gwSuite)
+}
+
+type gatewaySuite struct {
+	suite.Suite
+	fixMd         *mock.TestFixClient
+	fixOrd        *mock.TestFixClient
+	srvWs         *mock.Ws
+	gw            *Gateway
+	settings      mockFixSettings
+	fixVersionTag string
+	isWsOnline    bool
+}
+
+func (s *gatewaySuite) checkFixTags(fix string, tags ...string) (err error) {
+	s.Require().Contains(fix, "8="+s.fixVersionTag)
+	for _, tag := range tags {
+		if !s.Contains(fix, tag) {
+			if err == nil {
+				err = fmt.Errorf("fix message %s does not contain", fix)
+			}
+			err = fmt.Errorf("%s %s", err.Error(), tag)
+		}
+	}
+	return
+}
+
+func (s *gatewaySuite) loadSettings(file string) *quickfix.Settings {
+	cfg, err := os.Open(file)
+	s.Require().Nil(err)
+
+	settings, err := quickfix.ParseSettings(cfg)
+	s.Require().Nil(err)
+
+	return settings
+}
+
+func (s *gatewaySuite) SetupTest() {
+	// remove temporary directories
+	tries := 40
+	var err error
+	for i := 0; i < tries; i++ {
+		err = os.RemoveAll("tmp/")
+		if err == nil {
+			break
+		}
+		time.Sleep(time.Millisecond * 250)
+	}
+	s.Require().Nil(err)
+
+	// mock BFX websocket
+	s.srvWs = mock.NewMockWs(6001)
+	err = s.srvWs.Start()
+	s.Require().Nil(err)
+
+	params := websocket.NewDefaultParameters()
+	params.URL = "ws://127.0.0.1:6001"
+	params.AutoReconnect = true
+	params.ReconnectAttempts = 5
+	params.ReconnectInterval = time.Millisecond * 250 // 1.25s
+	httpDo := func(_ *http.Client, req *http.Request) (*http.Response, error) {
+		msg := "" // TODO http request handling (book snapshots?)
+		resp := http.Response{
+			Body:       ioutil.NopCloser(bytes.NewBufferString(msg)),
+			StatusCode: 200,
+		}
+		return &resp, nil
+	}
+	factory := testClientFactory{
+		Params: params,
+		Nonce:  &testNonceFactory{},
+		HTTPDo: httpDo,
+	}
+	// create gateway
+	gatewayMdSettings := s.loadSettings(fmt.Sprintf("conf/integration_test/service/marketdata_%s.cfg", s.settings.FixVersion))
+	gatewayOrdSettings := s.loadSettings(fmt.Sprintf("conf/integration_test/service/orders_%s.cfg", s.settings.FixVersion))
+	s.gw, err = New(gatewayMdSettings, gatewayOrdSettings, &factory, symbol.NewPassthroughSymbology())
+	s.Require().Nil(err)
+	err = s.gw.Start()
+	s.Require().Nil(err)
+
+	// mock FIX client
+	clientMDSettings := s.loadSettings(fmt.Sprintf("conf/integration_test/client/marketdata_%s.cfg", s.settings.FixVersion))
+	s.fixMd, err = mock.NewTestFixClient(clientMDSettings, fix.NewNoStoreFactory(), "MarketData")
+	s.Require().Nil(err)
+	s.fixMd.APIKey = s.settings.APIKey
+	s.fixMd.APISecret = s.settings.APISecret
+	s.fixMd.BfxUserID = s.settings.BfxUserID
+	err = s.fixMd.Start()
+	s.Require().Nil(err)
+	if len(s.settings.BfxUserID) > 0 {
+		err = s.srvWs.WaitForClientCount(1)
+		s.Require().Nil(err)
+	}
+
+	clientOrdSettings := s.loadSettings(fmt.Sprintf("conf/integration_test/client/orders_%s.cfg", s.settings.FixVersion))
+	s.fixOrd, err = mock.NewTestFixClient(clientOrdSettings, quickfix.NewFileStoreFactory(clientOrdSettings), "Orders")
+	s.Require().Nil(err)
+	s.fixOrd.APIKey = s.settings.APIKey
+	s.fixOrd.APISecret = s.settings.APISecret
+	s.fixOrd.BfxUserID = s.settings.BfxUserID
+	err = s.fixOrd.Start()
+	s.Require().Nil(err)
+	if len(s.settings.BfxUserID) > 0 {
+		err = s.srvWs.WaitForClientCount(2)
+		s.Require().Nil(err)
+	}
+
+	s.isWsOnline = true
+}
+
+func (s *gatewaySuite) TearDownTest() {
+	s.fixMd.Stop()
+	s.fixOrd.Stop()
+	s.gw.Stop()
+	if s.isWsOnline {
+		err := s.srvWs.Stop()
+		s.Require().Nil(err)
+		s.isWsOnline = false
+	}
+}

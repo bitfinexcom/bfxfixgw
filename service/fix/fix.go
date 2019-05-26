@@ -14,6 +14,11 @@ import (
 	fix42ocrr "github.com/quickfixgo/fix42/ordercancelreplacerequest"
 	fix42ocr "github.com/quickfixgo/fix42/ordercancelrequest"
 	fix42osr "github.com/quickfixgo/fix42/orderstatusrequest"
+	fix44mdr "github.com/quickfixgo/fix44/marketdatarequest"
+	fix44nos "github.com/quickfixgo/fix44/newordersingle"
+	fix44ocrr "github.com/quickfixgo/fix44/ordercancelreplacerequest"
+	fix44ocr "github.com/quickfixgo/fix44/ordercancelrequest"
+	fix44osr "github.com/quickfixgo/fix44/orderstatusrequest"
 	"github.com/quickfixgo/quickfix"
 )
 
@@ -149,6 +154,7 @@ func New(s *quickfix.Settings, peers peer.Peers, serviceType ServiceType, symbol
 		return nil, err
 	}
 	if serviceType == OrderRoutingService {
+		// FIX.4.2
 		f.AddRoute(fix42nos.Route(func(msg fix42nos.NewOrderSingle, sID quickfix.SessionID) quickfix.MessageRejectError {
 			return f.OnFIXNewOrderSingle(msg.FieldMap, sID)
 		}))
@@ -161,11 +167,31 @@ func New(s *quickfix.Settings, peers peer.Peers, serviceType ServiceType, symbol
 		f.AddRoute(fix42osr.Route(func(msg fix42osr.OrderStatusRequest, sID quickfix.SessionID) quickfix.MessageRejectError {
 			return f.OnFIXOrderStatusRequest(msg.FieldMap, sID)
 		}))
+		// FIX.4.4
+		f.AddRoute(fix44nos.Route(func(msg fix44nos.NewOrderSingle, sID quickfix.SessionID) quickfix.MessageRejectError {
+			return f.OnFIXNewOrderSingle(msg.FieldMap, sID)
+		}))
+		f.AddRoute(fix44ocrr.Route(func(msg fix44ocrr.OrderCancelReplaceRequest, sID quickfix.SessionID) quickfix.MessageRejectError {
+			return f.OnFIXOrderCancelReplaceRequest(msg.FieldMap, sID)
+		}))
+		f.AddRoute(fix44ocr.Route(func(msg fix44ocr.OrderCancelRequest, sID quickfix.SessionID) quickfix.MessageRejectError {
+			return f.OnFIXOrderCancelRequest(msg.FieldMap, sID)
+		}))
+		f.AddRoute(fix44osr.Route(func(msg fix44osr.OrderStatusRequest, sID quickfix.SessionID) quickfix.MessageRejectError {
+			return f.OnFIXOrderStatusRequest(msg.FieldMap, sID)
+		}))
+		// Common
 		storeFactory = quickfix.NewFileStoreFactory(s)
 	} else {
+		// FIX.4.2
 		f.AddRoute(fix42mdr.Route(func(msg fix42mdr.MarketDataRequest, sID quickfix.SessionID) quickfix.MessageRejectError {
 			return f.OnFIXMarketDataRequest(msg.FieldMap, sID)
 		}))
+		// FIX.4.4
+		f.AddRoute(fix44mdr.Route(func(msg fix44mdr.MarketDataRequest, sID quickfix.SessionID) quickfix.MessageRejectError {
+			return f.OnFIXMarketDataRequest(msg.FieldMap, sID)
+		}))
+		// Common
 		storeFactory = NewNoStoreFactory()
 	}
 

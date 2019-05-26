@@ -118,31 +118,31 @@ func (s *Service) listen() {
 		case *bitfinex.Notification:
 			if !s.isOrderRoutingService() {
 				continue
-			} else if err := s.Websocket.FIX42NotificationHandler(obj, msg.FIXSessionID()); err != nil {
+			} else if err := s.Websocket.FIXNotificationHandler(obj, msg.FIXSessionID()); err != nil {
 				s.log.Error("fix notification handler error", zap.Error(err))
 			}
 		case *bitfinex.OrderNew:
 			if !s.isOrderRoutingService() {
 				continue
-			} else if err := s.Websocket.FIX42OrderNewHandler(obj, msg.FIXSessionID()); err != nil {
+			} else if err := s.Websocket.FIXOrderNewHandler(obj, msg.FIXSessionID()); err != nil {
 				s.log.Error("fix order new handler error", zap.Error(err))
 			}
 		case *bitfinex.OrderCancel:
 			if !s.isOrderRoutingService() {
 				continue
-			} else if err := s.Websocket.FIX42OrderCancelHandler(obj, msg.FIXSessionID()); err != nil {
+			} else if err := s.Websocket.FIXOrderCancelHandler(obj, msg.FIXSessionID()); err != nil {
 				s.log.Error("fix order cancel handler error", zap.Error(err))
 			}
 		case *bitfinex.OrderUpdate:
 			if !s.isOrderRoutingService() {
 				continue
-			} else if err := s.Websocket.FIX42OrderUpdateHandler(obj, msg.FIXSessionID()); err != nil {
+			} else if err := s.Websocket.FIXOrderUpdateHandler(obj, msg.FIXSessionID()); err != nil {
 				s.log.Error("fix order update handler error", zap.Error(err))
 			}
 		case *wsv2.InfoEvent:
 			// no-op
 		case *wsv2.AuthEvent:
-			if err := s.Websocket.FIX42HandleAuth(obj, msg.FIXSessionID()); err != nil {
+			if err := s.Websocket.FIXHandleAuth(obj, msg.FIXSessionID()); err != nil {
 				s.log.Error("fix auth handler error", zap.Error(err))
 			}
 		case *bitfinex.FundingInfo:
@@ -166,7 +166,7 @@ func (s *Service) listen() {
 		case *bitfinex.OrderSnapshot:
 			if !s.isOrderRoutingService() {
 				continue
-			} else if err := s.Websocket.FIX42OrderSnapshotHandler(obj, msg.FIXSessionID()); err != nil {
+			} else if err := s.Websocket.FIXOrderSnapshotHandler(obj, msg.FIXSessionID()); err != nil {
 				s.log.Error("fix order snapshot handler error", zap.Error(err))
 			}
 		case *wsv2.SubscribeEvent:
@@ -174,13 +174,13 @@ func (s *Service) listen() {
 		case *bitfinex.BookUpdateSnapshot:
 			if !s.isMarketDataService() {
 				continue
-			} else if err := s.Websocket.FIX42BookSnapshot(obj, msg.FIXSessionID()); err != nil {
+			} else if err := s.Websocket.FIXBookSnapshot(obj, msg.FIXSessionID()); err != nil {
 				s.log.Error("fix book snapshot handler error", zap.Error(err))
 			}
 		case *bitfinex.BookUpdate:
 			if !s.isMarketDataService() {
 				continue
-			} else if err := s.Websocket.FIX42BookUpdate(obj, msg.FIXSessionID()); err != nil {
+			} else if err := s.Websocket.FIXBookUpdate(obj, msg.FIXSessionID()); err != nil {
 				s.log.Error("fix book update handler error", zap.Error(err))
 			}
 		case *bitfinex.TradeExecution:
@@ -195,13 +195,13 @@ func (s *Service) listen() {
 			// ignore trade execution update ('tu') in favor of trade executions since they come in-order
 			if !s.isOrderRoutingService() {
 				continue
-			} else if err := s.Websocket.FIX42TradeExecutionUpdateHandler(obj, msg.FIXSessionID()); err != nil {
+			} else if err := s.Websocket.FIXTradeExecutionUpdateHandler(obj, msg.FIXSessionID()); err != nil {
 				s.log.Error("fix trade execution update handler error", zap.Error(err))
 			}
 		case *bitfinex.Trade: // public trade
 			if !s.isMarketDataService() {
 				continue
-			} else if err := s.Websocket.FIX42TradeHandler(obj, msg.FIXSessionID()); err != nil {
+			} else if err := s.Websocket.FIXTradeHandler(obj, msg.FIXSessionID()); err != nil {
 				s.log.Error("fix trade handler error", zap.Error(err))
 			}
 		case *bitfinex.TradeSnapshot:

@@ -562,6 +562,20 @@
 
 [[projects]]
   branch = "master"
+  digest = "1:a4ead118c275b8e2154b24cf8f95c8ec4ab0f0e24b54c46dc2c4a27476118741"
+  name = "github.com/quickfixgo/fix44"
+  packages = [
+    ".",
+    "executionreport",
+    "marketdataincrementalrefresh",
+    "marketdatasnapshotfullrefresh",
+    "ordercancelreject",
+  ]
+  pruneopts = "UT"
+  revision = "f090a100621863abecaa6cd783811e8bea211370"
+
+[[projects]]
+  branch = "master"
   digest = "1:22e48938e888d7b69b91a4c867720ce2183b7e255218b62e80e2811e4735ac51"
   name = "github.com/quickfixgo/quickfix"
   packages = [
@@ -830,6 +844,10 @@
     "github.com/quickfixgo/fix42/ordercancelreplacerequest",
     "github.com/quickfixgo/fix42/ordercancelrequest",
     "github.com/quickfixgo/fix42/orderstatusrequest",
+    "github.com/quickfixgo/fix44/executionreport",
+    "github.com/quickfixgo/fix44/marketdataincrementalrefresh",
+    "github.com/quickfixgo/fix44/marketdatasnapshotfullrefresh",
+    "github.com/quickfixgo/fix44/ordercancelreject",
     "github.com/quickfixgo/quickfix",
     "github.com/quickfixgo/tag",
     "github.com/satori/go.uuid",

@@ -147,7 +147,7 @@ func (f *FIX) OnFIX42NewOrderSingle(msg nos.NewOrderSingle, sID quickfix.Session
 	e := p.Ws.SubmitOrder(context.Background(), bo)
 	if e != nil {
 		// should be an ER
-		er := convert.FIX42ExecutionReportFromOrder(o, p.BfxUserID(), enum.ExecType_REJECTED, 0.0, enum.OrdStatus_REJECTED, e.Error(), f.Symbology, sID.TargetCompID, int(o.Flags), bo.PriceAuxLimit, bo.PriceTrailing)
+		er := convert.FIXExecutionReportFromOrder(sID.BeginString, o, p.BfxUserID(), enum.ExecType_REJECTED, 0.0, enum.OrdStatus_REJECTED, e.Error(), f.Symbology, sID.TargetCompID, int(o.Flags), bo.PriceAuxLimit, bo.PriceTrailing)
 		f.logger.Warn("could not submit order", zap.Error(e))
 		return sendToTarget(er, sID)
 	}
@@ -182,7 +182,7 @@ func (f *FIX) OnFIX42OrderCancelReplaceRequest(msg ocrr.OrderCancelReplaceReques
 	} else {
 		var er error
 		if cache, er = p.LookupByClOrdID(ocid); er != nil {
-			r := convert.FIX42OrderCancelReject(p.BfxUserID(), id, ocid, cid, convert.OrderNotFoundText, true)
+			r := convert.FIXOrderCancelReject(sID.BeginString, p.BfxUserID(), id, ocid, cid, convert.OrderNotFoundText, true)
 			return sendToTarget(r, sID)
 		}
 		id = cache.OrderID
@@ -192,18 +192,18 @@ func (f *FIX) OnFIX42OrderCancelReplaceRequest(msg ocrr.OrderCancelReplaceReques
 	//Ensure ids are fine
 	cidi, er := strconv.ParseInt(cid, 10, 64)
 	if er != nil {
-		r := convert.FIX42OrderCancelReject(p.BfxUserID(), id, ocid, cid, convert.OrderNotFoundText, true)
+		r := convert.FIXOrderCancelReject(sID.BeginString, p.BfxUserID(), id, ocid, cid, convert.OrderNotFoundText, true)
 		return sendToTarget(r, sID)
 	} else if ou.ID, er = strconv.ParseInt(id, 10, 64); er != nil {
-		r := convert.FIX42OrderCancelReject(p.BfxUserID(), id, ocid, cid, convert.OrderNotFoundText, true)
+		r := convert.FIXOrderCancelReject(sID.BeginString, p.BfxUserID(), id, ocid, cid, convert.OrderNotFoundText, true)
 		return sendToTarget(r, sID)
 	} else if _, er = strconv.ParseInt(ocid, 10, 64); er != nil {
-		r := convert.FIX42OrderCancelReject(p.BfxUserID(), id, ocid, cid, convert.OrderNotFoundText, true)
+		r := convert.FIXOrderCancelReject(sID.BeginString, p.BfxUserID(), id, ocid, cid, convert.OrderNotFoundText, true)
 		return sendToTarget(r, sID)
 	} else if cache == nil {
 		cache, er = p.LookupByClOrdID(ocid)
 		if er != nil || cache.OrderID != id {
-			r := convert.FIX42OrderCancelReject(p.BfxUserID(), id, ocid, cid, convert.OrderNotFoundText, true)
+			r := convert.FIXOrderCancelReject(sID.BeginString, p.BfxUserID(), id, ocid, cid, convert.OrderNotFoundText, true)
 			return sendToTarget(r, sID)
 		}
 	}
@@ -244,7 +244,7 @@ func (f *FIX) OnFIX42OrderCancelReplaceRequest(msg ocrr.OrderCancelReplaceReques
 	e := p.Ws.SubmitUpdateOrder(context.Background(), ou)
 	if e != nil {
 		// should be an ER
-		er := convert.FIX42ExecutionReportFromOrder(o, p.BfxUserID(), enum.ExecType_REJECTED, 0.0, enum.OrdStatus_REJECTED, e.Error(), f.Symbology, sID.TargetCompID, int(o.Flags), ou.PriceAuxLimit, ou.PriceTrailing)
+		er := convert.FIXExecutionReportFromOrder(sID.BeginString, o, p.BfxUserID(), enum.ExecType_REJECTED, 0.0, enum.OrdStatus_REJECTED, e.Error(), f.Symbology, sID.TargetCompID, int(o.Flags), ou.PriceAuxLimit, ou.PriceTrailing)
 		f.logger.Warn("could not submit order", zap.Error(e))
 		return sendToTarget(er, sID)
 	}
@@ -380,7 +380,7 @@ func (f *FIX) OnFIX42MarketDataRequest(msg mdr.MarketDataRequest, sID quickfix.S
 				f.logger.Warn("could not get book snapshot: " + err.Error())
 				return sendToTarget(rej, sID)
 			}
-			fix := convert.FIX42MarketDataFullRefreshFromBookSnapshot(mdReqID, bookSnapshot, f.Symbology, sID.TargetCompID)
+			fix := convert.FIXMarketDataFullRefreshFromBookSnapshot(sID.BeginString, mdReqID, bookSnapshot, f.Symbology, sID.TargetCompID)
 			if errSend := sendToTarget(fix, sID); errSend != nil {
 				return errSend
 			}
@@ -465,14 +465,14 @@ func (f *FIX) OnFIX42OrderCancelRequest(msg ocr.OrderCancelRequest, sID quickfix
 	if id != "" { // cancel by server-assigned ID
 		idi, err := strconv.ParseInt(id, 10, 64)
 		if err != nil { // bitfinex uses int IDs so we can reject right away.
-			r := convert.FIX42OrderCancelReject(p.BfxUserID(), id, ocid, cid, convert.OrderNotFoundText, false)
+			r := convert.FIXOrderCancelReject(sID.BeginString, p.BfxUserID(), id, ocid, cid, convert.OrderNotFoundText, false)
 			return sendToTarget(r, sID)
 		}
 		oc.ID = idi
 	} else { // cancel by client-assigned ID
 		ocidi, err := strconv.ParseInt(ocid, 10, 64)
 		if err != nil {
-			r := convert.FIX42OrderCancelReject(p.BfxUserID(), id, ocid, cid, convert.OrderNotFoundText, false)
+			r := convert.FIXOrderCancelReject(sID.BeginString, p.BfxUserID(), id, ocid, cid, convert.OrderNotFoundText, false)
 			return sendToTarget(r, sID)
 		}
 		oc.CID = ocidi
@@ -487,7 +487,7 @@ func (f *FIX) OnFIX42OrderCancelRequest(msg ocr.OrderCancelRequest, sID quickfix
 	err2 := p.Ws.Send(context.Background(), oc)
 	if err2 != nil {
 		f.logger.Error("not logged onto websocket", zap.String("SessionID", sID.String()), zap.Error(err))
-		rej := convert.FIX42OrderCancelReject(p.BfxUserID(), id, ocid, cid, err2.Error(), false)
+		rej := convert.FIXOrderCancelReject(sID.BeginString, p.BfxUserID(), id, ocid, cid, err2.Error(), false)
 		return sendToTarget(rej, sID)
 	}
 
@@ -530,6 +530,6 @@ func (f *FIX) OnFIX42OrderStatusRequest(msg osr.OrderStatusRequest, sID quickfix
 		cached = foundPeer.AddOrder(clOrdID, order.Price, order.PriceAuxLimit, order.PriceTrailing, order.Amount, order.Symbol, foundPeer.BfxUserID(), convert.SideToFIX(order.Amount), ot, isMargin, tif, order.MTSTif, int(order.Flags))
 	}
 	status := convert.OrdStatusToFIX(order.Status)
-	er := convert.FIX42ExecutionReportFromOrder(order, foundPeer.BfxUserID(), enum.ExecType_ORDER_STATUS, cached.FilledQty(), status, "", f.Symbology, sID.TargetCompID, cached.Flags, cached.Stop, cached.Trail)
+	er := convert.FIXExecutionReportFromOrder(sID.BeginString, order, foundPeer.BfxUserID(), enum.ExecType_ORDER_STATUS, cached.FilledQty(), status, "", f.Symbology, sID.TargetCompID, cached.Flags, cached.Stop, cached.Trail)
 	return sendToTarget(er, sID)
 }

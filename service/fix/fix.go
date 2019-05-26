@@ -149,13 +149,23 @@ func New(s *quickfix.Settings, peers peer.Peers, serviceType ServiceType, symbol
 		return nil, err
 	}
 	if serviceType == OrderRoutingService {
-		f.AddRoute(fix42nos.Route(f.OnFIX42NewOrderSingle))
-		f.AddRoute(fix42ocrr.Route(f.OnFIX42OrderCancelReplaceRequest))
-		f.AddRoute(fix42ocr.Route(f.OnFIX42OrderCancelRequest))
-		f.AddRoute(fix42osr.Route(f.OnFIX42OrderStatusRequest))
+		f.AddRoute(fix42nos.Route(func(msg fix42nos.NewOrderSingle, sID quickfix.SessionID) quickfix.MessageRejectError {
+			return f.OnFIXNewOrderSingle(msg.FieldMap, sID)
+		}))
+		f.AddRoute(fix42ocrr.Route(func(msg fix42ocrr.OrderCancelReplaceRequest, sID quickfix.SessionID) quickfix.MessageRejectError {
+			return f.OnFIXOrderCancelReplaceRequest(msg.FieldMap, sID)
+		}))
+		f.AddRoute(fix42ocr.Route(func(msg fix42ocr.OrderCancelRequest, sID quickfix.SessionID) quickfix.MessageRejectError {
+			return f.OnFIXOrderCancelRequest(msg.FieldMap, sID)
+		}))
+		f.AddRoute(fix42osr.Route(func(msg fix42osr.OrderStatusRequest, sID quickfix.SessionID) quickfix.MessageRejectError {
+			return f.OnFIXOrderStatusRequest(msg.FieldMap, sID)
+		}))
 		storeFactory = quickfix.NewFileStoreFactory(s)
 	} else {
-		f.AddRoute(fix42mdr.Route(f.OnFIX42MarketDataRequest))
+		f.AddRoute(fix42mdr.Route(func(msg fix42mdr.MarketDataRequest, sID quickfix.SessionID) quickfix.MessageRejectError {
+			return f.OnFIXMarketDataRequest(msg.FieldMap, sID)
+		}))
 		storeFactory = NewNoStoreFactory()
 	}
 

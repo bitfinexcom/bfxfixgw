@@ -6,26 +6,22 @@ import (
 	"fmt"
 	"github.com/bitfinexcom/bfxfixgw/convert"
 	"github.com/bitfinexcom/bfxfixgw/service/peer"
+	"github.com/quickfixgo/tag"
+	"log"
 	"strconv"
 	"strings"
 	"time"
 
 	"go.uber.org/zap"
 
-	//er "github.com/quickfixgo/quickfix/fix42/executionreport"
-	lgout "github.com/quickfixgo/fix42/logout"
-	mdr "github.com/quickfixgo/fix42/marketdatarequest"
-	mdrr "github.com/quickfixgo/fix42/marketdatarequestreject"
-	nos "github.com/quickfixgo/fix42/newordersingle"
-	ocrr "github.com/quickfixgo/fix42/ordercancelreplacerequest"
-	ocr "github.com/quickfixgo/fix42/ordercancelrequest"
-	osr "github.com/quickfixgo/fix42/orderstatusrequest"
-
 	"github.com/quickfixgo/enum"
 	"github.com/quickfixgo/field"
+	lgout42 "github.com/quickfixgo/fix42/logout"
+	mdr "github.com/quickfixgo/fix42/marketdatarequest"
+	mdrr42 "github.com/quickfixgo/fix42/marketdatarequestreject"
+	lgout44 "github.com/quickfixgo/fix44/logout"
+	mdrr44 "github.com/quickfixgo/fix44/marketdatarequestreject"
 	"github.com/quickfixgo/quickfix"
-
-	lg "log"
 
 	"github.com/bitfinexcom/bitfinex-api-go/v2"
 )
@@ -96,8 +92,16 @@ func updateToOrder(o *bitfinex.OrderUpdateRequest, cid int64, typ, symbol string
 }
 
 func logout(message string, sID quickfix.SessionID) error {
-	msg := lgout.New()
-	msg.SetText(message)
+	var msg convert.GenericFix
+	switch sID.BeginString {
+	case quickfix.BeginStringFIX42:
+		msg = lgout42.New()
+	case quickfix.BeginStringFIX44:
+		msg = lgout44.New()
+	default:
+		return errors.New(convert.UnsupportedBeginStringText)
+	}
+	msg.Set(field.NewText(message))
 	return quickfix.SendToTarget(msg, sID)
 }
 
@@ -108,40 +112,40 @@ func sendToTarget(m quickfix.Messagable, sessionID quickfix.SessionID) quickfix.
 	return nil
 }
 
-// OnFIX42NewOrderSingle handles a New Order Single FIX message
-func (f *FIX) OnFIX42NewOrderSingle(msg nos.NewOrderSingle, sID quickfix.SessionID) quickfix.MessageRejectError {
+// OnFIXNewOrderSingle handles a New Order Single FIX message
+func (f *FIX) OnFIXNewOrderSingle(msg quickfix.FieldMap, sID quickfix.SessionID) quickfix.MessageRejectError {
 	p, ok := f.FindPeer(sID.String())
 	if !ok {
 		f.logger.Warn("could not find peer for SessionID", zap.String("SessionID", sID.String()))
 		return quickfix.NewMessageRejectError("could not find established peer for session ID", rejectReasonOther, nil)
 	}
 
-	bo, err := convert.OrderNewFromFIXNewOrderSingle(msg.FieldMap, f.Symbology, sID.TargetCompID)
+	bo, err := convert.OrderNewFromFIXNewOrderSingle(msg, f.Symbology, sID.TargetCompID)
 	if err != nil {
 		return err
 	}
 
-	ordtype, err := msg.GetOrdType()
-	if err != nil {
+	ordtype := field.OrdTypeField{}
+	if err = msg.Get(&ordtype); err != nil {
 		return err
 	}
-	clordid, err := msg.GetClOrdID()
-	if err != nil {
+	clordid := field.ClOrdIDField{}
+	if err = msg.Get(&clordid); err != nil {
 		return err
 	}
-	side, err := msg.GetSide()
-	if err != nil {
+	side := field.SideField{}
+	if err = msg.Get(&side); err != nil {
 		return err
 	}
 	var tif enum.TimeInForce
-	tif, bo.TimeInForce, err = convert.GetTimeInForceFromFIX(msg.FieldMap)
+	tif, bo.TimeInForce, err = convert.GetTimeInForceFromFIX(msg)
 	if err != nil {
 		return err
 	}
 	ismargin := strings.Contains(bo.Type, "MARGIN")
 
 	o := requestToOrder(bo)
-	p.AddOrder(clordid, bo.Price, bo.PriceAuxLimit, bo.PriceTrailing, bo.Amount, bo.Symbol, p.BfxUserID(), side, ordtype, ismargin, tif, o.MTSTif, int(o.Flags))
+	p.AddOrder(clordid.String(), bo.Price, bo.PriceAuxLimit, bo.PriceTrailing, bo.Amount, bo.Symbol, p.BfxUserID(), side.Value(), ordtype.Value(), ismargin, tif, o.MTSTif, int(o.Flags))
 	// order has been accepted by business logic in gateway, no more 35=j
 
 	e := p.Ws.SubmitOrder(context.Background(), bo)
@@ -155,15 +159,15 @@ func (f *FIX) OnFIX42NewOrderSingle(msg nos.NewOrderSingle, sID quickfix.Session
 	return nil
 }
 
-// OnFIX42OrderCancelReplaceRequest handles an Order Cancel Replace FIX message
-func (f *FIX) OnFIX42OrderCancelReplaceRequest(msg ocrr.OrderCancelReplaceRequest, sID quickfix.SessionID) quickfix.MessageRejectError {
-	ocid, err := msg.GetOrigClOrdID() // Required
-	if err != nil {
+// OnFIXOrderCancelReplaceRequest handles an Order Cancel Replace FIX message
+func (f *FIX) OnFIXOrderCancelReplaceRequest(msg quickfix.FieldMap, sID quickfix.SessionID) quickfix.MessageRejectError {
+	ocid := field.OrigClOrdIDField{} // required
+	if err := msg.Get(&ocid); err != nil {
 		return err
 	}
 
-	cid, err := msg.GetClOrdID() // required
-	if err != nil {
+	cid := field.ClOrdIDField{} // required
+	if err := msg.Get(&cid); err != nil {
 		return err
 	}
 
@@ -175,14 +179,16 @@ func (f *FIX) OnFIX42OrderCancelReplaceRequest(msg ocrr.OrderCancelReplaceReques
 
 	id := ""
 	var cache *peer.CachedOrder
-	if msg.HasOrderID() {
-		if id, err = msg.GetOrderID(); err != nil {
+	if msg.Has(tag.OrderID) {
+		idField := field.OrderIDField{}
+		if err := msg.Get(&idField); err != nil {
 			return err
 		}
+		id = idField.String()
 	} else {
 		var er error
-		if cache, er = p.LookupByClOrdID(ocid); er != nil {
-			r := convert.FIXOrderCancelReject(sID.BeginString, p.BfxUserID(), id, ocid, cid, convert.OrderNotFoundText, true)
+		if cache, er = p.LookupByClOrdID(ocid.String()); er != nil {
+			r := convert.FIXOrderCancelReject(sID.BeginString, p.BfxUserID(), id, ocid.String(), cid.String(), convert.OrderNotFoundText, true)
 			return sendToTarget(r, sID)
 		}
 		id = cache.OrderID
@@ -190,52 +196,51 @@ func (f *FIX) OnFIX42OrderCancelReplaceRequest(msg ocrr.OrderCancelReplaceReques
 
 	ou := &bitfinex.OrderUpdateRequest{GID: 0}
 	//Ensure ids are fine
-	cidi, er := strconv.ParseInt(cid, 10, 64)
+	cidi, er := strconv.ParseInt(cid.String(), 10, 64)
 	if er != nil {
-		r := convert.FIXOrderCancelReject(sID.BeginString, p.BfxUserID(), id, ocid, cid, convert.OrderNotFoundText, true)
+		r := convert.FIXOrderCancelReject(sID.BeginString, p.BfxUserID(), id, ocid.String(), cid.String(), convert.OrderNotFoundText, true)
 		return sendToTarget(r, sID)
 	} else if ou.ID, er = strconv.ParseInt(id, 10, 64); er != nil {
-		r := convert.FIXOrderCancelReject(sID.BeginString, p.BfxUserID(), id, ocid, cid, convert.OrderNotFoundText, true)
+		r := convert.FIXOrderCancelReject(sID.BeginString, p.BfxUserID(), id, ocid.String(), cid.String(), convert.OrderNotFoundText, true)
 		return sendToTarget(r, sID)
-	} else if _, er = strconv.ParseInt(ocid, 10, 64); er != nil {
-		r := convert.FIXOrderCancelReject(sID.BeginString, p.BfxUserID(), id, ocid, cid, convert.OrderNotFoundText, true)
+	} else if _, er = strconv.ParseInt(ocid.String(), 10, 64); er != nil {
+		r := convert.FIXOrderCancelReject(sID.BeginString, p.BfxUserID(), id, ocid.String(), cid.String(), convert.OrderNotFoundText, true)
 		return sendToTarget(r, sID)
 	} else if cache == nil {
-		cache, er = p.LookupByClOrdID(ocid)
+		cache, er = p.LookupByClOrdID(ocid.String())
 		if er != nil || cache.OrderID != id {
-			r := convert.FIXOrderCancelReject(sID.BeginString, p.BfxUserID(), id, ocid, cid, convert.OrderNotFoundText, true)
+			r := convert.FIXOrderCancelReject(sID.BeginString, p.BfxUserID(), id, ocid.String(), cid.String(), convert.OrderNotFoundText, true)
 			return sendToTarget(r, sID)
 		}
 	}
 
 	//Update requisite fields
-	qty, err := msg.GetOrderQty()
-	if err != nil {
+	qty := field.OrderQtyField{}
+	if err := msg.Get(&qty); err != nil {
 		return err
 	}
-	ou.Amount = convert.GetAmountFromQtyAndSide(cache.Side, qty)
+	ou.Amount = convert.GetAmountFromQtyAndSide(cache.Side, qty.Value())
 
 	var t enum.OrdType
-	t, ou.Price, ou.PriceAuxLimit, ou.PriceTrailing, _, err = convert.GetPricesFromOrdType(msg.FieldMap)
-	if err != nil {
+	var err quickfix.MessageRejectError
+	if t, ou.Price, ou.PriceAuxLimit, ou.PriceTrailing, _, err = convert.GetPricesFromOrdType(msg); err != nil {
 		return err
 	}
 
 	var tif enum.TimeInForce
-	tif, ou.TimeInForce, err = convert.GetTimeInForceFromFIX(msg.FieldMap)
-	if err != nil {
+	if tif, ou.TimeInForce, err = convert.GetTimeInForceFromFIX(msg); err != nil {
 		return err
 	}
 
-	ou.Hidden, ou.PostOnly, _ = convert.GetFlagsFromFIX(msg.FieldMap)
+	ou.Hidden, ou.PostOnly, _ = convert.GetFlagsFromFIX(msg)
 
-	typ, err := convert.OrderNewTypeFromFIX(msg.FieldMap)
+	typ, err := convert.OrderNewTypeFromFIX(msg)
 	if err != nil {
 		return err
 	}
 	o := updateToOrder(ou, cidi, typ, cache.Symbol)
-	p.AddOrder(cid, ou.Price, ou.PriceAuxLimit, ou.PriceTrailing, ou.Amount, cache.Symbol, p.BfxUserID(), cache.Side, t, cache.IsMargin, tif, genMTSTif(ou.TimeInForce), genFlags(ou.Hidden, ou.PostOnly))
-	if _, er = p.UpdateOrder(cid, id); er != nil {
+	p.AddOrder(cid.String(), ou.Price, ou.PriceAuxLimit, ou.PriceTrailing, ou.Amount, cache.Symbol, p.BfxUserID(), cache.Side, t, cache.IsMargin, tif, genMTSTif(ou.TimeInForce), genFlags(ou.Hidden, ou.PostOnly))
+	if _, er = p.UpdateOrder(cid.String(), id); er != nil {
 		//Ensure order id is updated - this should not fail b/c above call inserts into cache
 		panic(er)
 	}
@@ -276,17 +281,30 @@ func validatePrecision(prec string) (bitfinex.BookPrecision, bool) {
 	return bitfinex.Precision0, false
 }
 
-// OnFIX42MarketDataRequest handles a Market Data Request FIX message
-func (f *FIX) OnFIX42MarketDataRequest(msg mdr.MarketDataRequest, sID quickfix.SessionID) quickfix.MessageRejectError {
+func buildMarketDataRequestReject(beginString, mdReqID, text string, rejReason enum.MDReqRejReason) (rej convert.GenericFix) {
+	switch beginString {
+	case quickfix.BeginStringFIX42:
+		rej = mdrr42.New(field.NewMDReqID(mdReqID))
+	case quickfix.BeginStringFIX44:
+		rej = mdrr44.New(field.NewMDReqID(mdReqID))
+	default:
+		panic(convert.UnsupportedBeginStringText)
+	}
+	rej.Set(field.NewText(text))
+	rej.Set(field.NewMDReqRejReason(rejReason))
+	return
+}
 
+// OnFIXMarketDataRequest handles a Market Data Request FIX message
+func (f *FIX) OnFIXMarketDataRequest(msg quickfix.FieldMap, sID quickfix.SessionID) quickfix.MessageRejectError {
 	p, ok := f.FindPeer(sID.String())
 	if !ok {
 		f.logger.Warn("could not find peer for SessionID", zap.String("SessionID", sID.String()))
 		return quickfix.NewMessageRejectError("could not find established peer for session ID", rejectReasonOther, nil)
 	}
 
-	relSym, err := msg.GetNoRelatedSym()
-	if err != nil {
+	relSym := mdr.NewNoRelatedSymRepeatingGroup()
+	if err := msg.GetGroup(relSym); err != nil {
 		return err
 	}
 
@@ -295,25 +313,26 @@ func (f *FIX) OnFIX42MarketDataRequest(msg mdr.MarketDataRequest, sID quickfix.S
 		return quickfix.NewMessageRejectError("no symbol provided", rejectReasonOther, nil)
 	}
 
-	mdReqID, err := msg.GetMDReqID()
-	if err != nil {
+	mdReqID := field.MDReqIDField{}
+	if err := msg.Get(&mdReqID); err != nil {
 		return err
 	}
 
-	subType, err := msg.GetSubscriptionRequestType()
-	if err != nil {
+	subType := field.SubscriptionRequestTypeField{}
+	if err := msg.Get(&subType); err != nil {
 		return err
 	}
 
-	depth, err := msg.GetMarketDepth()
-	if err != nil {
+	depthField := field.MarketDepthField{}
+	if err := msg.Get(&depthField); err != nil {
 		return err
 	}
+	depth := depthField.Value()
+
 	// validate depth
 	if depth < 0 {
 		return rejectError(fmt.Sprintf("invalid market depth for market data request: %d", depth))
-	}
-	if 0 == depth {
+	} else if 0 == depth {
 		depth = 100
 	}
 
@@ -338,69 +357,65 @@ func (f *FIX) OnFIX42MarketDataRequest(msg mdr.MarketDataRequest, sID quickfix.S
 		translated, err2 := f.Symbology.ToBitfinex(fixSymbol, sID.TargetCompID)
 		var symbol string
 		if err2 == nil {
-			lg.Printf("translate FIX %s to %s", fixSymbol, translated)
+			log.Printf("translate FIX %s to %s", fixSymbol, translated)
 			symbol = translated
 		} else {
-			lg.Printf("could not translate FIX %s: %s", fixSymbol, err2.Error())
+			log.Printf("could not translate FIX %s: %s", fixSymbol, err2.Error())
 			symbol = fixSymbol
 		}
 		// business logic has accepted message. after this return type-specific reject (MarketDataRequestReject)
 
-		if p.MDReqIDExists(mdReqID) {
-			rej := mdrr.New(field.NewMDReqID(mdReqID))
-			rej.SetText("duplicate MDReqID by session: " + mdReqID)
-			rej.SetMDReqRejReason(enum.MDReqRejReason_DUPLICATE_MDREQID)
-			f.logger.Warn("duplicate MDReqID by session: " + mdReqID)
+		if p.MDReqIDExists(mdReqID.String()) {
+			text := "duplicate MDReqID by session: " + mdReqID.String()
+			rej := buildMarketDataRequestReject(sID.BeginString, mdReqID.String(), text, enum.MDReqRejReason_DUPLICATE_MDREQID)
+			f.logger.Warn(text)
 			return sendToTarget(rej, sID)
 		}
 		if _, has := p.LookupMDReqID(symbol); has {
-			rej := mdrr.New(field.NewMDReqID(mdReqID))
-			rej.SetText("duplicate symbol subscription for \"" + symbol + "\", one subscription per symbol allowed")
-			f.logger.Warn("duplicate symbol subscription by session: " + mdReqID)
+			text := "duplicate symbol subscription for \"" + symbol + "\", one subscription per symbol allowed"
+			rej := buildMarketDataRequestReject(sID.BeginString, mdReqID.String(), text, enum.MDReqRejReason_DUPLICATE_MDREQID)
+			f.logger.Warn("duplicate symbol subscription by session: " + mdReqID.String())
 			return sendToTarget(rej, sID)
 		}
 
 		// XXX: The following could most likely be abtracted to work both for 4.2 and 4.4.
-		switch subType {
+		switch subType.Value() {
 		default:
-			rej := mdrr.New(field.NewMDReqID(mdReqID))
 			text := fmt.Sprintf("subscription type not supported: %s", subType)
+			rej := buildMarketDataRequestReject(sID.BeginString, mdReqID.String(), text, enum.MDReqRejReason_UNSUPPORTED_SUBSCRIPTIONREQUESTTYPE)
 			f.logger.Warn(text)
-			rej.SetText(text)
 			if errSend := sendToTarget(rej, sID); errSend != nil {
 				return errSend
 			}
 
 		case enum.SubscriptionRequestType_SNAPSHOT:
-			p.MapSymbolToReqID(symbol, mdReqID)
+			p.MapSymbolToReqID(symbol, mdReqID.String())
 			bookSnapshot, err := p.Rest.Book.All(symbol, precision, depth)
 			if err != nil {
-				rej := mdrr.New(field.NewMDReqID(mdReqID))
-				rej.SetText(err.Error())
+				rej := buildMarketDataRequestReject(sID.BeginString, mdReqID.String(), err.Error(), enum.MDReqRejReason_UNKNOWN_SYMBOL)
 				f.logger.Warn("could not get book snapshot: " + err.Error())
 				return sendToTarget(rej, sID)
 			}
-			fix := convert.FIXMarketDataFullRefreshFromBookSnapshot(sID.BeginString, mdReqID, bookSnapshot, f.Symbology, sID.TargetCompID)
+			fix := convert.FIXMarketDataFullRefreshFromBookSnapshot(sID.BeginString, mdReqID.String(), bookSnapshot, f.Symbology, sID.TargetCompID)
 			if errSend := sendToTarget(fix, sID); errSend != nil {
 				return errSend
 			}
 
 		case enum.SubscriptionRequestType_SNAPSHOT_PLUS_UPDATES:
-			p.MapSymbolToReqID(symbol, mdReqID)
+			p.MapSymbolToReqID(symbol, mdReqID.String())
 
 			prec := bitfinex.Precision0
 			if overridePrecision {
 				prec = precision
 			} else {
-				aggregate, err := msg.GetAggregatedBook() // aggregate by price (most granular by default) if no precision override is given
-				if err == nil && !aggregate {
+				aggregate := field.AggregatedBookField{} // aggregate by price (most granular by default) if no precision override is given
+				if err = msg.Get(&aggregate); err == nil && !aggregate.Value() {
 					prec = bitfinex.PrecisionRawBook
 				}
 			}
 			bookReqID, err := p.Ws.SubscribeBook(context.Background(), symbol, prec, bitfinex.FrequencyRealtime, depth)
 			if err != nil {
-				rej := mdrr.New(field.NewMDReqID(mdReqID))
-				rej.SetText(err.Error())
+				rej := buildMarketDataRequestReject(sID.BeginString, mdReqID.String(), err.Error(), enum.MDReqRejReason_UNKNOWN_SYMBOL)
 				f.logger.Warn("could not subscribe to book: " + err.Error())
 				return sendToTarget(rej, sID)
 			}
@@ -409,17 +424,16 @@ func (f *FIX) OnFIX42MarketDataRequest(msg mdr.MarketDataRequest, sID quickfix.S
 				if errUnsub := p.Ws.Unsubscribe(context.Background(), bookReqID); errUnsub != nil { // remove book subscription
 					err = errors.New(err.Error() + " occurred, and also unable to subscribe due to " + errUnsub.Error())
 				}
-				rej := mdrr.New(field.NewMDReqID(mdReqID))
-				rej.SetText(err.Error())
+				rej := buildMarketDataRequestReject(sID.BeginString, mdReqID.String(), err.Error(), enum.MDReqRejReason_UNKNOWN_SYMBOL)
 				f.logger.Warn("could not subscribe to trades: " + err.Error())
 				return sendToTarget(rej, sID)
 			}
-			f.logger.Info("mapping FIX->API request ID", zap.String("MDReqID", mdReqID), zap.String("BookReqID", bookReqID), zap.String("TradeReqID", tradeReqID))
-			p.MapMDReqIDs(mdReqID, bookReqID, tradeReqID)
+			f.logger.Info("mapping FIX->API request ID", zap.String("MDReqID", mdReqID.String()), zap.String("BookReqID", bookReqID), zap.String("TradeReqID", tradeReqID))
+			p.MapMDReqIDs(mdReqID.String(), bookReqID, tradeReqID)
 
 		case enum.SubscriptionRequestType_DISABLE_PREVIOUS_SNAPSHOT_PLUS_UPDATE_REQUEST:
-			if bookReqID, tradeReqID, ok := p.LookupAPIReqIDs(mdReqID); ok {
-				f.logger.Info("unsubscribe from API", zap.String("MDReqID", mdReqID), zap.String("BookReqID", bookReqID), zap.String("TradeReqID", tradeReqID))
+			if bookReqID, tradeReqID, ok := p.LookupAPIReqIDs(mdReqID.String()); ok {
+				f.logger.Info("unsubscribe from API", zap.String("MDReqID", mdReqID.String()), zap.String("BookReqID", bookReqID), zap.String("TradeReqID", tradeReqID))
 				errUnsubBook := p.Ws.Unsubscribe(context.Background(), bookReqID)
 				errUnsubTrade := p.Ws.Unsubscribe(context.Background(), tradeReqID)
 				if errUnsubBook != nil || errUnsubTrade != nil {
@@ -428,9 +442,9 @@ func (f *FIX) OnFIX42MarketDataRequest(msg mdr.MarketDataRequest, sID quickfix.S
 				}
 				return nil
 			}
-			rej := mdrr.New(field.NewMDReqID(mdReqID))
-			rej.SetText("could not find subscription for MDReqID: " + mdReqID)
-			f.logger.Warn("could not find subscription for MDReqID: " + mdReqID)
+			text := "could not find subscription for MDReqID: " + mdReqID.String()
+			rej := buildMarketDataRequestReject(sID.BeginString, mdReqID.String(), text, enum.MDReqRejReason_UNKNOWN_SYMBOL)
+			f.logger.Warn(text)
 			if err := sendToTarget(rej, sID); err != nil {
 				return err
 			}
@@ -440,19 +454,24 @@ func (f *FIX) OnFIX42MarketDataRequest(msg mdr.MarketDataRequest, sID quickfix.S
 	return nil
 }
 
-// OnFIX42OrderCancelRequest handles an Order Cancel message
-func (f *FIX) OnFIX42OrderCancelRequest(msg ocr.OrderCancelRequest, sID quickfix.SessionID) quickfix.MessageRejectError {
-	ocid, err := msg.GetOrigClOrdID() // Required
-	if err != nil {
+// OnFIXOrderCancelRequest handles an Order Cancel message
+func (f *FIX) OnFIXOrderCancelRequest(msg quickfix.FieldMap, sID quickfix.SessionID) quickfix.MessageRejectError {
+	ocid := field.OrigClOrdIDField{} // required
+	if err := msg.Get(&ocid); err != nil {
 		return err
 	}
 
-	cid, _ := msg.GetClOrdID() // required
-	id, _ := msg.GetOrderID()
+	cid := field.ClOrdIDField{} // required
+	if err := msg.Get(&cid); err != nil {
+		return err
+	}
 
 	// The spec says that a quantity and side are also required but the bitfinex API does not
 	// care about either of those for cancelling.
-	txnT, _ := msg.GetTransactTime()
+	txnT := field.TransactTimeField{}
+	if err := msg.Get(&txnT); err != nil {
+		return err
+	}
 
 	oc := &bitfinex.OrderCancelRequest{}
 
@@ -462,42 +481,47 @@ func (f *FIX) OnFIX42OrderCancelRequest(msg ocr.OrderCancelRequest, sID quickfix
 		return quickfix.NewMessageRejectError("could not find established peer for session ID", rejectReasonOther, nil)
 	}
 
-	if id != "" { // cancel by server-assigned ID
+	id := ""
+	if msg.Has(tag.OrderID) { // cancel by server-assigned ID
+		idField := field.OrderIDField{}
+		if err := msg.Get(&idField); err != nil {
+			return err
+		}
+		id = idField.Value()
 		idi, err := strconv.ParseInt(id, 10, 64)
 		if err != nil { // bitfinex uses int IDs so we can reject right away.
-			r := convert.FIXOrderCancelReject(sID.BeginString, p.BfxUserID(), id, ocid, cid, convert.OrderNotFoundText, false)
+			r := convert.FIXOrderCancelReject(sID.BeginString, p.BfxUserID(), id, ocid.Value(), cid.Value(), convert.OrderNotFoundText, false)
 			return sendToTarget(r, sID)
 		}
 		oc.ID = idi
 	} else { // cancel by client-assigned ID
-		ocidi, err := strconv.ParseInt(ocid, 10, 64)
+		ocidi, err := strconv.ParseInt(ocid.Value(), 10, 64)
 		if err != nil {
-			r := convert.FIXOrderCancelReject(sID.BeginString, p.BfxUserID(), id, ocid, cid, convert.OrderNotFoundText, false)
+			r := convert.FIXOrderCancelReject(sID.BeginString, p.BfxUserID(), id, ocid.Value(), cid.Value(), convert.OrderNotFoundText, false)
 			return sendToTarget(r, sID)
 		}
 		oc.CID = ocidi
 		d := txnT.Format("2006-01-02")
 		oc.CIDDate = d
-		cache, err := p.LookupByClOrdID(ocid)
+		cache, err := p.LookupByClOrdID(ocid.Value())
 		if err == nil {
 			id = cache.OrderID
 		}
 	}
 
-	err2 := p.Ws.Send(context.Background(), oc)
-	if err2 != nil {
-		f.logger.Error("not logged onto websocket", zap.String("SessionID", sID.String()), zap.Error(err))
-		rej := convert.FIXOrderCancelReject(sID.BeginString, p.BfxUserID(), id, ocid, cid, err2.Error(), false)
+	if err2 := p.Ws.Send(context.Background(), oc); err2 != nil {
+		f.logger.Error("not logged onto websocket", zap.String("SessionID", sID.String()), zap.Error(err2))
+		rej := convert.FIXOrderCancelReject(sID.BeginString, p.BfxUserID(), id, ocid.Value(), cid.Value(), err2.Error(), false)
 		return sendToTarget(rej, sID)
 	}
 
 	return nil
 }
 
-// OnFIX42OrderStatusRequest handles a FIX order status request
-func (f *FIX) OnFIX42OrderStatusRequest(msg osr.OrderStatusRequest, sID quickfix.SessionID) quickfix.MessageRejectError {
-	oid, err := msg.GetOrderID()
-	if err != nil {
+// OnFIXOrderStatusRequest handles a FIX order status request
+func (f *FIX) OnFIXOrderStatusRequest(msg quickfix.FieldMap, sID quickfix.SessionID) quickfix.MessageRejectError {
+	oid := field.OrderIDField{}
+	if err := msg.Get(&oid); err != nil {
 		return err
 	}
 	/*
@@ -506,7 +530,7 @@ func (f *FIX) OnFIX42OrderStatusRequest(msg osr.OrderStatusRequest, sID quickfix
 			return err
 		}
 	*/
-	oidi, nerr := strconv.ParseInt(oid, 10, 64)
+	oidi, nerr := strconv.ParseInt(oid.Value(), 10, 64)
 	if nerr != nil {
 		return reject(nerr)
 	}

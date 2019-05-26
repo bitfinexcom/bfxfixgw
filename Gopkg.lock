@@ -562,12 +562,14 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:a4ead118c275b8e2154b24cf8f95c8ec4ab0f0e24b54c46dc2c4a27476118741"
+  digest = "1:17694459ee8636bda44b17895eb9e264725aeeb6e368b9d8acd47bafedcd6779"
   name = "github.com/quickfixgo/fix44"
   packages = [
     ".",
     "executionreport",
+    "logout",
     "marketdataincrementalrefresh",
+    "marketdatarequestreject",
     "marketdatasnapshotfullrefresh",
     "ordercancelreject",
   ]
@@ -845,7 +847,9 @@
     "github.com/quickfixgo/fix42/ordercancelrequest",
     "github.com/quickfixgo/fix42/orderstatusrequest",
     "github.com/quickfixgo/fix44/executionreport",
+    "github.com/quickfixgo/fix44/logout",
     "github.com/quickfixgo/fix44/marketdataincrementalrefresh",
+    "github.com/quickfixgo/fix44/marketdatarequestreject",
     "github.com/quickfixgo/fix44/marketdatasnapshotfullrefresh",
     "github.com/quickfixgo/fix44/ordercancelreject",
     "github.com/quickfixgo/quickfix",

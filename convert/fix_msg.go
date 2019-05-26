@@ -29,6 +29,9 @@ import (
 //OrderNotFoundText is the text that corresponds to an unknown order
 const OrderNotFoundText = "Order not found."
 
+//UnsupportedBeginStringText is the text that corresponds to an unknown beginstring
+const UnsupportedBeginStringText = "Unsupported BeginString"
+
 //GenericFix is a simple interface for all generic FIX messages
 type GenericFix interface {
 	Set(field quickfix.FieldWriter) *quickfix.FieldMap
@@ -53,7 +56,7 @@ func FIXMarketDataFullRefreshFromTradeSnapshot(beginString, mdReqID string, snap
 		message = fix44mdsfr.New()
 		message.Set(field.NewSymbol(sym))
 	default:
-		panic("unsupported beginString")
+		panic(UnsupportedBeginStringText)
 	}
 	message.Set(field.NewMDReqID(mdReqID))
 	message.Set(field.NewSymbol(sym))
@@ -93,7 +96,7 @@ func FIXMarketDataFullRefreshFromBookSnapshot(beginString, mdReqID string, snaps
 		message = fix44mdsfr.New()
 		message.Set(field.NewSymbol(sym))
 	default:
-		panic("unsupported beginString")
+		panic(UnsupportedBeginStringText)
 	}
 	message.Set(field.NewMDReqID(mdReqID))
 	message.Set(field.NewSymbol(sym))
@@ -136,7 +139,7 @@ func FIXMarketDataIncrementalRefreshFromTrade(beginString, mdReqID string, trade
 	case quickfix.BeginStringFIX44:
 		message = fix44mdir.New()
 	default:
-		panic("unsupported beginString")
+		panic(UnsupportedBeginStringText)
 	}
 	message.Set(field.NewMDReqID(mdReqID))
 	// MDStreamID?
@@ -170,7 +173,7 @@ func FIXMarketDataIncrementalRefreshFromBookUpdate(beginString, mdReqID string, 
 	case quickfix.BeginStringFIX44:
 		message = fix44mdir.New()
 	default:
-		panic("unsupported beginString")
+		panic(UnsupportedBeginStringText)
 	}
 	message.Set(field.NewMDReqID(mdReqID))
 	// MDStreamID?
@@ -261,7 +264,7 @@ func FIXExecutionReport(beginString, symbol, clOrdID, orderID, account string, e
 		)
 		e.Set(field.NewSymbol(sym))
 	default:
-		panic("unsupported beginString")
+		panic(UnsupportedBeginStringText)
 	}
 	e.Set(field.NewAccount(account))
 	if lastShares.Cmp(decimal.Zero) != 0 {
@@ -389,7 +392,7 @@ func FIXOrderCancelReject(beginString, account, orderID, origClOrdID, cxlClOrdID
 			field.NewCxlRejResponseTo(enum.CxlRejResponseTo_ORDER_CANCEL_REQUEST),
 		)
 	default:
-		panic("unsupported beginString")
+		panic(UnsupportedBeginStringText)
 	}
 	r.Set(field.NewCxlRejReason(rejReason))
 	r.Set(field.NewAccount(account))

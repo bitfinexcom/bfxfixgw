@@ -13,15 +13,14 @@ import (
 	"github.com/quickfixgo/tag"
 
 	"github.com/bitfinexcom/bfxfixgw/service/symbol"
-	fix42nos "github.com/quickfixgo/fix42/newordersingle"
 )
 
 // TimeInForceFormat is the string format required for a dynamic expiration date
 const TimeInForceFormat = "2006-01-02 15:04:05"
 
-// OrderNewTypeFromFIX42 takes a FIX42 message and tries to extract enough information
+// OrderNewTypeFromFIX takes a generic FIX message and tries to extract enough information
 // to figure out the appropriate type for the bitfinex order.
-func OrderNewTypeFromFIX42(msg quickfix.FieldMap) (ordType string, err quickfix.MessageRejectError) {
+func OrderNewTypeFromFIX(msg quickfix.FieldMap) (ordType string, err quickfix.MessageRejectError) {
 	ot := &field.OrdTypeField{}
 	_ = msg.Get(ot)
 	tif := &field.TimeInForceField{}
@@ -174,56 +173,57 @@ func GetPricesFromOrdType(msg quickfix.FieldMap) (t enum.OrdType, px float64, au
 	return
 }
 
-// OrderNewFromFIX42NewOrderSingle converts a NewOrderSingle into a new order for the
+// OrderNewFromFIXNewOrderSingle converts a generic NewOrderSingle into a new order for the
 // bitfinex websocket API, as best as it can.
-func OrderNewFromFIX42NewOrderSingle(nos fix42nos.NewOrderSingle, symbology symbol.Symbology, counterparty string) (*bitfinex.OrderNewRequest, quickfix.MessageRejectError) {
+func OrderNewFromFIXNewOrderSingle(msg quickfix.FieldMap, symbology symbol.Symbology, counterparty string) (*bitfinex.OrderNewRequest, quickfix.MessageRejectError) {
 	on := &bitfinex.OrderNewRequest{}
 
 	on.GID = 0
-	cidstr, err := nos.GetClOrdID()
-	if err != nil {
+	cidfield := &field.ClOrdIDField{}
+	var err quickfix.MessageRejectError
+	if err = msg.Get(cidfield); err != nil {
 		return nil, err
 	}
-	cid, perr := strconv.ParseInt(cidstr, 10, 64)
+	cid, perr := strconv.ParseInt(cidfield.String(), 10, 64)
 	if perr != nil {
 		cid = 0
 	}
 	on.CID = cid
 
-	on.Type, err = OrderNewTypeFromFIX42(nos.FieldMap)
+	on.Type, err = OrderNewTypeFromFIX(msg)
 	if err != nil {
 		return nil, err
 	}
 
-	s, err := nos.GetSymbol()
-	if err != nil {
+	sfield := &field.SymbolField{}
+	if err = msg.Get(sfield); err != nil {
 		return nil, err
 	}
-	translated, err2 := symbology.ToBitfinex(s, counterparty)
+	translated, err2 := symbology.ToBitfinex(sfield.String(), counterparty)
 	var sym string
 	if err2 == nil {
 		sym = translated
 	} else {
-		sym = s
+		sym = sfield.String()
 	}
 	on.Symbol = sym
 
-	_, on.Price, on.PriceAuxLimit, on.PriceTrailing, on.PriceOcoStop, err = GetPricesFromOrdType(nos.FieldMap)
+	_, on.Price, on.PriceAuxLimit, on.PriceTrailing, on.PriceOcoStop, err = GetPricesFromOrdType(msg)
 	if err != nil {
 		return nil, err
 	}
 
-	side, err := nos.GetSide()
-	if err != nil {
+	sidefield := &field.SideField{}
+	if err = msg.Get(sidefield); err != nil {
 		return nil, err
 	}
 
-	qd, err := nos.GetOrderQty()
-	if err != nil {
+	qdfield := &field.OrderQtyField{}
+	if err = msg.Get(qdfield); err != nil {
 		return nil, err
 	}
-	on.Amount = GetAmountFromQtyAndSide(side, qd)
+	on.Amount = GetAmountFromQtyAndSide(enum.Side(sidefield.String()), qdfield.Decimal)
 
-	on.Hidden, on.PostOnly, on.OcoOrder = GetFlagsFromFIX(nos.FieldMap)
+	on.Hidden, on.PostOnly, on.OcoOrder = GetFlagsFromFIX(msg)
 	return on, nil
 }

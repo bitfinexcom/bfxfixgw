@@ -20,7 +20,6 @@ import (
 	fix42mdir "github.com/quickfixgo/fix42/marketdataincrementalrefresh"
 	fix42mdsfr "github.com/quickfixgo/fix42/marketdatasnapshotfullrefresh"
 	ocj "github.com/quickfixgo/fix42/ordercancelreject"
-	//fix42nos "github.com/quickfixgo/quickfix/fix42/newordersingle"
 )
 
 //OrderNotFoundText is the text that corresponds to an unknown order

@@ -24,6 +24,10 @@ import (
 	fix44mdir "github.com/quickfixgo/fix44/marketdataincrementalrefresh"
 	fix44mdsfr "github.com/quickfixgo/fix44/marketdatasnapshotfullrefresh"
 	ocj44 "github.com/quickfixgo/fix44/ordercancelreject"
+	fix50er "github.com/quickfixgo/fix50/executionreport"
+	fix50mdir "github.com/quickfixgo/fix50/marketdataincrementalrefresh"
+	fix50mdsfr "github.com/quickfixgo/fix50/marketdatasnapshotfullrefresh"
+	ocj50 "github.com/quickfixgo/fix50/ordercancelreject"
 )
 
 //OrderNotFoundText is the text that corresponds to an unknown order
@@ -54,6 +58,9 @@ func FIXMarketDataFullRefreshFromTradeSnapshot(beginString, mdReqID string, snap
 		message = fix42mdsfr.New(field.NewSymbol(sym))
 	case quickfix.BeginStringFIX44:
 		message = fix44mdsfr.New()
+		message.Set(field.NewSymbol(sym))
+	case quickfix.BeginStringFIXT11:
+		message = fix50mdsfr.New()
 		message.Set(field.NewSymbol(sym))
 	default:
 		panic(UnsupportedBeginStringText)
@@ -94,6 +101,9 @@ func FIXMarketDataFullRefreshFromBookSnapshot(beginString, mdReqID string, snaps
 		message = fix42mdsfr.New(field.NewSymbol(sym))
 	case quickfix.BeginStringFIX44:
 		message = fix44mdsfr.New()
+		message.Set(field.NewSymbol(sym))
+	case quickfix.BeginStringFIXT11:
+		message = fix50mdsfr.New()
 		message.Set(field.NewSymbol(sym))
 	default:
 		panic(UnsupportedBeginStringText)
@@ -138,6 +148,8 @@ func FIXMarketDataIncrementalRefreshFromTrade(beginString, mdReqID string, trade
 		message = fix42mdir.New()
 	case quickfix.BeginStringFIX44:
 		message = fix44mdir.New()
+	case quickfix.BeginStringFIXT11:
+		message = fix50mdir.New()
 	default:
 		panic(UnsupportedBeginStringText)
 	}
@@ -172,6 +184,8 @@ func FIXMarketDataIncrementalRefreshFromBookUpdate(beginString, mdReqID string, 
 		message = fix42mdir.New()
 	case quickfix.BeginStringFIX44:
 		message = fix44mdir.New()
+	case quickfix.BeginStringFIXT11:
+		message = fix50mdir.New()
 	default:
 		panic(UnsupportedBeginStringText)
 	}
@@ -263,6 +277,18 @@ func FIXExecutionReport(beginString, symbol, clOrdID, orderID, account string, e
 			AvgPxToFIX(avgPx),
 		)
 		e.Set(field.NewSymbol(sym))
+	case quickfix.BeginStringFIXT11:
+		e = fix50er.New(
+			field.NewOrderID(orderID),
+			field.NewExecID(uuid.NewV4().String()),
+			field.NewExecType(execType),
+			field.NewOrdStatus(ordStatus),
+			field.NewSide(side),
+			field.NewLeavesQty(remaining, 4), // qty
+			field.NewCumQty(cumAmt, 4),
+		)
+		e.Set(field.NewSymbol(sym))
+		e.Set(AvgPxToFIX(avgPx))
 	default:
 		panic(UnsupportedBeginStringText)
 	}
@@ -385,6 +411,14 @@ func FIXOrderCancelReject(beginString, account, orderID, origClOrdID, cxlClOrdID
 		)
 	case quickfix.BeginStringFIX44:
 		r = ocj44.New(
+			field.NewOrderID(orderID),
+			field.NewClOrdID(cxlClOrdID),
+			field.NewOrigClOrdID(origClOrdID),
+			field.NewOrdStatus(enum.OrdStatus_REJECTED),
+			field.NewCxlRejResponseTo(enum.CxlRejResponseTo_ORDER_CANCEL_REQUEST),
+		)
+	case quickfix.BeginStringFIXT11:
+		r = ocj50.New(
 			field.NewOrderID(orderID),
 			field.NewClOrdID(cxlClOrdID),
 			field.NewOrigClOrdID(origClOrdID),

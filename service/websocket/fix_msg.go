@@ -1,6 +1,7 @@
 package websocket
 
 import (
+	"errors"
 	"github.com/quickfixgo/field"
 	"strconv"
 
@@ -8,7 +9,9 @@ import (
 	"github.com/bitfinexcom/bitfinex-api-go/v2"
 	"github.com/bitfinexcom/bitfinex-api-go/v2/websocket"
 	"github.com/quickfixgo/enum"
-	"github.com/quickfixgo/fix42/logout"
+	lgout42 "github.com/quickfixgo/fix42/logout"
+	lgout44 "github.com/quickfixgo/fix44/logout"
+	lgoutfixt "github.com/quickfixgo/fixt11/logout"
 	"github.com/quickfixgo/quickfix"
 	"github.com/shopspring/decimal"
 	"go.uber.org/zap"
@@ -40,9 +43,19 @@ func (w *Websocket) FIXHandler(o interface{}, sID quickfix.SessionID) {
 // FIXHandleAuth handles a websocket auth event
 func (w *Websocket) FIXHandleAuth(auth *websocket.AuthEvent, sID quickfix.SessionID) error {
 	if auth.Status == "FAILED" {
-		logoutMsg := logout.New()
-		logoutMsg.SetText(auth.Message)
-		return quickfix.SendToTarget(logoutMsg, sID)
+		var msg convert.GenericFix
+		switch sID.BeginString {
+		case quickfix.BeginStringFIX42:
+			msg = lgout42.New()
+		case quickfix.BeginStringFIX44:
+			msg = lgout44.New()
+		case quickfix.BeginStringFIXT11:
+			msg = lgoutfixt.New()
+		default:
+			return errors.New(convert.UnsupportedBeginStringText)
+		}
+		msg.Set(field.NewText(auth.Message))
+		return quickfix.SendToTarget(msg, sID)
 	}
 	return nil
 }

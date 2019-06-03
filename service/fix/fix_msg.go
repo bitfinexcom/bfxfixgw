@@ -21,6 +21,8 @@ import (
 	mdrr42 "github.com/quickfixgo/fix42/marketdatarequestreject"
 	lgout44 "github.com/quickfixgo/fix44/logout"
 	mdrr44 "github.com/quickfixgo/fix44/marketdatarequestreject"
+	mdrr50 "github.com/quickfixgo/fix50/marketdatarequestreject"
+	lgoutfixt "github.com/quickfixgo/fixt11/logout"
 	"github.com/quickfixgo/quickfix"
 
 	"github.com/bitfinexcom/bitfinex-api-go/v2"
@@ -98,6 +100,8 @@ func logout(message string, sID quickfix.SessionID) error {
 		msg = lgout42.New()
 	case quickfix.BeginStringFIX44:
 		msg = lgout44.New()
+	case quickfix.BeginStringFIXT11:
+		msg = lgoutfixt.New()
 	default:
 		return errors.New(convert.UnsupportedBeginStringText)
 	}
@@ -287,6 +291,8 @@ func buildMarketDataRequestReject(beginString, mdReqID, text string, rejReason e
 		rej = mdrr42.New(field.NewMDReqID(mdReqID))
 	case quickfix.BeginStringFIX44:
 		rej = mdrr44.New(field.NewMDReqID(mdReqID))
+	case quickfix.BeginStringFIXT11:
+		rej = mdrr50.New(field.NewMDReqID(mdReqID))
 	default:
 		panic(convert.UnsupportedBeginStringText)
 	}

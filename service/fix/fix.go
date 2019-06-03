@@ -19,6 +19,11 @@ import (
 	fix44ocrr "github.com/quickfixgo/fix44/ordercancelreplacerequest"
 	fix44ocr "github.com/quickfixgo/fix44/ordercancelrequest"
 	fix44osr "github.com/quickfixgo/fix44/orderstatusrequest"
+	fix50mdr "github.com/quickfixgo/fix50/marketdatarequest"
+	fix50nos "github.com/quickfixgo/fix50/newordersingle"
+	fix50ocrr "github.com/quickfixgo/fix50/ordercancelreplacerequest"
+	fix50ocr "github.com/quickfixgo/fix50/ordercancelrequest"
+	fix50osr "github.com/quickfixgo/fix50/orderstatusrequest"
 	"github.com/quickfixgo/quickfix"
 )
 
@@ -180,6 +185,19 @@ func New(s *quickfix.Settings, peers peer.Peers, serviceType ServiceType, symbol
 		f.AddRoute(fix44osr.Route(func(msg fix44osr.OrderStatusRequest, sID quickfix.SessionID) quickfix.MessageRejectError {
 			return f.OnFIXOrderStatusRequest(msg.FieldMap, sID)
 		}))
+		// FIX.5.0
+		f.AddRoute(fix50nos.Route(func(msg fix50nos.NewOrderSingle, sID quickfix.SessionID) quickfix.MessageRejectError {
+			return f.OnFIXNewOrderSingle(msg.FieldMap, sID)
+		}))
+		f.AddRoute(fix50ocrr.Route(func(msg fix50ocrr.OrderCancelReplaceRequest, sID quickfix.SessionID) quickfix.MessageRejectError {
+			return f.OnFIXOrderCancelReplaceRequest(msg.FieldMap, sID)
+		}))
+		f.AddRoute(fix50ocr.Route(func(msg fix50ocr.OrderCancelRequest, sID quickfix.SessionID) quickfix.MessageRejectError {
+			return f.OnFIXOrderCancelRequest(msg.FieldMap, sID)
+		}))
+		f.AddRoute(fix50osr.Route(func(msg fix50osr.OrderStatusRequest, sID quickfix.SessionID) quickfix.MessageRejectError {
+			return f.OnFIXOrderStatusRequest(msg.FieldMap, sID)
+		}))
 		// Common
 		storeFactory = quickfix.NewFileStoreFactory(s)
 	} else {
@@ -189,6 +207,10 @@ func New(s *quickfix.Settings, peers peer.Peers, serviceType ServiceType, symbol
 		}))
 		// FIX.4.4
 		f.AddRoute(fix44mdr.Route(func(msg fix44mdr.MarketDataRequest, sID quickfix.SessionID) quickfix.MessageRejectError {
+			return f.OnFIXMarketDataRequest(msg.FieldMap, sID)
+		}))
+		// FIX.5.0
+		f.AddRoute(fix50mdr.Route(func(msg fix50mdr.MarketDataRequest, sID quickfix.SessionID) quickfix.MessageRejectError {
 			return f.OnFIXMarketDataRequest(msg.FieldMap, sID)
 		}))
 		// Common

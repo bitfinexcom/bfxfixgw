@@ -119,6 +119,11 @@ func (s *gatewaySuite) loadSettings(file string) *quickfix.Settings {
 func (s *gatewaySuite) SetupTest() {
 	s.MarketDataSessionID = s.fixVersionTag + ":EXORG_MD->BFXFIX"
 	s.OrderSessionID = s.fixVersionTag + ":EXORG_ORD->BFXFIX"
+	if s.fixVersionTag == quickfix.BeginStringFIXT11 {
+		appendStr := ":" + strings.ToUpper(s.settings.FixVersion)
+		s.MarketDataSessionID += appendStr
+		s.OrderSessionID += appendStr
+	}
 
 	// remove temporary directories
 	tries := 40

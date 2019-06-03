@@ -231,13 +231,13 @@ Order routing can be enabled with the `-ord` and `-ordcfg` flags on startup.
 
 The following table lists Bitfinex order type support in the FIX gateway:
 
-| Order Type	| FIX 4.2	| FIX 4.4	|
-|---------------|:---------:|:---------:|
-| Market		| ✔			| ✔			|
-| Limit			| ✔			| ✔			|
-| Stop			| ✔			| ✔			|
-| Stop Limit	| ✔			| ✔			|
-| Trailing Stop | ✔			| ✔			|
+| Order Type	| FIX 4.2	| FIX 4.4	| FIX 5.0	|
+|---------------|:---------:|:---------:|:---------:|
+| Market		| ✔			| ✔			| ✔			|
+| Limit			| ✔			| ✔			| ✔			|
+| Stop			| ✔			| ✔			| ✔			|
+| Stop Limit	| ✔			| ✔			| ✔			|
+| Trailing Stop | ✔			| ✔			| ✔			|
 
 Below is a table of various Bitfinex order features and their FIX `35=D NewOrderSingle` tags:
 

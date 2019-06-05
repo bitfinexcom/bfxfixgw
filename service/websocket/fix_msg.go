@@ -1,60 +1,74 @@
 package websocket
 
 import (
+	"errors"
+	"github.com/quickfixgo/field"
 	"strconv"
 
 	"github.com/bitfinexcom/bfxfixgw/convert"
 	"github.com/bitfinexcom/bitfinex-api-go/v2"
 	"github.com/bitfinexcom/bitfinex-api-go/v2/websocket"
 	"github.com/quickfixgo/enum"
-	"github.com/quickfixgo/fix42/logout"
+	lgout42 "github.com/quickfixgo/fix42/logout"
+	lgout44 "github.com/quickfixgo/fix44/logout"
+	lgoutfixt "github.com/quickfixgo/fixt11/logout"
 	"github.com/quickfixgo/quickfix"
 	"github.com/shopspring/decimal"
 	"go.uber.org/zap"
 	"strings"
 )
 
-// Handle Bitfinex messages and process them as FIX42 downstream.
+// Handle Bitfinex messages and process them as FIX downstream.
 
-// FIX42Handler processes websocket -> FIX
+// FIXHandler processes websocket -> FIX
 /*
-func (w *Websocket) FIX42Handler(o interface{}, sID quickfix.SessionID) {
-	w.logger.Debug("in FIX42TermDataHandler", zap.Any("object", o))
+func (w *Websocket) FIXHandler(o interface{}, sID quickfix.SessionID) {
+	w.logger.Debug("in FIXTermDataHandler", zap.Any("object", o))
 
 	switch d := o.(type) {
 	case *bitfinex.OrderSnapshot: // Order snapshot
-		w.FIX42OrderSnapshotHandler(d, sID)
+		w.FIXOrderSnapshotHandler(d, sID)
 	case *bitfinex.OrderNew: // Order new
-		w.FIX42OrderNewHandler(d, sID)
+		w.FIXOrderNewHandler(d, sID)
 	case *bitfinex.OrderCancel: // Order cancel
-		w.FIX42OrderCancelHandler(d, sID)
+		w.FIXOrderCancelHandler(d, sID)
 	case *bitfinex.Notification: // Notification
-		w.FIX42NotificationHandler(d, sID)
+		w.FIXNotificationHandler(d, sID)
 	default: // unknown
 		return
 	}
 }
 */
 
-// FIX42HandleAuth handles a websocket auth event
-func (w *Websocket) FIX42HandleAuth(auth *websocket.AuthEvent, sID quickfix.SessionID) error {
+// FIXHandleAuth handles a websocket auth event
+func (w *Websocket) FIXHandleAuth(auth *websocket.AuthEvent, sID quickfix.SessionID) error {
 	if auth.Status == "FAILED" {
-		logoutMsg := logout.New()
-		logoutMsg.SetText(auth.Message)
-		return quickfix.SendToTarget(logoutMsg, sID)
+		var msg convert.GenericFix
+		switch sID.BeginString {
+		case quickfix.BeginStringFIX42:
+			msg = lgout42.New()
+		case quickfix.BeginStringFIX44:
+			msg = lgout44.New()
+		case quickfix.BeginStringFIXT11:
+			msg = lgoutfixt.New()
+		default:
+			return errors.New(convert.UnsupportedBeginStringText)
+		}
+		msg.Set(field.NewText(auth.Message))
+		return quickfix.SendToTarget(msg, sID)
 	}
 	return nil
 }
 
-// FIX42TradeHandler handles public trades
-func (w *Websocket) FIX42TradeHandler(t *bitfinex.Trade, sID quickfix.SessionID) error {
+// FIXTradeHandler handles public trades
+func (w *Websocket) FIXTradeHandler(t *bitfinex.Trade, sID quickfix.SessionID) error {
 	p, ok := w.FindPeer(sID.String())
 	if !ok {
 		w.logger.Warn("could not find peer for SessionID", zap.String("SessionID", sID.String()))
 		return nil
 	}
 	if reqID, ok := p.LookupMDReqID(t.Pair); ok {
-		fix := convert.FIX42MarketDataIncrementalRefreshFromTrade(reqID, t, w.Symbology, sID.TargetCompID)
+		fix := convert.FIXMarketDataIncrementalRefreshFromTrade(sID.BeginString, reqID, t, w.Symbology, sID.TargetCompID)
 		return quickfix.SendToTarget(fix, sID)
 	} else {
 		w.logger.Warn("could not find MDReqID for BFX trade", zap.String("Pair", t.Pair))
@@ -62,8 +76,8 @@ func (w *Websocket) FIX42TradeHandler(t *bitfinex.Trade, sID quickfix.SessionID)
 	return nil
 }
 
-// FIX42TradeSnapshotHandler handles trade snapshots
-func (w *Websocket) FIX42TradeSnapshotHandler(s *bitfinex.TradeSnapshot, sID quickfix.SessionID) error {
+// FIXTradeSnapshotHandler handles trade snapshots
+func (w *Websocket) FIXTradeSnapshotHandler(s *bitfinex.TradeSnapshot, sID quickfix.SessionID) error {
 	p, ok := w.FindPeer(sID.String())
 	if !ok {
 		w.logger.Warn("could not find peer for SessionID", zap.String("SessionID", sID.String()))
@@ -72,7 +86,7 @@ func (w *Websocket) FIX42TradeSnapshotHandler(s *bitfinex.TradeSnapshot, sID qui
 	if len(s.Snapshot) > 0 {
 		t := s.Snapshot[0]
 		if reqID, ok := p.LookupMDReqID(t.Pair); ok {
-			fix := convert.FIX42MarketDataFullRefreshFromTradeSnapshot(reqID, s, w.Symbology, sID.TargetCompID)
+			fix := convert.FIXMarketDataFullRefreshFromTradeSnapshot(sID.BeginString, reqID, s, w.Symbology, sID.TargetCompID)
 			return quickfix.SendToTarget(fix, sID)
 		} else {
 			w.logger.Warn("could not find MDReqID for BFX trade", zap.String("Pair", t.Pair))
@@ -82,8 +96,8 @@ func (w *Websocket) FIX42TradeSnapshotHandler(s *bitfinex.TradeSnapshot, sID qui
 	return nil
 }
 
-// FIX42TradeExecutionUpdateHandler handles trade snapshots
-func (w *Websocket) FIX42TradeExecutionUpdateHandler(t *bitfinex.TradeExecutionUpdate, sID quickfix.SessionID) error {
+// FIXTradeExecutionUpdateHandler handles trade snapshots
+func (w *Websocket) FIXTradeExecutionUpdateHandler(t *bitfinex.TradeExecutionUpdate, sID quickfix.SessionID) error {
 	p, ok := w.FindPeer(sID.String())
 	if !ok {
 		w.logger.Warn("could not find peer for SessionID", zap.String("SessionID", sID.String()))
@@ -119,11 +133,11 @@ func (w *Websocket) FIX42TradeExecutionUpdateHandler(t *bitfinex.TradeExecutionU
 	if err != nil {
 		return err
 	}
-	return quickfix.SendToTarget(convert.FIX42ExecutionReportFromTradeExecutionUpdate(t, p.BfxUserID(), cached.ClOrdID, cached.Qty, totalFillQty, cached.Px, cached.Stop, cached.Trail, avgFillPx, w.Symbology, sID.TargetCompID, cached.TifExpiration, cached.Flags), sID)
+	return quickfix.SendToTarget(convert.FIXExecutionReportFromTradeExecutionUpdate(sID.BeginString, t, p.BfxUserID(), cached.ClOrdID, cached.Qty, totalFillQty, cached.Px, cached.Stop, cached.Trail, avgFillPx, w.Symbology, sID.TargetCompID, cached.TifExpiration, cached.Flags), sID)
 }
 
-// FIX42BookSnapshot handles a book update snapshot
-func (w *Websocket) FIX42BookSnapshot(s *bitfinex.BookUpdateSnapshot, sID quickfix.SessionID) error {
+// FIXBookSnapshot handles a book update snapshot
+func (w *Websocket) FIXBookSnapshot(s *bitfinex.BookUpdateSnapshot, sID quickfix.SessionID) error {
 	p, ok := w.FindPeer(sID.String())
 	if !ok {
 		w.logger.Warn("could not find peer for SessionID", zap.String("SessionID", sID.String()))
@@ -133,7 +147,7 @@ func (w *Websocket) FIX42BookSnapshot(s *bitfinex.BookUpdateSnapshot, sID quickf
 	if len(s.Snapshot) > 0 {
 		mdReqID, ok = p.LookupMDReqID(s.Snapshot[0].Symbol)
 		if ok {
-			return quickfix.SendToTarget(convert.FIX42MarketDataFullRefreshFromBookSnapshot(mdReqID, s, w.Symbology, sID.TargetCompID), sID)
+			return quickfix.SendToTarget(convert.FIXMarketDataFullRefreshFromBookSnapshot(sID.BeginString, mdReqID, s, w.Symbology, sID.TargetCompID), sID)
 		} else {
 			w.logger.Warn("could not find MDReqID for symbol", zap.String("MDReqID", mdReqID))
 		}
@@ -141,8 +155,8 @@ func (w *Websocket) FIX42BookSnapshot(s *bitfinex.BookUpdateSnapshot, sID quickf
 	return nil
 }
 
-// FIX42BookUpdate handles a book update
-func (w *Websocket) FIX42BookUpdate(u *bitfinex.BookUpdate, sID quickfix.SessionID) error {
+// FIXBookUpdate handles a book update
+func (w *Websocket) FIXBookUpdate(u *bitfinex.BookUpdate, sID quickfix.SessionID) error {
 	p, ok := w.FindPeer(sID.String())
 	if !ok {
 		w.logger.Warn("could not find peer for SessionID", zap.String("SessionID", sID.String()))
@@ -150,15 +164,15 @@ func (w *Websocket) FIX42BookUpdate(u *bitfinex.BookUpdate, sID quickfix.Session
 	}
 	mdReqID, ok := p.LookupMDReqID(u.Symbol)
 	if ok {
-		return quickfix.SendToTarget(convert.FIX42MarketDataIncrementalRefreshFromBookUpdate(mdReqID, u, w.Symbology, sID.TargetCompID), sID)
+		return quickfix.SendToTarget(convert.FIXMarketDataIncrementalRefreshFromBookUpdate(sID.BeginString, mdReqID, u, w.Symbology, sID.TargetCompID), sID)
 	} else {
 		w.logger.Warn("could not find MDReqID for symbol", zap.String("MDReqID", mdReqID))
 	}
 	return nil
 }
 
-// FIX42NotificationHandler handles a bitfinex notification
-func (w *Websocket) FIX42NotificationHandler(d *bitfinex.Notification, sID quickfix.SessionID) error {
+// FIXNotificationHandler handles a bitfinex notification
+func (w *Websocket) FIXNotificationHandler(d *bitfinex.Notification, sID quickfix.SessionID) error {
 	p, ok := w.FindPeer(sID.String())
 	if !ok {
 		w.logger.Warn("could not find peer for SessionID", zap.String("SessionID", sID.String()))
@@ -178,7 +192,7 @@ func (w *Websocket) FIX42NotificationHandler(d *bitfinex.Notification, sID quick
 			if err == nil {
 				cxlClOrdID = cache.ClOrdID
 			}
-			return quickfix.SendToTarget(convert.FIX42OrderCancelReject(p.BfxUserID(), orderID, origClOrdID, cxlClOrdID, d.Text, false), sID)
+			return quickfix.SendToTarget(convert.FIXOrderCancelReject(sID.BeginString, p.BfxUserID(), orderID, origClOrdID, cxlClOrdID, d.Text, false), sID)
 		} else if d.Status == "SUCCESS" {
 			clOrdID := strconv.FormatInt(o.CID, 10)
 			orig, err := p.LookupByClOrdID(clOrdID)
@@ -188,9 +202,9 @@ func (w *Websocket) FIX42NotificationHandler(d *bitfinex.Notification, sID quick
 			}
 
 			exp, _ := convert.MTSToTime(orig.TifExpiration)
-			er := convert.FIX42ExecutionReport(orig.Symbol, orig.ClOrdID, orig.OrderID, orig.Account, enum.ExecType_PENDING_CANCEL, orig.Side, orig.Qty, 0.0, orig.FilledQty(), orig.Px, orig.Stop, orig.Trail, orig.AvgFillPx(), enum.OrdStatus_PENDING_CANCEL, orig.OrderType, orig.IsMargin, orig.TimeInForce, exp, d.Text, w.Symbology, sID.TargetCompID, orig.Flags)
+			er := convert.FIXExecutionReport(sID.BeginString, orig.Symbol, orig.ClOrdID, orig.OrderID, orig.Account, enum.ExecType_PENDING_CANCEL, orig.Side, orig.Qty, 0.0, orig.FilledQty(), orig.Px, orig.Stop, orig.Trail, orig.AvgFillPx(), enum.OrdStatus_PENDING_CANCEL, orig.OrderType, orig.IsMargin, orig.TimeInForce, exp, d.Text, w.Symbology, sID.TargetCompID, orig.Flags)
 			if orig.Px > 0 {
-				er.SetPrice(decimal.NewFromFloat(orig.Px), 4)
+				er.Set(field.NewPrice(decimal.NewFromFloat(orig.Px), 4))
 			}
 			return quickfix.SendToTarget(er, sID)
 		}
@@ -237,15 +251,15 @@ func (w *Websocket) FIX42NotificationHandler(d *bitfinex.Notification, sID quick
 			}
 			stop = o.Price
 		}
-		return quickfix.SendToTarget(convert.FIX42ExecutionReportFromOrder(&order, p.BfxUserID(), execType, 0, ordStatus, text, w.Symbology, sID.TargetCompID, flags, stop, peg), sID)
+		return quickfix.SendToTarget(convert.FIXExecutionReportFromOrder(sID.BeginString, &order, p.BfxUserID(), execType, 0, ordStatus, text, w.Symbology, sID.TargetCompID, flags, stop, peg), sID)
 	default:
 		w.logger.Warn("unhandled notify info object", zap.Any("msg", d.NotifyInfo))
 	}
 	return nil
 }
 
-// FIX42OrderSnapshotHandler handles an incoming order snapshot
-func (w *Websocket) FIX42OrderSnapshotHandler(os *bitfinex.OrderSnapshot, sID quickfix.SessionID) error {
+// FIXOrderSnapshotHandler handles an incoming order snapshot
+func (w *Websocket) FIXOrderSnapshotHandler(os *bitfinex.OrderSnapshot, sID quickfix.SessionID) error {
 	peer, ok := w.FindPeer(sID.String())
 	if ok {
 		for _, order := range os.Snapshot {
@@ -275,16 +289,16 @@ func (w *Websocket) FIX42OrderSnapshotHandler(os *bitfinex.OrderSnapshot, sID qu
 				}
 			}
 			cache.OrderID = strconv.FormatInt(order.ID, 10)
-			er := convert.FIX42ExecutionReportFromOrder(order, peer.BfxUserID(), enum.ExecType_NEW, cache.FilledQty(), enum.OrdStatus_NEW, string(order.Status), w.Symbology, sID.TargetCompID, int(order.Flags), order.PriceAuxLimit, order.PriceTrailing)
-			er.SetAvgPx(decimal.NewFromFloat(cache.AvgFillPx()), 4)
+			er := convert.FIXExecutionReportFromOrder(sID.BeginString, order, peer.BfxUserID(), enum.ExecType_NEW, cache.FilledQty(), enum.OrdStatus_NEW, string(order.Status), w.Symbology, sID.TargetCompID, int(order.Flags), order.PriceAuxLimit, order.PriceTrailing)
+			er.Set(field.NewAvgPx(decimal.NewFromFloat(cache.AvgFillPx()), 4))
 			return quickfix.SendToTarget(er, sID)
 		}
 	}
 	return nil
 }
 
-// FIX42OrderNewHandler is for working orders after notification 'ack'
-func (w *Websocket) FIX42OrderNewHandler(o *bitfinex.OrderNew, sID quickfix.SessionID) error {
+// FIXOrderNewHandler is for working orders after notification 'ack'
+func (w *Websocket) FIXOrderNewHandler(o *bitfinex.OrderNew, sID quickfix.SessionID) error {
 	// order new notification is sent prior to this message and is translated into a NEW ER.
 	// this message is received is a limit order is resting on the book after submission,
 	// but the corresponding execution report has already been sent (server did not reject)
@@ -293,8 +307,8 @@ func (w *Websocket) FIX42OrderNewHandler(o *bitfinex.OrderNew, sID quickfix.Sess
 	return nil
 }
 
-// FIX42OrderUpdateHandler is for working orders after notification 'ack'
-func (w *Websocket) FIX42OrderUpdateHandler(o *bitfinex.OrderUpdate, sID quickfix.SessionID) error {
+// FIXOrderUpdateHandler is for working orders after notification 'ack'
+func (w *Websocket) FIXOrderUpdateHandler(o *bitfinex.OrderUpdate, sID quickfix.SessionID) error {
 	p, ok := w.FindPeer(sID.String())
 	if !ok {
 		w.logger.Warn("could not find peer for SessionID", zap.String("SessionID", sID.String()))
@@ -312,12 +326,12 @@ func (w *Websocket) FIX42OrderUpdateHandler(o *bitfinex.OrderUpdate, sID quickfi
 			peg = cache.Trail
 		}
 	}
-	return quickfix.SendToTarget(convert.FIX42ExecutionReportFromOrder(&ord, p.BfxUserID(), execType, 0.0, ordStatus, "", w.Symbology, sID.TargetCompID, int(o.Flags), stop, peg), sID)
+	return quickfix.SendToTarget(convert.FIXExecutionReportFromOrder(sID.BeginString, &ord, p.BfxUserID(), execType, 0.0, ordStatus, "", w.Symbology, sID.TargetCompID, int(o.Flags), stop, peg), sID)
 }
 
-//FIX42OrderCancelHandler handles order cancels
+//FIXOrderCancelHandler handles order cancels
 //[0,"oc",[1149698616,null,57103053041,"tBTCUSD",1523634703091,1523634703127,0,0.1,"EXCHANGE LIMIT",null,null,null,0,"EXECUTED @ 1662.9(0.05): was PARTIALLY FILLED @ 1661.5(0.05)",null,null,1670,1662.2,null,null,null,null,null,0,0,0,null,null,"API>BFX",null,null,null]]
-func (w *Websocket) FIX42OrderCancelHandler(o *bitfinex.OrderCancel, sID quickfix.SessionID) error {
+func (w *Websocket) FIXOrderCancelHandler(o *bitfinex.OrderCancel, sID quickfix.SessionID) error {
 	p, ok := w.FindPeer(sID.String())
 	if !ok {
 		w.logger.Warn("could not find peer for SessionID", zap.String("SessionID", sID.String()))
@@ -337,5 +351,5 @@ func (w *Websocket) FIX42OrderCancelHandler(o *bitfinex.OrderCancel, sID quickfi
 	if ordStatus == enum.OrdStatus_FILLED || ordStatus == enum.OrdStatus_PARTIALLY_FILLED {
 		return nil // do not publish duplicate execution report--tu/te will have more information (fees, etc.) for this event
 	}
-	return quickfix.SendToTarget(convert.FIX42ExecutionReportFromOrder(&ord, p.BfxUserID(), execType, cached.FilledQty(), ordStatus, string(ord.Status), w.Symbology, sID.TargetCompID, cached.Flags, 0.0, cached.Trail), sID)
+	return quickfix.SendToTarget(convert.FIXExecutionReportFromOrder(sID.BeginString, &ord, p.BfxUserID(), execType, cached.FilledQty(), ordStatus, string(ord.Status), w.Symbology, sID.TargetCompID, cached.Flags, 0.0, cached.Trail), sID)
 }

@@ -562,6 +562,57 @@
 
 [[projects]]
   branch = "master"
+  digest = "1:6ce9aaabec9b30fcd02d9d7856fde9a6e3cd881d2fc61fa98f3fd11e50742709"
+  name = "github.com/quickfixgo/fix44"
+  packages = [
+    ".",
+    "executionreport",
+    "logout",
+    "marketdataincrementalrefresh",
+    "marketdatarequest",
+    "marketdatarequestreject",
+    "marketdatasnapshotfullrefresh",
+    "newordersingle",
+    "ordercancelreject",
+    "ordercancelreplacerequest",
+    "ordercancelrequest",
+    "orderstatusrequest",
+  ]
+  pruneopts = "UT"
+  revision = "f090a100621863abecaa6cd783811e8bea211370"
+
+[[projects]]
+  branch = "master"
+  digest = "1:b3ed69d03f0cd767f392ae2cde56485cfc0630eea6d6ad975b06295899a859c6"
+  name = "github.com/quickfixgo/fix50"
+  packages = [
+    "executionreport",
+    "marketdataincrementalrefresh",
+    "marketdatarequest",
+    "marketdatarequestreject",
+    "marketdatasnapshotfullrefresh",
+    "newordersingle",
+    "ordercancelreject",
+    "ordercancelreplacerequest",
+    "ordercancelrequest",
+    "orderstatusrequest",
+  ]
+  pruneopts = "UT"
+  revision = "d09e70735b64d97d9323a715d960c579f0c50822"
+
+[[projects]]
+  branch = "master"
+  digest = "1:5dfe02a9c7f24559c832b0669d8e242e93906f9fcde8d61e21e3c99806cc8a40"
+  name = "github.com/quickfixgo/fixt11"
+  packages = [
+    ".",
+    "logout",
+  ]
+  pruneopts = "UT"
+  revision = "d9788ca97f5dc3ec16c4dfdc6e05f201385d88ee"
+
+[[projects]]
+  branch = "master"
   digest = "1:22e48938e888d7b69b91a4c867720ce2183b7e255218b62e80e2811e4735ac51"
   name = "github.com/quickfixgo/quickfix"
   packages = [
@@ -830,6 +881,28 @@
     "github.com/quickfixgo/fix42/ordercancelreplacerequest",
     "github.com/quickfixgo/fix42/ordercancelrequest",
     "github.com/quickfixgo/fix42/orderstatusrequest",
+    "github.com/quickfixgo/fix44/executionreport",
+    "github.com/quickfixgo/fix44/logout",
+    "github.com/quickfixgo/fix44/marketdataincrementalrefresh",
+    "github.com/quickfixgo/fix44/marketdatarequest",
+    "github.com/quickfixgo/fix44/marketdatarequestreject",
+    "github.com/quickfixgo/fix44/marketdatasnapshotfullrefresh",
+    "github.com/quickfixgo/fix44/newordersingle",
+    "github.com/quickfixgo/fix44/ordercancelreject",
+    "github.com/quickfixgo/fix44/ordercancelreplacerequest",
+    "github.com/quickfixgo/fix44/ordercancelrequest",
+    "github.com/quickfixgo/fix44/orderstatusrequest",
+    "github.com/quickfixgo/fix50/executionreport",
+    "github.com/quickfixgo/fix50/marketdataincrementalrefresh",
+    "github.com/quickfixgo/fix50/marketdatarequest",
+    "github.com/quickfixgo/fix50/marketdatarequestreject",
+    "github.com/quickfixgo/fix50/marketdatasnapshotfullrefresh",
+    "github.com/quickfixgo/fix50/newordersingle",
+    "github.com/quickfixgo/fix50/ordercancelreject",
+    "github.com/quickfixgo/fix50/ordercancelreplacerequest",
+    "github.com/quickfixgo/fix50/ordercancelrequest",
+    "github.com/quickfixgo/fix50/orderstatusrequest",
+    "github.com/quickfixgo/fixt11/logout",
     "github.com/quickfixgo/quickfix",
     "github.com/quickfixgo/tag",
     "github.com/satori/go.uuid",

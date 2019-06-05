@@ -10,10 +10,12 @@ import (
 	"github.com/bitfinexcom/bitfinex-api-go/v2/rest"
 	"github.com/bitfinexcom/bitfinex-api-go/v2/websocket"
 	"github.com/quickfixgo/quickfix"
+	"github.com/quickfixgo/tag"
 	"github.com/stretchr/testify/suite"
 	"io/ioutil"
 	"net/http"
 	"os"
+	"strings"
 	"testing"
 	"time"
 )
@@ -67,6 +69,14 @@ func TestGatewaySuiteFIX42(t *testing.T) {
 	runSuite(t, "fix42", "FIX.4.2")
 }
 
+func TestGatewaySuiteFIX44(t *testing.T) {
+	runSuite(t, "fix44", "FIX.4.4")
+}
+
+func TestGatewaySuiteFIX50(t *testing.T) {
+	runSuite(t, "fix50", "FIXT.1.1")
+}
+
 type gatewaySuite struct {
 	suite.Suite
 	fixMd               *mock.TestFixClient
@@ -82,12 +92,15 @@ type gatewaySuite struct {
 
 func (s *gatewaySuite) checkFixTags(fix string, tags ...string) (err error) {
 	s.Require().Contains(fix, "8="+s.fixVersionTag)
-	for _, tag := range tags {
-		if !s.Contains(fix, tag) {
+	for _, t := range tags {
+		if s.fixVersionTag != quickfix.BeginStringFIX42 && strings.HasPrefix(t, fmt.Sprintf("%d=", tag.ExecTransType)) {
+			//ignore exec trans type for non-fix42
+			continue
+		} else if !s.Contains(fix, t) {
 			if err == nil {
 				err = fmt.Errorf("fix message %s does not contain", fix)
 			}
-			err = fmt.Errorf("%s %s", err.Error(), tag)
+			err = fmt.Errorf("%s %s", err.Error(), t)
 		}
 	}
 	return
@@ -106,6 +119,11 @@ func (s *gatewaySuite) loadSettings(file string) *quickfix.Settings {
 func (s *gatewaySuite) SetupTest() {
 	s.MarketDataSessionID = s.fixVersionTag + ":EXORG_MD->BFXFIX"
 	s.OrderSessionID = s.fixVersionTag + ":EXORG_ORD->BFXFIX"
+	if s.fixVersionTag == quickfix.BeginStringFIXT11 {
+		appendStr := ":" + strings.ToUpper(s.settings.FixVersion)
+		s.MarketDataSessionID += appendStr
+		s.OrderSessionID += appendStr
+	}
 
 	// remove temporary directories
 	tries := 40

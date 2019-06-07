@@ -152,9 +152,17 @@ func (s *Service) listen() {
 		case *bitfinex.MarginInfoBase:
 			// no-op
 		case *bitfinex.WalletSnapshot:
-			// no-op
+			if !s.isOrderRoutingService() {
+				continue
+			} else if err := s.Websocket.FIXWalletSnapshotHandler(obj, msg.FIXSessionID()); err != nil {
+				s.log.Error("fix wallet snapshot handler error", zap.Error(err))
+			}
 		case *bitfinex.WalletUpdate:
-			// no-op
+			if !s.isOrderRoutingService() {
+				continue
+			} else if err := s.Websocket.FIXWalletUpdateHandler(obj, msg.FIXSessionID()); err != nil {
+				s.log.Error("fix wallet update handler error", zap.Error(err))
+			}
 		case *bitfinex.BalanceInfo:
 			// no-op
 		case *bitfinex.BalanceUpdate:

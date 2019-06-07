@@ -439,6 +439,11 @@ func FIXOrderCancelReject(beginString, account, orderID, origClOrdID, cxlClOrdID
 	return
 }
 
+// FIXPositionReportFromWallets generates a FIX position report from a bitfinex wallet
+func FIXPositionReportFromWallets(beginString string, wallets []*bitfinex.Wallet, account string, symbology symbol.Symbology, counterparty string) (e GenericFix) {
+	panic("implement me!")
+}
+
 // FIX42NoMDEntriesRepeatingGroupFromTradeTicker generates market data entries from ticker data
 func FIX42NoMDEntriesRepeatingGroupFromTradeTicker(data []float64) fix42mdsfr.NoMDEntriesRepeatingGroup {
 	mdEntriesGroup := fix42mdsfr.NewNoMDEntriesRepeatingGroup()

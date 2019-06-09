@@ -369,5 +369,12 @@ func (w *Websocket) FIXWalletSnapshotHandler(s *bitfinex.WalletSnapshot, sID qui
 		return nil
 	}
 
-	return quickfix.SendToTarget(convert.FIXPositionReportFromWallets(sID.BeginString, s.Snapshot, p.BfxUserID(), w.Symbology, sID.TargetCompID), sID)
+	for _, wallet := range s.Snapshot {
+		posRep := convert.FIXPositionReportFromWallet(sID.BeginString, wallet, p.BfxUserID())
+		if err := quickfix.SendToTarget(posRep, sID); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }

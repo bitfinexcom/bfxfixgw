@@ -28,6 +28,7 @@ import (
 	fix50mdir "github.com/quickfixgo/fix50/marketdataincrementalrefresh"
 	fix50mdsfr "github.com/quickfixgo/fix50/marketdatasnapshotfullrefresh"
 	ocj50 "github.com/quickfixgo/fix50/ordercancelreject"
+	pr50 "github.com/quickfixgo/fix50/positionreport"
 )
 
 //OrderNotFoundText is the text that corresponds to an unknown order
@@ -35,6 +36,9 @@ const OrderNotFoundText = "Order not found."
 
 //UnsupportedBeginStringText is the text that corresponds to an unknown beginstring
 const UnsupportedBeginStringText = "Unsupported BeginString"
+
+//LocalMktDate is the time format for local market date
+const LocalMktDate = "20060102"
 
 //GenericFix is a simple interface for all generic FIX messages
 type GenericFix interface {
@@ -439,9 +443,21 @@ func FIXOrderCancelReject(beginString, account, orderID, origClOrdID, cxlClOrdID
 	return
 }
 
-// FIXPositionReportFromWallets generates a FIX position report from a bitfinex wallet
-func FIXPositionReportFromWallets(beginString string, wallets []*bitfinex.Wallet, account string, symbology symbol.Symbology, counterparty string) (e GenericFix) {
-	panic("implement me!")
+// FIXPositionReportFromWallet generates a FIX position report from a bitfinex wallet
+func FIXPositionReportFromWallet(beginString string, wallet *bitfinex.Wallet, account string) GenericFix {
+	e := pr50.New(
+		field.NewPosMaintRptID(uuid.NewV4().String()),
+		field.NewClearingBusinessDate(time.Now().Local().Format(LocalMktDate)),
+	)
+	e.SetAccount(account)
+	e.SetAccountType(enum.AccountType(wallet.Type))
+	e.SetBeginString(beginString)
+	e.SetCurrency(wallet.Currency)
+	e.SetSettlPrice(decimal.NewFromFloat(wallet.BalanceAvailable), 4)
+	e.SetSettlPriceType(enum.SettlPriceType_FINAL)
+	e.SetPriorSettlPrice(decimal.NewFromFloat(wallet.Balance), 4)
+	e.Set(field.NewOpenInterest(decimal.NewFromFloat(wallet.UnsettledInterest), 4))
+	return e
 }
 
 // FIX42NoMDEntriesRepeatingGroupFromTradeTicker generates market data entries from ticker data

@@ -353,3 +353,28 @@ func (w *Websocket) FIXOrderCancelHandler(o *bitfinex.OrderCancel, sID quickfix.
 	}
 	return quickfix.SendToTarget(convert.FIXExecutionReportFromOrder(sID.BeginString, &ord, p.BfxUserID(), execType, cached.FilledQty(), ordStatus, string(ord.Status), w.Symbology, sID.TargetCompID, cached.Flags, 0.0, cached.Trail), sID)
 }
+
+// FIXWalletUpdateHandler is for wallet updates
+func (w *Websocket) FIXWalletUpdateHandler(u *bitfinex.WalletUpdate, sID quickfix.SessionID) error {
+	wallet := bitfinex.Wallet(*u)
+	snap := bitfinex.WalletSnapshot{Snapshot: []*bitfinex.Wallet{&wallet}}
+	return w.FIXWalletSnapshotHandler(&snap, sID)
+}
+
+// FIXWalletSnapshotHandler is for wallet snapshots
+func (w *Websocket) FIXWalletSnapshotHandler(s *bitfinex.WalletSnapshot, sID quickfix.SessionID) error {
+	p, ok := w.FindPeer(sID.String())
+	if !ok {
+		w.logger.Warn("could not find peer for SessionID", zap.String("SessionID", sID.String()))
+		return nil
+	}
+
+	for _, wallet := range s.Snapshot {
+		posRep := convert.FIXPositionReportFromWallet(sID.BeginString, wallet, p.BfxUserID())
+		if err := quickfix.SendToTarget(posRep, sID); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}

@@ -1,6 +1,6 @@
 package main
 
-//TestNewOrderSingleBuyLimitFill assures the gateway service will publish an OrderNew websocket message when receiving a FIX42 NewOrderSingle
+//TestWalletSnapshotUpdate assures the gateway service will publish wallet snapshots and updates to FIX
 func (s *gatewaySuite) TestWalletSnapshotUpdate() {
 	// assert FIX MD logon
 	fix, err := s.fixMd.WaitForMessage(s.MarketDataSessionID, 1)

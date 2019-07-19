@@ -44,8 +44,8 @@ func (s *gatewaySuite) TestWalletSnapshotUpdate() {
 	s.Require().Nil(err)
 }
 
-//TestPositionSnapshotUpdate assures the gateway service will publish position snapshots and updates to FIX
-func (s *gatewaySuite) TestPositionSnapshotUpdate() {
+//TestBalanceUpdate assures the gateway service will publish balance updates to FIX
+func (s *gatewaySuite) TestBalanceUpdate() {
 	// assert FIX MD logon
 	fix, err := s.fixMd.WaitForMessage(s.MarketDataSessionID, 1)
 	s.Require().Nil(err)

@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"github.com/bitfinexcom/bfxfixgw/convert"
+	fix2 "github.com/bitfinexcom/bfxfixgw/service/fix"
 	"time"
 
 	"github.com/quickfixgo/enum"
@@ -313,6 +314,84 @@ func (s *gatewaySuite) TestNewOrderSingleThenUpdate() {
 	msg, err = s.srvWs.WaitForMessage(OrdersClient, 3)
 	s.Require().Nil(err)
 	s.Require().EqualValues(`[0,"ou",null,{"id":1234567,"price":"21000","amount":"2","tif":"2006-01-02 15:04:05"}]`, msg)
+}
+
+//TestNewOrderSingleThenUpdateLeverage assures the gateway service will publish a leveraged OrderNew websocket message when receiving a FIX42 NewOrderSingle, and can update it later
+func (s *gatewaySuite) TestNewOrderSingleThenUpdateLeverage() {
+	// assert FIX MD logon
+	fix, err := s.fixMd.WaitForMessage(s.MarketDataSessionID, 1)
+	s.Require().Nil(err)
+	err = s.checkFixTags(fix, "35=A", "49=BFXFIX", "56=EXORG_MD")
+	s.Require().Nil(err)
+	// assert FIX order logon
+	fix, err = s.fixOrd.WaitForMessage(s.OrderSessionID, 1)
+	s.Require().Nil(err)
+	err = s.checkFixTags(fix, "35=A", "49=BFXFIX", "56=EXORG_ORD")
+	s.Require().Nil(err)
+
+	// assume both ws clients connected in setup()
+	s.srvWs.Broadcast(`{"event":"info","version":2}`)
+
+	// assert MD ws auth request
+	msg, err := s.srvWs.WaitForMessage(MarketDataClient, 0)
+	s.Require().Nil(err)
+	s.Require().EqualValues(`{"subId":"nonce1","event":"auth","apiKey":"apiKey1","authSig":"2744ec1afc974eadbda7e09efa03da80578628ba90e2aa5fcba8c2c61014b811f3a8be5a041c3ee35c464a59856b3869","authPayload":"AUTHnonce1","authNonce":"nonce1"}`, msg)
+
+	// assert order ws auth request
+	msg, err = s.srvWs.WaitForMessage(OrdersClient, 0)
+	s.Require().Nil(err)
+	s.Require().EqualValues(`{"subId":"nonce1","event":"auth","apiKey":"apiKey1","authSig":"2744ec1afc974eadbda7e09efa03da80578628ba90e2aa5fcba8c2c61014b811f3a8be5a041c3ee35c464a59856b3869","authPayload":"AUTHnonce1","authNonce":"nonce1"}`, msg)
+
+	// broadcast auth ack to both clients
+	s.srvWs.Broadcast(`{"event":"auth","status":"OK","chanId":0,"userId":1,"subId":"nonce1","auth_id":"valid-auth-guid","caps":{"orders":{"read":1,"write":0},"account":{"read":1,"write":0},"funding":{"read":1,"write":0},"history":{"read":1,"write":0},"wallets":{"read":1,"write":0},"withdraw":{"read":0,"write":0},"positions":{"read":1,"write":0}}}`)
+
+	// send NOS, ClOrdID MUST be an integer
+	nos := fix42nos.New(field.NewClOrdID("555"),
+		field.NewHandlInst(enum.HandlInst_MANUAL_ORDER_BEST_EXECUTION),
+		field.NewSymbol("BTCUSD"),
+		field.NewSide(enum.Side_BUY),
+		field.NewTransactTime(time.Now()),
+		field.NewOrdType(enum.OrdType_LIMIT))
+	nos.Set(field.NewOrderQty(decimal.NewFromFloat(1.0), 1))
+	nos.Set(field.NewPrice(decimal.NewFromFloat(12000.0), 1))
+	nos.SetInt(fix2.TagLeverage, 50)
+	session := s.fixOrd.LastSession()
+	err = session.Send(nos)
+	s.Require().Nil(err)
+
+	// assert OrderNew
+	msg, err = s.srvWs.WaitForMessage(OrdersClient, 1)
+	s.Require().Nil(err)
+	s.Require().EqualValues(`[0,"on",null,{"gid":0,"cid":555,"type":"EXCHANGE LIMIT","symbol":"BTCUSD","amount":"1","price":"12000","lev":50}]`, msg)
+
+	// service publish pending new ack
+	s.srvWs.Send(OrdersClient, `[0,"n",[null,"on-req",null,null,[1234567,null,555,"tBTCUSD",null,null,1,1,"EXCHANGE LIMIT",null,null,null,null,null,null,null,12000,null,null,null,null,null,null,0,null,null],null,"SUCCESS","Submitting limit buy order for 1.0 BTC."]]`)
+
+	// service publish new ack, assert NEW
+	s.srvWs.Send(OrdersClient, `[0,"on",[1234567,0,555,"tBTCUSD",1521153050972,1521153051035,1,1,"EXCHANGE LIMIT",null,null,null,0,"ACTIVE",null,null,12000,0,null,null,null,null,null,0,0,0,null,null,"API>BFX",null,null,null]]`)
+	fix, err = s.fixOrd.WaitForMessage(s.OrderSessionID, 2)
+	s.Require().Nil(err)
+	err = s.checkFixTags(fix, "35=8", "49=BFXFIX", "56=EXORG_ORD", "1=user123", "40=2", "20=3", "32=0.000", "39=0", "54=1", "55=tBTCUSD", "150=0", "151=1.00", "6=0.00", "14=0.00")
+	s.Require().Nil(err)
+
+	// send order update and change a bunch of fields
+	oup := fix42ocrr.New(field.NewOrigClOrdID("555"),
+		field.NewClOrdID("567"),
+		field.NewHandlInst(enum.HandlInst_MANUAL_ORDER_BEST_EXECUTION),
+		field.NewSymbol("BTCUSD"),
+		field.NewSide(enum.Side_BUY),
+		field.NewTransactTime(time.Now()),
+		field.NewOrdType(enum.OrdType_LIMIT))
+	oup.Set(field.NewOrderQty(decimal.NewFromFloat(2.0), 1))
+	oup.Set(field.NewPrice(decimal.NewFromFloat(21000.0), 1))
+	oup.SetInt(fix2.TagLeverage, 60)
+	err = session.Send(oup)
+	s.Require().Nil(err)
+
+	// assert OrderUpdate
+	msg, err = s.srvWs.WaitForMessage(OrdersClient, 2)
+	s.Require().Nil(err)
+	s.Require().EqualValues(`[0,"ou",null,{"id":1234567,"price":"21000","amount":"2","lev":60}]`, msg)
 }
 
 //TestNewOrderSingleOCO assures the gateway service will publish an OrderNew websocket message when receiving a FIX42 NewOrderSingle with an OCO contingency

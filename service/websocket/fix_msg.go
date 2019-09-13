@@ -378,3 +378,20 @@ func (w *Websocket) FIXWalletSnapshotHandler(s *bitfinex.WalletSnapshot, sID qui
 
 	return nil
 }
+
+// FIXBalanceUpdateHandler is for balance updates
+func (w *Websocket) FIXBalanceUpdateHandler(s *bitfinex.BalanceUpdate, sID quickfix.SessionID) error {
+	info := bitfinex.BalanceInfo(*s)
+	return w.FIXBalanceInfoHandler(&info, sID)
+}
+
+// FIXBalanceInfoHandler is for balance info
+func (w *Websocket) FIXBalanceInfoHandler(s *bitfinex.BalanceInfo, sID quickfix.SessionID) error {
+	wallet := bitfinex.WalletUpdate{
+		Type:             "balance",
+		Currency:         "all",
+		Balance:          s.TotalAUM,
+		BalanceAvailable: s.NetAUM,
+	}
+	return w.FIXWalletUpdateHandler(&wallet, sID)
+}

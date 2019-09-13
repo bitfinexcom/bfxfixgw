@@ -225,6 +225,18 @@ Receive FIX `35=X` trade incremental update (for the first tBTCUSD request):
 8=FIX.4.2|9=143|35=X|34=5|49=BFXFIX|52=20180417-21:25:27.455|56=EXORG_MD|262=req-tBTCUSD|268=1|279=0|269=2|55=tBTCUSD|48=tBTCUSD|22=8|270=1671.0000|271=0.1000|10=081|
 ```
 
+Receive FIX `35=AP` wallet snapshot and/or update
+
+```
+8=FIX.4.2|9=190|35=AP|34=2|49=BFXFIX|52=20190801-19:29:05.679|56=EXORG_ORD|1=user123|15=fUSD|581=exchange|715=20190801|721=fd96bcd8-0133-4740-a1e1-044feddd1be7|730=1123.4500|731=1|734=1234.5600|746=10.0000|10=099|
+```
+
+Receive FIX `35=AP` balance update
+
+```
+8=FIX.4.2|9=184|35=AP|34=2|49=BFXFIX|52=20190801-19:31:26.318|56=EXORG_ORD|1=user123|15=all|581=balance|715=20190801|721=fcefabf1-13b2-4f06-8015-521109c640de|730=12.3400|731=1|734=123.4500|746=0.0000|10=139|
+```
+
 ## Order Routing
 
 Order routing can be enabled with the `-ord` and `-ordcfg` flags on startup.

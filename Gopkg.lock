@@ -19,7 +19,7 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:7adf7bdeeab3ed99ae7312fb3b7b5bea2091702b55b7be391e07152e5ff3f8cc"
+  digest = "1:484a871144b6bf9897c697d36b8e4024fa17059036a9975767085707fe9aa4f7"
   name = "github.com/bitfinexcom/bitfinex-api-go"
   packages = [
     "utils",
@@ -29,7 +29,7 @@
     "v2/websocket",
   ]
   pruneopts = "UT"
-  revision = "c6dc390bf362f75ea621836dc6bc34f34203579e"
+  revision = "c81134c8c402553c57fdb20c5d58c65f6ca4dfa8"
 
 [[projects]]
   digest = "1:ffe9824d294da03b391f44e1ae8281281b4afc1bdaa9588c9097785e3af10cec"
@@ -497,6 +497,14 @@
   pruneopts = "UT"
   revision = "eafdab6b0663b4b528c35975c8b0e78be6e25261"
   version = "v0.1"
+
+[[projects]]
+  branch = "master"
+  digest = "1:41f3b549dbb8216e490c27926c09dc055aa509b3476e7cbc3317103990b13aeb"
+  name = "github.com/op/go-logging"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "970db520ece77730c7e4724c61121037378659d9"
 
 [[projects]]
   digest = "1:95741de3af260a92cc5c7f3f3061e85273f5a81b5db20d4bd68da74bd521675e"

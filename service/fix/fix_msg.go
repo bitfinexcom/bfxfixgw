@@ -563,7 +563,7 @@ func (f *FIX) OnFIXOrderStatusRequest(msg quickfix.FieldMap, sID quickfix.Sessio
 		return reject(fmt.Errorf("could not find route for FIX session %s", sID.String()))
 	}
 
-	order, nerr := foundPeer.Rest.Orders.Status(oidi)
+	order, nerr := foundPeer.Rest.Orders.GetByOrderId(oidi)
 	if nerr != nil {
 		return reject(nerr)
 	}

@@ -7,17 +7,19 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/bitfinexcom/bitfinex-api-go/utils"
+	"github.com/bitfinexcom/bitfinex-api-go/v2"
 	"io"
 	"io/ioutil"
 	"net/http"
 	"net/url"
 )
 
-var productionBaseURL = "https://api.bitfinex.com/v2/"
+var productionBaseURL = "https://api-pub.bitfinex.com/v2/"
 
 type requestFactory interface {
-	NewAuthenticatedRequestWithData(refURL string, data map[string]interface{}) (Request, error)
-	NewAuthenticatedRequest(refURL string) (Request, error)
+	NewAuthenticatedRequestWithData(permissionType bitfinex.PermissionType, refURL string, data map[string]interface{}) (Request, error)
+	NewAuthenticatedRequestWithBytes(permissionType bitfinex.PermissionType, refURL string, data []byte) (Request, error)
+	NewAuthenticatedRequest(permissionType bitfinex.PermissionType, refURL string) (Request, error)
 }
 
 type Synchronous interface {
@@ -31,13 +33,20 @@ type Client struct {
 	nonce     utils.NonceGenerator
 
 	// service providers
-	Candles   CandleService
-	Orders    OrderService
-	Positions PositionService
-	Trades    TradeService
-	Platform  PlatformService
-	Book      BookService
-	Wallet    WalletService
+	Candles     CandleService
+	Orders      OrderService
+	Positions   PositionService
+	Trades      TradeService
+	Tickers     TickerService
+	Currencies  CurrenciesService
+	Platform    PlatformService
+	Book        BookService
+	Wallet      WalletService
+	Ledgers     LedgerService
+	Stats       StatsService
+	Status      StatusService
+	Derivatives DerivativesService
+	Funding     FundingService
 
 	Synchronous
 }
@@ -92,9 +101,16 @@ func NewClientWithSynchronousURLNonce(sync Synchronous, url string, nonce utils.
 	c.Book = BookService{Synchronous: c}
 	c.Candles = CandleService{Synchronous: c}
 	c.Trades = TradeService{Synchronous: c, requestFactory: c}
+	c.Tickers = TickerService{Synchronous: c, requestFactory: c}
+	c.Currencies = CurrenciesService{ Synchronous: c, requestFactory: c}
 	c.Platform = PlatformService{Synchronous: c}
 	c.Positions = PositionService{Synchronous: c, requestFactory: c}
 	c.Wallet = WalletService{Synchronous: c, requestFactory: c}
+	c.Ledgers = LedgerService{Synchronous: c, requestFactory: c}
+	c.Stats = StatsService{Synchronous: c, requestFactory: c}
+	c.Status = StatusService{Synchronous: c, requestFactory: c}
+	c.Derivatives = DerivativesService{Synchronous: c, requestFactory: c}
+	c.Funding = FundingService{Synchronous: c, requestFactory: c}
 	return c
 }
 
@@ -107,7 +123,7 @@ func (c *Client) Credentials(key string, secret string) *Client {
 // Request is a wrapper for standard http.Request.  Default method is POST with no data.
 type Request struct {
 	RefURL  string                 // ref url
-	Data    map[string]interface{} // body data
+	Data    []byte                 // body data
 	Method  string                 // http method
 	Params  url.Values             // query parameters
 	Headers map[string]string
@@ -128,24 +144,15 @@ func (c *Client) sign(msg string) (string, error) {
 	return hex.EncodeToString(sig.Sum(nil)), nil
 }
 
-func (c *Client) NewAuthenticatedRequest(refURL string) (Request, error) {
-	return c.NewAuthenticatedRequestWithData(refURL, nil)
+func (c *Client) NewAuthenticatedRequest(permissionType bitfinex.PermissionType, refURL string) (Request, error) {
+	return c.NewAuthenticatedRequestWithBytes(permissionType, refURL, []byte("{}"))
 }
 
-func (c *Client) NewAuthenticatedRequestWithData(refURL string, data map[string]interface{}) (Request, error) {
-	authURL := "auth/r/" + refURL
-	req := NewRequestWithData(authURL, data)
+func (c *Client) NewAuthenticatedRequestWithBytes(permissionType bitfinex.PermissionType, refURL string, data []byte) (Request, error) {
+	authURL := fmt.Sprintf("auth/%s/%s", string(permissionType), refURL)
+	req := NewRequestWithBytes(authURL, data)
 	nonce := c.nonce.GetNonce()
-	b, err := json.Marshal(data)
-	if err != nil {
-		return Request{}, err
-	}
-	msg := "/api/v2/" + authURL + nonce
-	if data != nil {
-		msg += string(b)
-	} else {
-		msg += "{}"
-	}
+	msg := "/api/v2/" + authURL + nonce + string(data)
 	sig, err := c.sign(msg)
 	if err != nil {
 		return Request{}, err
@@ -158,19 +165,35 @@ func (c *Client) NewAuthenticatedRequestWithData(refURL string, data map[string]
 	return req, nil
 }
 
+func (c *Client) NewAuthenticatedRequestWithData(permissionType bitfinex.PermissionType,refURL string, data map[string]interface{}) (Request, error) {
+	b, err := json.Marshal(data)
+	if err != nil {
+		return Request{}, err
+	}
+	return c.NewAuthenticatedRequestWithBytes(permissionType, refURL, b)
+}
+
 func NewRequest(refURL string) Request {
-	return NewRequestWithDataMethod(refURL, nil, "POST")
+	return NewRequestWithDataMethod(refURL, []byte("{}"), "POST")
 }
 
 func NewRequestWithMethod(refURL string, method string) Request {
-	return NewRequestWithDataMethod(refURL, nil, method)
+	return NewRequestWithDataMethod(refURL, []byte("{}"), method)
 }
 
-func NewRequestWithData(refURL string, data map[string]interface{}) Request {
+func NewRequestWithBytes(refURL string, data []byte) Request {
 	return NewRequestWithDataMethod(refURL, data, "POST")
 }
 
-func NewRequestWithDataMethod(refURL string, data map[string]interface{}, method string) Request {
+func NewRequestWithData(refURL string, data map[string]interface{}) (Request, error) {
+	b, err := json.Marshal(data)
+	if err != nil {
+		return Request{}, err
+	}
+	return NewRequestWithDataMethod(refURL, b, "POST"), nil
+}
+
+func NewRequestWithDataMethod(refURL string, data []byte, method string) Request {
 	return Request{
 		RefURL:  refURL,
 		Data:    data,
@@ -201,7 +224,7 @@ func (r *Response) String() string {
 // checkResponse checks response status code and response
 // for errors.
 func checkResponse(r *Response) error {
-	if c := r.Response.StatusCode; 200 <= c && c <= 299 {
+	if c := r.Response.StatusCode; c >= 200 && c <= 299 {
 		return nil
 	}
 

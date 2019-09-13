@@ -9,11 +9,37 @@ import (
 )
 
 type Orderbook struct {
-	lock sync.Mutex
+	lock sync.RWMutex
 
 	symbol string
 	bids   []*bitfinex.BookUpdate
 	asks   []*bitfinex.BookUpdate
+}
+
+// return a dereferenced copy of an orderbook side. This is so consumers can access
+// the book but not change the values that are used to generate the crc32 checksum
+func (ob *Orderbook) copySide(side []*bitfinex.BookUpdate) []bitfinex.BookUpdate {
+	var cpy []bitfinex.BookUpdate
+	for i := 0; i < len(side); i++ {
+		cpy = append(cpy, *side[i])
+	}
+	return cpy
+}
+
+func (ob *Orderbook) Symbol() string {
+	return ob.symbol
+}
+
+func (ob *Orderbook) Asks() []bitfinex.BookUpdate {
+	ob.lock.RLock()
+	defer ob.lock.RUnlock()
+	return ob.copySide(ob.asks)
+}
+
+func (ob *Orderbook) Bids() []bitfinex.BookUpdate {
+	ob.lock.RLock()
+	defer ob.lock.RUnlock()
+	return ob.copySide(ob.bids)
 }
 
 func (ob *Orderbook) SetWithSnapshot(bs *bitfinex.BookUpdateSnapshot) {

@@ -110,7 +110,7 @@ func (w *Websocket) FIXTradeExecutionUpdateHandler(t *bitfinex.TradeExecutionUpd
 	if err != nil {
 		// try a REST fetch
 		w.logger.Warn("order not in cache, falling back to REST", zap.String("OrderID", orderID))
-		os, err2 := p.Rest.Orders.Status(t.OrderID)
+		os, err2 := p.Rest.Orders.GetByOrderId(t.OrderID)
 		if err2 != nil {
 			// couldn't fallback to REST
 			w.logger.Error("could not process trade execution", zap.Error(err), zap.Error(err2))

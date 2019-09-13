@@ -3,9 +3,10 @@ package bitfinex
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"math"
-	"fmt"
+	"strings"
 )
 
 // Prefixes for available pairs
@@ -73,6 +74,12 @@ func CandleResolutionFromString(str string) (CandleResolution, error) {
 	return OneMinute, fmt.Errorf("could not convert string to resolution: %s", str)
 }
 
+type PermissionType string
+const (
+	PermissionRead = "r"
+	PermissionWrite = "w"
+)
+
 // private type--cannot instantiate.
 type candleResolution string
 
@@ -83,6 +90,8 @@ type CandleResolution candleResolution
 const (
 	Bid OrderSide = 1
 	Ask OrderSide = 2
+	Long OrderSide = 1
+	Short OrderSide = 2
 )
 
 // Settings flags
@@ -147,6 +156,7 @@ type OrderNewRequest struct {
 	Symbol        string  `json:"symbol"`
 	Amount        float64 `json:"amount,string"`
 	Price         float64 `json:"price,string"`
+	Leverage      int64   `json:"lev,omitempty"`
 	PriceTrailing float64 `json:"price_trailing,string,omitempty"`
 	PriceAuxLimit float64 `json:"price_aux_limit,string,omitempty"`
 	PriceOcoStop  float64 `json:"price_oco_stop,string,omitempty"`
@@ -160,6 +170,14 @@ type OrderNewRequest struct {
 // MarshalJSON converts the order object into the format required by the bitfinex
 // websocket service.
 func (o *OrderNewRequest) MarshalJSON() ([]byte, error) {
+	jsonOrder, err := o.ToJSON()
+	if err != nil {
+		return nil, err
+	}
+	return []byte(fmt.Sprintf("[0, \"on\", null, %s]", string(jsonOrder))), nil
+}
+
+func (o *OrderNewRequest) ToJSON() ([]byte, error) {
 	aux := struct {
 		GID           int64   `json:"gid"`
 		CID           int64   `json:"cid"`
@@ -167,6 +185,7 @@ func (o *OrderNewRequest) MarshalJSON() ([]byte, error) {
 		Symbol        string  `json:"symbol"`
 		Amount        float64 `json:"amount,string"`
 		Price         float64 `json:"price,string"`
+		Leverage      int64   `json:"lev,omitempty"`
 		PriceTrailing float64 `json:"price_trailing,string,omitempty"`
 		PriceAuxLimit float64 `json:"price_aux_limit,string,omitempty"`
 		PriceOcoStop  float64 `json:"price_oco_stop,string,omitempty"`
@@ -179,6 +198,7 @@ func (o *OrderNewRequest) MarshalJSON() ([]byte, error) {
 		Symbol:        o.Symbol,
 		Amount:        o.Amount,
 		Price:         o.Price,
+		Leverage:      o.Leverage,
 		PriceTrailing: o.PriceTrailing,
 		PriceAuxLimit: o.PriceAuxLimit,
 		PriceOcoStop:  o.PriceOcoStop,
@@ -200,16 +220,15 @@ func (o *OrderNewRequest) MarshalJSON() ([]byte, error) {
 	if o.Close {
 		aux.Flags = aux.Flags + OrderFlagClose
 	}
-
-	body := []interface{}{0, "on", nil, aux}
-	return json.Marshal(&body)
+	return json.Marshal(aux)
 }
 
 type OrderUpdateRequest struct {
-	ID           	int64   `json:"id"`
+	ID            int64   `json:"id"`
 	GID           int64   `json:"gid,omitempty"`
 	Price         float64 `json:"price,string,omitempty"`
 	Amount        float64 `json:"amount,string,omitempty"`
+	Leverage      int64   `json:"lev,omitempty"`
 	Delta         float64 `json:"delta,string,omitempty"`
 	PriceTrailing float64 `json:"price_trailing,string,omitempty"`
 	PriceAuxLimit float64 `json:"price_aux_limit,string,omitempty"`
@@ -221,11 +240,20 @@ type OrderUpdateRequest struct {
 // MarshalJSON converts the order object into the format required by the bitfinex
 // websocket service.
 func (o *OrderUpdateRequest) MarshalJSON() ([]byte, error) {
+	aux, err := o.ToJSON()
+	if err != nil {
+		return nil, err
+	}
+	return []byte(fmt.Sprintf("[0, \"ou\", null, %s]", string(aux))), nil
+}
+
+func (o *OrderUpdateRequest) ToJSON() ([]byte, error) {
 	aux := struct {
-		ID           	int64   `json:"id"`
+		ID            int64   `json:"id"`
 		GID           int64   `json:"gid,omitempty"`
 		Price         float64 `json:"price,string,omitempty"`
 		Amount        float64 `json:"amount,string,omitempty"`
+		Leverage      int64   `json:"lev,omitempty"`
 		Delta         float64 `json:"delta,string,omitempty"`
 		PriceTrailing float64 `json:"price_trailing,string,omitempty"`
 		PriceAuxLimit float64 `json:"price_aux_limit,string,omitempty"`
@@ -237,6 +265,7 @@ func (o *OrderUpdateRequest) MarshalJSON() ([]byte, error) {
 		ID:            o.ID,
 		GID:           o.GID,
 		Amount:        o.Amount,
+		Leverage:      o.Leverage,
 		Price:         o.Price,
 		PriceTrailing: o.PriceTrailing,
 		PriceAuxLimit: o.PriceAuxLimit,
@@ -251,9 +280,7 @@ func (o *OrderUpdateRequest) MarshalJSON() ([]byte, error) {
 	if o.PostOnly {
 		aux.Flags = aux.Flags + OrderFlagPostOnly
 	}
-
-	body := []interface{}{0, "ou", nil, aux}
-	return json.Marshal(&body)
+	return json.Marshal(aux)
 }
 
 // OrderCancelRequest represents an order cancel request.
@@ -266,9 +293,7 @@ type OrderCancelRequest struct {
 	CIDDate string `json:"cid_date,omitempty"`
 }
 
-// MarshalJSON converts the order cancel object into the format required by the
-// bitfinex websocket service.
-func (o *OrderCancelRequest) MarshalJSON() ([]byte, error) {
+func (o *OrderCancelRequest) ToJSON() ([]byte, error) {
 	aux := struct {
 		ID      int64  `json:"id,omitempty"`
 		CID     int64  `json:"cid,omitempty"`
@@ -279,8 +304,17 @@ func (o *OrderCancelRequest) MarshalJSON() ([]byte, error) {
 		CIDDate: o.CIDDate,
 	}
 
-	body := []interface{}{0, "oc", nil, aux}
-	return json.Marshal(&body)
+	return json.Marshal(aux)
+}
+
+// MarshalJSON converts the order cancel object into the format required by the
+// bitfinex websocket service.
+func (o *OrderCancelRequest) MarshalJSON() ([]byte, error) {
+	aux, err := o.ToJSON()
+	if err != nil {
+		return nil, err
+	}
+	return []byte(fmt.Sprintf("[0, \"oc\", null, %s]", string(aux))), nil
 }
 
 // TODO: MultiOrderCancelRequest represents an order cancel request.
@@ -439,6 +473,7 @@ const (
 )
 
 type Position struct {
+	Id                   int64
 	Symbol               string
 	Status               PositionStatus
 	Amount               float64
@@ -463,6 +498,19 @@ func NewPositionFromRaw(raw []interface{}) (o *Position, err error) {
 		}
 	} else if len(raw) < 10 {
 		return o, fmt.Errorf("data slice too short for position: %#v", raw)
+	} else if len(raw) == 10 {
+		o = &Position{
+			Symbol:               sValOrEmpty(raw[0]),
+			Status:               PositionStatus(sValOrEmpty(raw[1])),
+			Amount:               f64ValOrZero(raw[2]),
+			BasePrice:            f64ValOrZero(raw[3]),
+			MarginFunding:        f64ValOrZero(raw[4]),
+			MarginFundingType:    i64ValOrZero(raw[5]),
+			ProfitLoss:           f64ValOrZero(raw[6]),
+			ProfitLossPercentage: f64ValOrZero(raw[7]),
+			LiquidationPrice:     f64ValOrZero(raw[8]),
+			Leverage:             f64ValOrZero(raw[9]),
+		}
 	} else {
 		o = &Position{
 			Symbol:               sValOrEmpty(raw[0]),
@@ -475,6 +523,7 @@ func NewPositionFromRaw(raw []interface{}) (o *Position, err error) {
 			ProfitLossPercentage: f64ValOrZero(raw[7]),
 			LiquidationPrice:     f64ValOrZero(raw[8]),
 			Leverage:             f64ValOrZero(raw[9]),
+			Id:                   int64(f64ValOrZero(raw[11])),
 		}
 	}
 	return
@@ -510,6 +559,19 @@ func NewPositionSnapshotFromRaw(raw []interface{}) (s *PositionSnapshot, err err
 	s = &PositionSnapshot{Snapshot: ps}
 
 	return
+}
+
+type ClaimPositionRequest struct {
+	Id int64
+}
+
+func (o *ClaimPositionRequest) ToJSON() ([]byte, error) {
+	aux := struct {
+		Id int64 `json:"id"`
+	}{
+		Id: o.Id,
+	}
+	return json.Marshal(aux)
 }
 
 // Trade represents a trade on the public data feed.
@@ -886,12 +948,76 @@ const (
 	OfferStatusCanceled        OfferStatus = "CANCELED"
 )
 
+type FundingOfferCancelRequest struct {
+	Id int64
+}
+
+func (o *FundingOfferCancelRequest) ToJSON() ([]byte, error) {
+	aux := struct {
+		Id int64 `json:"id"`
+	}{
+		Id: o.Id,
+	}
+	return json.Marshal(aux)
+}
+
+// MarshalJSON converts the order cancel object into the format required by the
+// bitfinex websocket service.
+func (o *FundingOfferCancelRequest) MarshalJSON() ([]byte, error) {
+	aux, err := o.ToJSON()
+	if err != nil {
+		return nil, err
+	}
+	return []byte(fmt.Sprintf("[0, \"foc\", null, %s]", string(aux))), nil
+}
+
+type FundingOfferRequest struct {
+	Type   string
+	Symbol string
+	Amount float64
+	Rate   float64
+	Period int64
+	Hidden bool
+
+}
+
+func (o *FundingOfferRequest) ToJSON() ([]byte, error) {
+	aux := struct {
+		Type   string  `json:"type"`
+		Symbol string  `json:"symbol"`
+		Amount float64 `json:"amount,string"`
+		Rate   float64 `json:"rate,string"`
+		Period int64   `json:"period"`
+		Flags  int     `json:"flags,omitempty"`
+	}{
+		Type:   o.Type,
+		Symbol: o.Symbol,
+		Amount: o.Amount,
+		Rate: o.Rate,
+		Period: o.Period,
+	}
+	if o.Hidden {
+		aux.Flags = aux.Flags + OrderFlagHidden
+	}
+	return json.Marshal(aux)
+}
+
+// MarshalJSON converts the order cancel object into the format required by the
+// bitfinex websocket service.
+func (o *FundingOfferRequest) MarshalJSON() ([]byte, error) {
+	aux, err := o.ToJSON()
+	if err != nil {
+		return nil, err
+	}
+	return []byte(fmt.Sprintf("[0, \"fon\", null, %s]", string(aux))), nil
+}
+
 type Offer struct {
 	ID         int64
 	Symbol     string
 	MTSCreated int64
 	MTSUpdated int64
-	Amout      float64
+	Amount     float64
 	AmountOrig float64
 	Type       string
 	Flags      interface{}
@@ -915,7 +1041,7 @@ func NewOfferFromRaw(raw []interface{}) (o *Offer, err error) {
 		Symbol:     sValOrEmpty(raw[1]),
 		MTSCreated: i64ValOrZero(raw[2]),
 		MTSUpdated: i64ValOrZero(raw[3]),
-		Amout:      f64ValOrZero(raw[4]),
+		Amount:     f64ValOrZero(raw[4]),
 		AmountOrig: f64ValOrZero(raw[5]),
 		Type:       sValOrEmpty(raw[6]),
 		Flags:      raw[9],
@@ -1256,13 +1382,34 @@ func NewNotificationFromRaw(raw []interface{}) (o *Notification, err error) {
 		nraw = raw[4].([]interface{})
 		switch o.Type {
 		case "on-req":
+			if len(nraw) <= 0 {
+				o.NotifyInfo = nil
+				break
+			}
+			// will be a set of orders if created via rest
+			// this is to accommodate OCO orders
+			if _, ok := nraw[0].([]interface{}); ok {
+				o.NotifyInfo, err = NewOrderSnapshotFromRaw(nraw)
+				if err != nil {
+					return nil, err
+				}
+			} else {
+				on, err := NewOrderFromRaw(nraw)
+				if err != nil {
+					return nil, err
+				}
+				oNew := OrderNew(*on)
+				o.NotifyInfo = &oNew
+			}
+		case "ou-req":
 			on, err := NewOrderFromRaw(nraw)
 			if err != nil {
-				return o, err
+				return nil, err
 			}
-			orderNew := OrderNew(*on)
-			o.NotifyInfo = &orderNew
+			oNew := OrderUpdate(*on)
+			o.NotifyInfo = &oNew
 		case "oc-req":
+			// if list of list then parse to order snapshot
 			oc, err := NewOrderFromRaw(nraw)
 			if err != nil {
 				return o, err
@@ -1285,6 +1432,15 @@ func NewNotificationFromRaw(raw []interface{}) (o *Notification, err error) {
 			o.NotifyInfo = &fundingOffer
 		case "uca":
 			o.NotifyInfo = raw[4]
+		case "acc_tf":
+			o.NotifyInfo = raw[4]
+		case "pm-req":
+			p, err := NewPositionFromRaw(nraw)
+			if err != nil {
+				return o, err
+			}
+			cp := PositionCancel(*p)
+			o.NotifyInfo = &cp
 		}
 	}
 
@@ -1330,7 +1486,26 @@ func NewTickerFromRaw(symbol string, raw []interface{}) (t *Ticker, err error) {
 	if len(raw) < 10 {
 		return t, fmt.Errorf("data slice too short for ticker, expected %d got %d: %#v", 10, len(raw), raw)
 	}
+	// funding currency ticker
+	// ignore bid/ask period for now
+	if len(raw) == 13 {
+		t = &Ticker{
+			Symbol:          symbol,
+			Bid:             f64ValOrZero(raw[1]),
+			BidSize:         f64ValOrZero(raw[2]),
+			Ask:             f64ValOrZero(raw[4]),
+			AskSize:         f64ValOrZero(raw[5]),
+			DailyChange:     f64ValOrZero(raw[7]),
+			DailyChangePerc: f64ValOrZero(raw[8]),
+			LastPrice:       f64ValOrZero(raw[9]),
+			Volume:          f64ValOrZero(raw[10]),
+			High:            f64ValOrZero(raw[11]),
+			Low:             f64ValOrZero(raw[12]),
+		}
+		return t, nil
+	}
 
+	// all other tickers
 	t = &Ticker{
 		Symbol:          symbol,
 		Bid:             f64ValOrZero(raw[0]),
@@ -1345,7 +1520,11 @@ func NewTickerFromRaw(symbol string, raw []interface{}) (t *Ticker, err error) {
 		Low:             f64ValOrZero(raw[9]),
 	}
 
-	return
+	return t, nil
+}
+
+func NewTickerFromRestRaw(raw []interface{}) (t *Ticker, err error) {
+	return NewTickerFromRaw(raw[0].(string), raw[1:])
 }
 
 type bookAction byte
@@ -1378,7 +1557,6 @@ type BookUpdateSnapshot struct {
 }
 
 func NewBookUpdateSnapshotFromRaw(symbol, precision string, raw [][]float64, raw_numbers interface{}) (*BookUpdateSnapshot, error) {
-	fmt.Println(raw_numbers)
 	if len(raw) <= 0 {
 		return nil, fmt.Errorf("data slice too short for book snapshot: %#v", raw)
 	}
@@ -1519,4 +1697,321 @@ func NewCandleFromRaw(symbol string, resolution CandleResolution, raw []interfac
 	}
 
 	return
+}
+
+type Ledger struct {
+	ID		    int64
+	Currency	string
+	Nil1        float64
+	MTS		    int64
+	Nil2        float64
+	Amount	    float64
+	Balance		float64
+	Nil3        float64
+	Description	string
+}
+
+// NewLedgerFromRaw takes the raw list of values as returned from the websocket
+// service and tries to convert it into an Ledger.
+func NewLedgerFromRaw(raw []interface{}) (o *Ledger, err error) {
+	if len(raw) == 9 {
+		o = &Ledger{
+			ID:          int64(f64ValOrZero(raw[0])),
+			Currency:    sValOrEmpty(raw[1]),
+			Nil1:        f64ValOrZero(raw[2]),
+			MTS:         i64ValOrZero(raw[3]),
+			Nil2:        f64ValOrZero(raw[4]),
+			Amount:      f64ValOrZero(raw[5]),
+			Balance:     f64ValOrZero(raw[6]),
+			Nil3:		 f64ValOrZero(raw[7]),
+			Description: sValOrEmpty(raw[8]),
+			// API returns 3 Nil values, what do they map to?
+			// API documentation says ID is type integer but api returns a string
+		}
+	} else
+	{return o, fmt.Errorf("data slice too short for ledger: %#v", raw)
+	} 
+	return
+}
+
+type LedgerSnapshot struct {
+	Snapshot []*Ledger
+}
+
+// LedgerSnapshotFromRaw takes a raw list of values as returned from the websocket
+// service and tries to convert it into an LedgerSnapshot.
+func NewLedgerSnapshotFromRaw(raw []interface{}) (s *LedgerSnapshot, err error) {
+	if len(raw) == 0 {
+		return s, fmt.Errorf("data slice too short for ledgers: %#v", raw)
+	}
+
+	os := make([]*Ledger, 0)
+	switch raw[0].(type) {
+	case []interface{}:
+		for _, v := range raw {
+			if l, ok := v.([]interface{}); ok {
+				o, err := NewLedgerFromRaw(l)
+				if err != nil {
+					return s, err
+				}
+				os = append(os, o)
+			}
+		}
+	default:
+		return s, fmt.Errorf("not an ledger snapshot")
+	}
+	s = &LedgerSnapshot{Snapshot: os}
+	return
+}
+
+type CurrencyConf struct {
+	Currency  string
+	Label     string
+	Symbol    string
+	Pairs     []string
+	Pools     []string
+	Explorers ExplorerConf
+	Unit      string
+}
+
+type ExplorerConf struct {
+	BaseUri         string
+	AddressUri      string
+	TransactionUri  string
+}
+
+type CurrencyConfigMapping string
+
+const (
+	CurrencyLabelMap CurrencyConfigMapping = "pub:map:currency:label"
+	CurrencySymbolMap CurrencyConfigMapping = "pub:map:currency:sym"
+	CurrencyUnitMap CurrencyConfigMapping = "pub:map:currency:unit"
+	CurrencyExplorerMap CurrencyConfigMapping = "pub:map:currency:explorer"
+	CurrencyExchangeMap CurrencyConfigMapping = "pub:list:pair:exchange"
+)
+
+type RawCurrencyConf struct {
+	Mapping string
+	Data interface{}
+}
+
+func parseCurrencyLabelMap(config map[string]CurrencyConf, raw []interface{}) {
+	for _, rawLabel := range raw {
+		data := rawLabel.([]interface{})
+		cur := data[0].(string)
+		if val, ok := config[cur]; ok {
+			// add value
+			val.Label = data[1].(string)
+			config[cur] = val
+		} else {
+			// create new empty config instance
+			cfg := CurrencyConf{}
+			cfg.Label = data[1].(string)
+			cfg.Currency = cur
+			config[cur] = cfg
+		}
+	}
+}
+
+func parseCurrencySymbMap(config map[string]CurrencyConf, raw []interface{})  {
+	for _, rawLabel := range raw {
+		data := rawLabel.([]interface{})
+		cur := data[0].(string)
+		if val, ok := config[cur]; ok {
+			// add value
+			val.Symbol = data[1].(string)
+			config[cur] = val
+		} else {
+			// create new empty config instance
+			cfg := CurrencyConf{}
+			cfg.Symbol = data[1].(string)
+			cfg.Currency = cur
+			config[cur] = cfg
+		}
+	}
+}
+
+func parseCurrencyUnitMap(config map[string]CurrencyConf, raw []interface{})  {
+	for _, rawLabel := range raw {
+		data := rawLabel.([]interface{})
+		cur := data[0].(string)
+		if val, ok := config[cur]; ok {
+			// add value
+			val.Unit = data[1].(string)
+			config[cur] = val
+		} else {
+			// create new empty config instance
+			cfg := CurrencyConf{}
+			cfg.Unit = data[1].(string)
+			cfg.Currency = cur
+			config[cur] = cfg
+		}
+	}
+}
+
+func parseCurrencyExplorerMap(config map[string]CurrencyConf, raw []interface{})  {
+	for _, rawLabel := range raw {
+		data := rawLabel.([]interface{})
+		cur := data[0].(string)
+		explorers := data[1].([]interface{})
+		var cfg CurrencyConf
+		if val, ok := config[cur]; ok {
+			cfg = val
+		} else {
+			// create new empty config instance
+			cc := CurrencyConf{}
+			cc.Currency = cur
+			cfg = cc
+		}
+		ec := ExplorerConf{
+			explorers[0].(string),
+			explorers[1].(string),
+			explorers[2].(string),
+		}
+		cfg.Explorers = ec
+		config[cur] = cfg
+	}
+}
+
+func parseCurrencyExchangeMap(config map[string]CurrencyConf, raw []interface{})  {
+	for _, rs := range raw {
+		symbol := rs.(string)
+		var base, quote string
+		if len(symbol) > 6 {
+			base = strings.Split(symbol, ":")[0]
+			quote = strings.Split(symbol, ":")[1]
+		} else {
+			base = symbol[3:]
+			quote = symbol[:3]
+		}
+		// append if base exists in configs
+		if val, ok := config[base]; ok {
+			val.Pairs = append(val.Pairs, symbol)
+			config[base] = val
+		}
+		// append if quote exists in configs
+		if val, ok := config[quote]; ok {
+			val.Pairs = append(val.Pairs, symbol)
+			config[quote] = val
+		}
+	}
+}
+
+func NewCurrencyConfFromRaw(raw []RawCurrencyConf) ([]CurrencyConf, error) {
+	configMap := make(map[string]CurrencyConf)
+	for _, r := range raw {
+		switch (CurrencyConfigMapping(r.Mapping)) {
+		case CurrencyLabelMap:
+			data := r.Data.([]interface{})
+			parseCurrencyLabelMap(configMap, data)
+		case CurrencySymbolMap:
+			data := r.Data.([]interface{})
+			parseCurrencySymbMap(configMap, data)
+		case CurrencyUnitMap:
+			data := r.Data.([]interface{})
+			parseCurrencyUnitMap(configMap, data)
+		case CurrencyExplorerMap:
+			data := r.Data.([]interface{})
+			parseCurrencyExplorerMap(configMap, data)
+		case CurrencyExchangeMap:
+			data := r.Data.([]interface{})
+			parseCurrencyExchangeMap(configMap, data)
+		}
+	}
+	// convert map to array
+	configs := make([]CurrencyConf, 0)
+	for _, v := range configMap {
+		configs = append(configs, v)
+	}
+	return configs, nil
+}
+
+type StatKey string
+
+const (
+	FundingSizeKey StatKey = "funding.size"
+	CreditSizeKey StatKey = "credits.size"
+	CreditSizeSymKey StatKey = "credits.size.sym"
+	PositionSizeKey StatKey = "pos.size"
+)
+
+type Stat struct {
+	Period int64
+	Volume float64
+}
+
+type DerivativeStatusSnapshot struct {
+	Snapshot []*DerivativeStatus
+}
+
+type StatusType string
+const (
+	DerivativeStatusType StatusType = "deriv"
+)
+
+type DerivativeStatus struct {
+	Symbol               string
+	MTS                  int64
+	Price                float64
+	SpotPrice            float64
+	InsuranceFundBalance float64
+	FundingAccrued       float64
+	FundingStep          float64
+}
+
+func NewDerivativeStatusFromWsRaw(symbol string, raw []interface{}) (*DerivativeStatus, error) {
+	if len(raw) == 11 {
+		ds := &DerivativeStatus{
+			Symbol:               symbol,
+			MTS:                  i64ValOrZero(raw[0]),
+			// placeholder
+			Price:                f64ValOrZero(raw[2]),
+			SpotPrice:            f64ValOrZero(raw[3]),
+			// placeholder
+			InsuranceFundBalance: f64ValOrZero(raw[5]),
+			// placeholder
+			// placeholder
+			FundingAccrued:       f64ValOrZero(raw[8]),
+			FundingStep:          f64ValOrZero(raw[9]),
+			// placeholder
+		}
+		return ds, nil
+	} else {
+		return nil, fmt.Errorf("data slice too short for derivative status: %#v", raw)
+	}
+}
+
+
+func NewDerivativeStatusFromRaw(raw []interface{}) (*DerivativeStatus, error) {
+	if len(raw) == 12 {
+		ds := &DerivativeStatus{
+			Symbol:               sValOrEmpty(raw[0]),
+			MTS:                  i64ValOrZero(raw[1]),
+			// placeholder
+			Price:                f64ValOrZero(raw[3]),
+			SpotPrice:            f64ValOrZero(raw[4]),
+			// placeholder
+			InsuranceFundBalance: f64ValOrZero(raw[6]),
+			// placeholder
+			// placeholder
+			FundingAccrued:       f64ValOrZero(raw[9]),
+			FundingStep:          f64ValOrZero(raw[10]),
+			// placeholder
+		}
+		return ds, nil
+	} else {
+		return nil, fmt.Errorf("data slice too short for derivative status: %#v", raw)
+	}
+}
+
+func NewDerivativeSnapshotFromRaw(raw [][]interface{}) (*DerivativeStatusSnapshot, error) {
+	snapshot := make([]*DerivativeStatus, len(raw))
+	for i, rStatus := range raw {
+		pStatus, err := NewDerivativeStatusFromRaw(rStatus)
+		if err != nil {
+			return nil, err
+		}
+		snapshot[i] = pStatus
+	}
+	return &DerivativeStatusSnapshot{Snapshot: snapshot}, nil
 }

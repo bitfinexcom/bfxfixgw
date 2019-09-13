@@ -3,7 +3,6 @@ package websocket
 import (
 	"context"
 	"fmt"
-
 	"github.com/bitfinexcom/bitfinex-api-go/v2"
 )
 
@@ -16,7 +15,11 @@ type FlagRequest struct {
 
 // Send publishes a generic message to the Bitfinex API.
 func (c *Client) Send(ctx context.Context, msg interface{}) error {
-	return c.asynchronous.Send(ctx, msg)
+	socket, err := c.getSocket()
+	if err != nil {
+		return err
+	}
+	return socket.Asynchronous.Send(ctx, msg)
 }
 
 func (c *Client) EnableFlag(ctx context.Context, flag int) (string, error) {
@@ -24,22 +27,64 @@ func (c *Client) EnableFlag(ctx context.Context, flag int) (string, error) {
 		Event: "conf",
 		Flags: flag,
 	}
-	err := c.asynchronous.Send(ctx, req)
-	if err != nil {
-		return "", err
+	// TODO enable flag on reconnect?
+	// create sublist to stop concurrent map read
+	socks := make([]*Socket, len(c.sockets))
+	c.mtx.RLock()
+	for i, socket := range c.sockets {
+		socks[i] = socket
+	}
+	c.mtx.RUnlock()
+	for _, socket := range socks {
+		err := socket.Asynchronous.Send(ctx, req)
+		if err != nil {
+			return "", err
+		}
 	}
 	return "", nil
 }
 
-// Subscribe sends a subscription request to the Bitfinex API and tracks the subscription status by ID.
-func (c *Client) Subscribe(ctx context.Context, req *SubscriptionRequest) (string, error) {
-	c.subscriptions.add(req)
-	err := c.asynchronous.Send(ctx, req)
+// returns the count of websocket connections that are currently active
+func (c *Client) ConnectionCount() int {
+	c.mtx.RLock()
+	defer c.mtx.RUnlock()
+	return len(c.sockets)
+}
+
+func (c *Client) AvailableCapacity() int {
+	return c.getTotalAvailableSocketCapacity()
+}
+
+// starts a new websocket connection. This function is only exposed in case you want to
+// implicitly add new connections otherwise connection management is already handled for you.
+func (c *Client) StartNewConnection() error {
+	return c.connectSocket(SocketId(c.ConnectionCount()))
+}
+
+func (c *Client) subscribeBySocket(ctx context.Context, socket *Socket, req *SubscriptionRequest) (string, error) {
+	c.subscriptions.add(socket.Id, req)
+	err := socket.Asynchronous.Send(ctx, req)
 	if err != nil {
 		// propagate send error
 		return "", err
 	}
 	return req.SubID, nil
+}
+
+// Subscribe sends a subscription request to the Bitfinex API and tracks the subscription status by ID.
+func (c *Client) Subscribe(ctx context.Context, req *SubscriptionRequest) (string, error) {
+	if c.getTotalAvailableSocketCapacity() <= 1 {
+		err := c.StartNewConnection()
+		if err != nil {
+			return "", err
+		}
+	}
+	// get socket with the highest available capacity
+	socket, err := c.getMostAvailableSocket()
+	if err != nil {
+		return "", err
+	}
+	return c.subscribeBySocket(ctx, socket, req)
 }
 
 // SubscribeTicker sends a subscription request for the ticker.
@@ -95,18 +140,50 @@ func (c *Client) SubscribeCandles(ctx context.Context, symbol string, resolution
 	return c.Subscribe(ctx, req)
 }
 
+func (c *Client) SubscribeStatus(ctx context.Context, symbol string, sType bitfinex.StatusType) (string, error) {
+	req := &SubscriptionRequest{
+		SubID:   c.nonce.GetNonce(),
+		Event:   EventSubscribe,
+		Channel: ChanStatus,
+		Key:     fmt.Sprintf("%s:%s", string(sType), symbol),
+	}
+	return c.Subscribe(ctx, req)
+}
+
+func (c *Client) GetOrderbook(symbol string) (*Orderbook, error) {
+	c.mtx.RLock()
+	defer c.mtx.RUnlock()
+	if val, ok := c.orderbooks[symbol]; ok {
+		// take dereferenced copy of orderbook
+		return val, nil
+	}
+	return nil, fmt.Errorf("Orderbook %s does not exist", symbol)
+}
+
 // SubmitOrder sends an order request.
 func (c *Client) SubmitOrder(ctx context.Context, order *bitfinex.OrderNewRequest) error {
-	return c.asynchronous.Send(ctx, order)
+	socket, err := c.GetAuthenticatedSocket()
+	if err != nil {
+		return err
+	}
+	return socket.Asynchronous.Send(ctx, order)
 }
 
 func (c *Client) SubmitUpdateOrder(ctx context.Context, orderUpdate *bitfinex.OrderUpdateRequest) error {
-	return c.asynchronous.Send(ctx, orderUpdate)
+	socket, err := c.GetAuthenticatedSocket()
+	if err != nil {
+		return err
+	}
+	return socket.Asynchronous.Send(ctx, orderUpdate)
 }
 
 // SubmitCancel sends a cancel request.
 func (c *Client) SubmitCancel(ctx context.Context, cancel *bitfinex.OrderCancelRequest) error {
-	return c.asynchronous.Send(ctx, cancel)
+	socket, err := c.GetAuthenticatedSocket()
+	if err != nil {
+		return err
+	}
+	return socket.Asynchronous.Send(ctx, cancel)
 }
 
 // LookupSubscription looks up a subscription request by ID
@@ -116,4 +193,20 @@ func (c *Client) LookupSubscription(subID string) (*SubscriptionRequest, error) 
 		return nil, err
 	}
 	return s.Request, nil
+}
+
+func (c *Client) SubmitFundingOffer(ctx context.Context, fundingOffer *bitfinex.FundingOfferRequest) error {
+	socket, err := c.GetAuthenticatedSocket()
+	if err != nil {
+		return err
+	}
+	return socket.Asynchronous.Send(ctx, fundingOffer)
+}
+
+func (c *Client) SubmitFundingCancel(ctx context.Context, fundingOffer *bitfinex.FundingOfferCancelRequest) error {
+	socket, err := c.GetAuthenticatedSocket()
+	if err != nil {
+		return err
+	}
+	return socket.Asynchronous.Send(ctx, fundingOffer)
 }

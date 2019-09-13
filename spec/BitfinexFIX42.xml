@@ -399,6 +399,7 @@
    <field name='CashOrderQty' required='N' />
    <field name='OrdType' required='Y' />
    <field name='Price' required='N' />
+   <field name='Leverage' required='N' />
    <field name='StopPx' required='N' />
    <field name='Currency' required='N' />
    <field name='ComplianceID' required='N' />
@@ -609,6 +610,7 @@
    <field name='CashOrderQty' required='N' />
    <field name='OrdType' required='Y' />
    <field name='Price' required='N' />
+   <field name='Leverage' required='N' />
    <field name='StopPx' required='N' />
    <field name='PegDifference' required='N' />
    <field name='DiscretionInst' required='N' />
@@ -2755,6 +2757,7 @@
   <field number='20002' name='BfxUserID' type='STRING' />
   <field number='20003' name='PricePrecision' type='STRING' />
   <field number='20004' name='MDRequestType' type='STRING' />
+  <field number='20005' name='Leverage' type='INT' />
   <field number='8013' name='CancelOnDisconnect' type='BOOLEAN' />
  </fields>
 </fix>

@@ -31,6 +31,9 @@ import (
 const (
 	// PricePrecision is the FIX tag to specify a book subscription price precision
 	PricePrecision quickfix.Tag = 20003
+
+	// TagLeverage is the tag used for the leverage integer field
+	TagLeverage quickfix.Tag = 20005
 )
 
 // Handle FIX42 messages and process them upstream to Bitfinex.
@@ -127,6 +130,13 @@ func (f *FIX) OnFIXNewOrderSingle(msg quickfix.FieldMap, sID quickfix.SessionID)
 	bo, err := convert.OrderNewFromFIXNewOrderSingle(msg, f.Symbology, sID.TargetCompID)
 	if err != nil {
 		return err
+	}
+
+	if lev := 0; msg.Has(TagLeverage) {
+		if lev, err = msg.GetInt(TagLeverage); err != nil {
+			return err
+		}
+		bo.Leverage = int64(lev)
 	}
 
 	ordtype := field.OrdTypeField{}
@@ -234,6 +244,13 @@ func (f *FIX) OnFIXOrderCancelReplaceRequest(msg quickfix.FieldMap, sID quickfix
 	var tif enum.TimeInForce
 	if tif, ou.TimeInForce, err = convert.GetTimeInForceFromFIX(msg); err != nil {
 		return err
+	}
+
+	if lev := 0; msg.Has(TagLeverage) {
+		if lev, err = msg.GetInt(TagLeverage); err != nil {
+			return err
+		}
+		ou.Leverage = int64(lev)
 	}
 
 	ou.Hidden, ou.PostOnly, _ = convert.GetFlagsFromFIX(msg)

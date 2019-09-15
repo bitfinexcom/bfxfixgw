@@ -205,6 +205,8 @@ func (s *gatewaySuite) TearDownTest() {
 	if s.isWsOnline {
 		err := s.srvWs.Stop()
 		s.Require().Nil(err)
+		err = s.srvWs.KillConnections()
+		s.Require().Nil(err)
 		s.isWsOnline = false
 	}
 }

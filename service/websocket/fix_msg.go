@@ -379,6 +379,31 @@ func (w *Websocket) FIXWalletSnapshotHandler(s *bitfinex.WalletSnapshot, sID qui
 	return nil
 }
 
+// FIXPositionUpdateHandler is for wallet updates
+func (w *Websocket) FIXPositionUpdateHandler(u *bitfinex.PositionUpdate, sID quickfix.SessionID) error {
+	position := bitfinex.Position(*u)
+	snap := bitfinex.PositionSnapshot{Snapshot: []*bitfinex.Position{&position}}
+	return w.FIXPositionSnapshotHandler(&snap, sID)
+}
+
+// FIXPositionSnapshotHandler is for wallet snapshots
+func (w *Websocket) FIXPositionSnapshotHandler(s *bitfinex.PositionSnapshot, sID quickfix.SessionID) error {
+	p, ok := w.FindPeer(sID.String())
+	if !ok {
+		w.logger.Warn("could not find peer for SessionID", zap.String("SessionID", sID.String()))
+		return nil
+	}
+
+	for _, position := range s.Snapshot {
+		posRep := convert.FIXPositionReportFromPosition(sID.BeginString, position, p.BfxUserID(), w.Symbology, sID.TargetCompID)
+		if err := quickfix.SendToTarget(posRep, sID); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 // FIXBalanceUpdateHandler is for balance updates
 func (w *Websocket) FIXBalanceUpdateHandler(s *bitfinex.BalanceUpdate, sID quickfix.SessionID) error {
 	info := bitfinex.BalanceInfo(*s)

@@ -138,12 +138,12 @@ func (s *gatewaySuite) SetupTest() {
 	s.Require().Nil(err)
 
 	// mock BFX websocket
-	s.srvWs = mock.NewMockWs(6001)
+	s.srvWs = mock.NewMockWs()
 	err = s.srvWs.Start()
 	s.Require().Nil(err)
 
 	params := websocket.NewDefaultParameters()
-	params.URL = "ws://127.0.0.1:6001"
+	params.URL = fmt.Sprintf("ws://127.0.0.1:%d", s.srvWs.ListenPort())
 	params.AutoReconnect = true
 	params.ReconnectAttempts = 5
 	params.ReconnectInterval = time.Millisecond * 250 // 1.25s

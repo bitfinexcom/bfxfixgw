@@ -74,8 +74,8 @@ type tx struct {
 type Ws struct {
 	clients  map[*client]bool
 	listener net.Listener
-	port     int
 
+	port         int
 	register     chan *client
 	unregister   chan *client
 	broadcast    chan []byte
@@ -102,9 +102,9 @@ func (s *Ws) TotalClientCount() int {
 }
 
 //NewMockWs creates a new mocked websocket
-func NewMockWs(port int) *Ws {
+func NewMockWs() *Ws {
 	return &Ws{
-		port:       port,
+		port:       0,
 		clients:    make(map[*client]bool),
 		register:   make(chan *client),
 		unregister: make(chan *client),
@@ -217,12 +217,17 @@ func (s *Ws) Start() error {
 		return err
 	}
 	s.listener = l
+	s.port = s.ListenPort()
 	go func() {
 		if err := http.Serve(s.listener, s); err != nil {
 			log.Printf("error on closing http Ws server: %v", err)
 		}
 	}()
 	return nil
+}
+
+func (s *Ws) ListenPort() int {
+	return s.listener.Addr().(*net.TCPAddr).Port
 }
 
 func (s *Ws) serveWs(w http.ResponseWriter, r *http.Request) {

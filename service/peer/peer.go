@@ -2,6 +2,7 @@ package peer
 
 import (
 	"log"
+	"time"
 
 	bfxlog "github.com/bitfinexcom/bfxfixgw/log"
 	"github.com/bitfinexcom/bitfinex-api-go/v2/rest"
@@ -85,11 +86,24 @@ func (p *Peer) Logon(apiKey, apiSecret, bfxUserID string, cancelOnDisconnect boo
 
 func (p *Peer) listen() {
 	p.started = true
-	for msg := range p.Ws.Listen() {
-		p.toParent <- &Message{Data: msg, Peer: p}
+	defer func() {
+		p.disconnect <- true
+		close(p.exit)
+	}()
+	for {
+		select {
+		case msg := <-p.Ws.Listen():
+			if msg == nil {
+				return
+			}
+			p.toParent <- &Message{Data: msg, Peer: p}
+		case <-time.After(time.Second):
+			isConn := p.Ws.IsConnected()
+			if !isConn {
+				return
+			}
+		}
 	}
-	p.disconnect <- true
-	close(p.exit)
 }
 
 // BfxUserID is an immutable accessor to the bitfinex user ID

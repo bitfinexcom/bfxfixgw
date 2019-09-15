@@ -35,6 +35,8 @@ func (s *gatewaySuite) TestDisconnect() {
 	// disconnect ws
 	err = s.srvWs.Stop()
 	s.Require().Nil(err)
+	err = s.srvWs.KillConnections()
+	s.Require().Nil(err)
 	defer func() { s.isWsOnline = false }()
 
 	// wait for ws disconnect & reconnect period, assert FIX logoff msgs

@@ -176,9 +176,17 @@ func (s *Service) listen() {
 				s.log.Error("fix balance update handler error", zap.Error(err))
 			}
 		case *bitfinex.PositionSnapshot:
-			// no-op
+			if !s.isOrderRoutingService() {
+				continue
+			} else if err := s.Websocket.FIXPositionSnapshotHandler(obj, msg.FIXSessionID()); err != nil {
+				s.log.Error("fix position snapshot handler error", zap.Error(err))
+			}
 		case *bitfinex.PositionUpdate:
-			// no-op
+			if !s.isOrderRoutingService() {
+				continue
+			} else if err := s.Websocket.FIXPositionUpdateHandler(obj, msg.FIXSessionID()); err != nil {
+				s.log.Error("fix position update handler error", zap.Error(err))
+			}
 		case *bitfinex.OrderSnapshot:
 			if !s.isOrderRoutingService() {
 				continue

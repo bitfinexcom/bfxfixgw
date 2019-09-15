@@ -40,6 +40,18 @@ const UnsupportedBeginStringText = "Unsupported BeginString"
 //LocalMktDate is the time format for local market date
 const LocalMktDate = "20060102"
 
+// TagLeverage is the tag used for the leverage integer field
+const TagLeverage quickfix.Tag = 20005
+
+// TagMarginFundingType is the tag used for the margin type integer field
+const TagMarginFundingType quickfix.Tag = 20006
+
+// TagProfitLoss is the tag used for the profit loss float field
+const TagProfitLoss quickfix.Tag = 20007
+
+// TagProfitLossPercentage is the tag used for the profit loss percentage float field
+const TagProfitLossPercentage quickfix.Tag = 20008
+
 //GenericFix is a simple interface for all generic FIX messages
 type GenericFix interface {
 	Set(field quickfix.FieldWriter) *quickfix.FieldMap
@@ -457,6 +469,33 @@ func FIXPositionReportFromWallet(beginString string, wallet *bitfinex.Wallet, ac
 	e.SetSettlPriceType(enum.SettlPriceType_FINAL)
 	e.SetPriorSettlPrice(decimal.NewFromFloat(wallet.Balance), 4)
 	e.Set(field.NewOpenInterest(decimal.NewFromFloat(wallet.UnsettledInterest), 4))
+	return e
+}
+
+// FIXPositionReportFromPosition generates a FIX position report from a bitfinex position
+func FIXPositionReportFromPosition(beginString string, position *bitfinex.Position, account string, symbology symbol.Symbology, counterparty string) GenericFix {
+	e := pr50.New(
+		field.NewPosMaintRptID(uuid.NewV4().String()),
+		field.NewClearingBusinessDate(time.Now().Local().Format(LocalMktDate)),
+	)
+	e.SetAccount(account)
+	e.SetAccountType(enum.AccountType(position.Status))
+	e.SetBeginString(beginString)
+
+	sym, err := symbology.FromBitfinex(position.Symbol, counterparty)
+	if err != nil {
+		sym = position.Symbol
+	}
+	e.SetSymbol(sym)
+	e.Set(field.NewQuantity(decimal.NewFromFloat(position.Amount), 4))
+	e.SetSettlPrice(decimal.NewFromFloat(position.LiquidationPrice), 4)
+	e.SetSettlPriceType(enum.SettlPriceType_FINAL)
+	e.SetPriorSettlPrice(decimal.NewFromFloat(position.BasePrice), 4)
+	e.SetField(TagLeverage, quickfix.FIXDecimal{Decimal: decimal.NewFromFloat(position.Leverage), Scale: 4})
+	e.Set(field.NewMarginExcess(decimal.NewFromFloat(position.MarginFunding), 4))
+	e.SetInt(TagMarginFundingType, int(position.MarginFundingType))
+	e.SetField(TagProfitLoss, quickfix.FIXDecimal{Decimal: decimal.NewFromFloat(position.ProfitLoss), Scale: 4})
+	e.SetField(TagProfitLossPercentage, quickfix.FIXDecimal{Decimal: decimal.NewFromFloat(position.ProfitLossPercentage), Scale: 4})
 	return e
 }
 

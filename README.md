@@ -1,6 +1,10 @@
-[![Build Status](https://api.travis-ci.org/bitfinexcom/bfxfixgw.png?branch=master)](https://travis-ci.org/bitfinexcom/bfxfixgw.svg?branch=master)
+## $\textcolor{red}{\textsf{DEPRECATED PROJECT}}$
+### $\textcolor{red}{\textsf{This project has been deprecated in favor of a native gateway implementation.}}$
+### $\textcolor{red}{\textsf{For more information please contact us via email at}}$ `fix-support@bitfinex.com`
 
-# Bitfinex FIX Gateway
+![No Maintenance Intended](https://img.shields.io/badge/No%20Maintenance%20Intended-%E2%9C%95-red.svg)
+
+# Bitfinex GO FIX Gateway
 
 The Bitfinex FIX gateway uses [QuickFix/go](https://github.com/quickfixgo/quickfix) to implement FIX connectivity. [The Bitfinex Go API](https://github.com/bitfinexcom/bitfinex-api-go) is used to manage the [Bitfinex API websocket](https://bitfinex.readme.io/docs) connection, which ultimately uses [Gorilla](https://github.com/gorilla/websocket).
 
